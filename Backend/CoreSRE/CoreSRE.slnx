@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="CoreSRE.csproj" />
+    <Project Path="..\CoreSRE.Domain\CoreSRE.Domain.csproj" />
+    <Project Path="..\CoreSRE.Application\CoreSRE.Application.csproj" />
+    <Project Path="..\CoreSRE.Infrastructure\CoreSRE.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/aspire/">
+    <Project Path="..\CoreSRE.AppHost\CoreSRE.AppHost.csproj" />
+    <Project Path="..\CoreSRE.ServiceDefaults\CoreSRE.ServiceDefaults.csproj" />
+  </Folder>
+</Solution>

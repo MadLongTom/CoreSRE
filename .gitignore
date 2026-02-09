@@ -1,0 +1,54 @@
+# ===== .NET =====
+bin/
+obj/
+*.user
+*.suo
+*.cache
+*.dll
+*.exe
+*.pdb
+*.nupkg
+*.snupkg
+*.trx
+TestResults/
+publish/
+launchSettings.json
+
+# ===== Node.js / Frontend =====
+node_modules/
+dist/
+build/
+*.log
+.vite/
+
+# ===== Environment =====
+.env
+.env.*
+!.env.example
+
+# ===== IDE =====
+.vs/
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ===== OS =====
+.DS_Store
+Thumbs.db
+*.tmp
+
+# ===== Docker =====
+docker-compose.override.yml
+
+# ===== Aspire =====
+.aspire/
+
+# ===== Coverage =====
+coverage/
+*.coveragexml
+*.cobertura.xml
+
+# ===== Reference repos (large, local-only) =====
+.reference/

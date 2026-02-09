@@ -1,0 +1,6 @@
+@CoreSRE_HostAddress = http://localhost:5156
+
+GET {{CoreSRE_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

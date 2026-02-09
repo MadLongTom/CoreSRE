@@ -1,0 +1,168 @@
+openapi: 3.1.0
+info:
+  title: CoreSRE Health Check API
+  description: |
+    ASP.NET Core 标准健康检查端点，由 ServiceDefaults 的 MapDefaultEndpoints() 映射。
+    Readiness 检查包含所有注册的健康检查项（含 PostgreSQL 数据库连接检查）。
+    Liveness 检查仅验证进程存活。
+  version: 1.0.0
+  contact:
+    name: CoreSRE Team
+
+servers:
+  - url: http://localhost:5156
+    description: API 服务（直接运行）
+  - url: http://localhost:{port}
+    description: API 服务（Aspire 编排，端口动态分配）
+    variables:
+      port:
+        default: "5156"
+
+paths:
+  /health:
+    get:
+      summary: Readiness 健康检查
+      description: |
+        全量健康检查端点，包含所有注册的检查项：
+        - Self check（进程存活）
+        - DbContext check（PostgreSQL 连接，由 EnrichNpgsqlDbContext 注册）
+        - 未来可扩展：消息队列、外部服务等
+        
+        返回所有检查项的聚合状态。任一检查项 Unhealthy 则整体 Unhealthy。
+        
+        此端点在 Aspire Dashboard 中用作 HTTP 健康探针（WithHttpHealthCheck("/health")）。
+        此端点的请求不会出现在 OpenTelemetry Traces 中（已被 ServiceDefaults 过滤）。
+      operationId: getReadinessCheck
+      tags:
+        - Health
+      responses:
+        "200":
+          description: 所有检查项均 Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthReport"
+              example:
+                status: "Healthy"
+                totalDuration: "00:00:00.0234567"
+                entries:
+                  self:
+                    status: "Healthy"
+                    duration: "00:00:00.0001234"
+                    tags:
+                      - "live"
+                  dbContext:
+                    status: "Healthy"
+                    duration: "00:00:00.0200000"
+                    tags: []
+        "503":
+          description: 至少一项检查 Unhealthy（如 PostgreSQL 不可达）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthReport"
+              example:
+                status: "Unhealthy"
+                totalDuration: "00:00:05.0012345"
+                entries:
+                  self:
+                    status: "Healthy"
+                    duration: "00:00:00.0001234"
+                    tags:
+                      - "live"
+                  dbContext:
+                    status: "Unhealthy"
+                    duration: "00:00:05.0000000"
+                    description: "Could not connect to PostgreSQL"
+                    tags: []
+
+  /alive:
+    get:
+      summary: Liveness 存活检查
+      description: |
+        仅验证进程存活的轻量检查端点。
+        仅包含标记为 "live" tag 的检查项（Self check）。
+        不包含外部依赖检查（如数据库连接）。
+        
+        用于容器编排器（如 Kubernetes）的 liveness probe，
+        判断进程是否需要重启（而非服务是否就绪）。
+        
+        此端点的请求不会出现在 OpenTelemetry Traces 中（已被 ServiceDefaults 过滤）。
+      operationId: getLivenessCheck
+      tags:
+        - Health
+      responses:
+        "200":
+          description: 进程存活
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthReport"
+              example:
+                status: "Healthy"
+                totalDuration: "00:00:00.0001234"
+                entries:
+                  self:
+                    status: "Healthy"
+                    duration: "00:00:00.0001234"
+                    tags:
+                      - "live"
+
+components:
+  schemas:
+    HealthReport:
+      type: object
+      description: ASP.NET Core HealthReport 序列化输出
+      properties:
+        status:
+          type: string
+          enum:
+            - Healthy
+            - Degraded
+            - Unhealthy
+          description: 聚合健康状态
+        totalDuration:
+          type: string
+          format: duration
+          description: 所有检查项的总执行时间
+        entries:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/HealthCheckEntry"
+          description: 各检查项的详细结果
+      required:
+        - status
+        - totalDuration
+        - entries
+
+    HealthCheckEntry:
+      type: object
+      description: 单个健康检查项的结果
+      properties:
+        status:
+          type: string
+          enum:
+            - Healthy
+            - Degraded
+            - Unhealthy
+        duration:
+          type: string
+          format: duration
+          description: 该检查项的执行时间
+        description:
+          type: string
+          nullable: true
+          description: 可选的描述信息（通常在 Unhealthy 时包含错误详情）
+        tags:
+          type: array
+          items:
+            type: string
+          description: 检查项标签（如 "live" 用于 liveness 过滤）
+        data:
+          type: object
+          additionalProperties: true
+          description: 附加数据（可选）
+      required:
+        - status
+        - duration
+        - tags

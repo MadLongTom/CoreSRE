@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Aspire.Npgsql.EntityFrameworkCore.PostgreSQL" Version="13.1.0" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\CoreSRE.Application\CoreSRE.Application.csproj" />
+    <ProjectReference Include="..\CoreSRE.Infrastructure\CoreSRE.Infrastructure.csproj" />
+    <ProjectReference Include="..\CoreSRE.ServiceDefaults\CoreSRE.ServiceDefaults.csproj" />
+  </ItemGroup>
+
+</Project>
