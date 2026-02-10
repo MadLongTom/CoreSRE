@@ -1,0 +1,191 @@
+openapi: 3.0.3
+info:
+  title: CoreSRE Agent Search API
+  description: |
+    Agent 技能搜索端点。支持关键词模糊匹配（P1）和语义向量搜索（P2）。
+    搜索范围限定为 A2A 类型 Agent 的 AgentCard.Skills 字段。
+  version: 1.0.0
+
+servers:
+  - url: /api
+    description: Relative to application base URL
+
+paths:
+  /agents/search:
+    get:
+      operationId: searchAgents
+      summary: 按技能搜索 Agent
+      description: |
+        在所有 A2A Agent 的 skill name 和 description 中搜索匹配的 Agent。
+        P1 使用关键词大小写不敏感模糊匹配，P2 使用向量嵌入语义匹配。
+        结果按相关性排序（关键词模式：匹配 skill 数量降序；语义模式：相似度降序）。
+      tags:
+        - Agents
+      parameters:
+        - name: q
+          in: query
+          required: true
+          description: 搜索查询文本，不能为空，最大 500 字符
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 500
+          example: "customer support"
+      responses:
+        "200":
+          description: 搜索成功，返回匹配 Agent 列表（可能为空）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentSearchResponse"
+              examples:
+                keywordMatch:
+                  summary: 关键词匹配结果
+                  value:
+                    results:
+                      - id: "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+                        name: "CustomerSupportAgent"
+                        agentType: "A2A"
+                        status: "Active"
+                        createdAt: "2026-02-01T10:00:00Z"
+                        matchedSkills:
+                          - name: "answer-customer-questions"
+                            description: "Answer questions about products and orders"
+                          - name: "customer-onboarding"
+                            description: "Guide new customers through setup"
+                        similarityScore: null
+                    searchMode: "keyword"
+                    query: "customer"
+                    totalCount: 1
+                emptyResult:
+                  summary: 无匹配结果
+                  value:
+                    results: []
+                    searchMode: "keyword"
+                    query: "quantum physics"
+                    totalCount: 0
+        "400":
+          description: 请求参数无效
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+              examples:
+                missingQuery:
+                  summary: 缺少查询参数
+                  value:
+                    type: "https://tools.ietf.org/html/rfc9110#section-15.5.1"
+                    title: "Validation Failed"
+                    status: 400
+                    errors:
+                      Query:
+                        - "'Query' must not be empty."
+                tooLong:
+                  summary: 查询文本过长
+                  value:
+                    type: "https://tools.ietf.org/html/rfc9110#section-15.5.1"
+                    title: "Validation Failed"
+                    status: 400
+                    errors:
+                      Query:
+                        - "The length of 'Query' must be 500 characters or fewer."
+
+components:
+  schemas:
+    AgentSearchResponse:
+      type: object
+      required:
+        - results
+        - searchMode
+        - query
+        - totalCount
+      properties:
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/AgentSearchResultDto"
+          description: 匹配 Agent 列表，按相关性排序
+        searchMode:
+          type: string
+          enum:
+            - keyword
+            - semantic
+            - keyword-fallback
+          description: |
+            当前搜索模式。
+            - keyword: 关键词匹配
+            - semantic: 向量语义匹配 (P2)
+            - keyword-fallback: 语义搜索降级为关键词 (P2)
+        query:
+          type: string
+          description: 原始搜索文本
+        totalCount:
+          type: integer
+          minimum: 0
+          description: 匹配 Agent 总数
+
+    AgentSearchResultDto:
+      type: object
+      required:
+        - id
+        - name
+        - agentType
+        - status
+        - createdAt
+        - matchedSkills
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        agentType:
+          type: string
+          description: 始终为 "A2A"
+        status:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        matchedSkills:
+          type: array
+          items:
+            $ref: "#/components/schemas/MatchedSkillDto"
+          minItems: 1
+          description: 与搜索词匹配的 skill 列表
+        similarityScore:
+          type: number
+          format: double
+          nullable: true
+          minimum: 0.0
+          maximum: 1.0
+          description: 语义相似度评分 (P2 only)，关键词模式为 null
+
+    MatchedSkillDto:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          description: Skill 名称
+        description:
+          type: string
+          nullable: true
+          description: Skill 描述
+
+    ValidationError:
+      type: object
+      properties:
+        type:
+          type: string
+        title:
+          type: string
+        status:
+          type: integer
+        errors:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string

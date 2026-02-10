@@ -11,6 +11,9 @@ public class AppDbContext : DbContext, IUnitOfWork
 {
     public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
 
+    public DbSet<AgentRegistration> AgentRegistrations => Set<AgentRegistration>();
+    public DbSet<AgentSessionRecord> AgentSessions => Set<AgentSessionRecord>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);

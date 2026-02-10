@@ -1,6 +1,8 @@
 using CoreSRE.Application;
+using CoreSRE.Endpoints;
 using CoreSRE.Infrastructure;
 using CoreSRE.Infrastructure.Persistence;
+using CoreSRE.Middleware;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -32,6 +34,7 @@ builder.Services.AddCors(options =>
 var app = builder.Build();
 
 // ===== 中间件管道 =====
+app.UseMiddleware<ExceptionHandlingMiddleware>();
 app.MapDefaultEndpoints();
 
 if (app.Environment.IsDevelopment())
@@ -40,6 +43,9 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseCors();
+
+// ===== API 端点 =====
+app.MapAgentEndpoints();
 
 // ===== 自动迁移数据库（开发环境）=====
 using (var scope = app.Services.CreateScope())

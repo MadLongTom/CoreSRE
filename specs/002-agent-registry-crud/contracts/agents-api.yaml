@@ -1,0 +1,404 @@
+openapi: "3.0.3"
+info:
+  title: CoreSRE Agent Registry API
+  version: "1.0.0"
+  description: |
+    Agent Registration CRUD API for CoreSRE platform.
+    Supports three agent types: A2A, ChatClient, Workflow.
+
+servers:
+  - url: http://localhost:{port}
+    description: Development (Aspire-managed port)
+    variables:
+      port:
+        default: "5156"
+
+paths:
+  /api/agents:
+    post:
+      operationId: registerAgent
+      summary: Register a new Agent
+      tags: [Agents]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterAgentRequest"
+            examples:
+              a2a:
+                summary: A2A Agent
+                value:
+                  name: "customer-support-agent"
+                  description: "Customer support agent via A2A protocol"
+                  agentType: "A2A"
+                  endpoint: "https://agents.example.com/customer-support"
+                  agentCard:
+                    skills:
+                      - name: "answer-questions"
+                        description: "Answer customer questions about products"
+                    interfaces:
+                      - protocol: "HTTP+SSE"
+                        path: "/a2a"
+                    securitySchemes:
+                      - type: "bearer"
+                        parameters: null
+              chatClient:
+                summary: ChatClient Agent
+                value:
+                  name: "code-review-agent"
+                  description: "LLM-based code review agent"
+                  agentType: "ChatClient"
+                  llmConfig:
+                    modelId: "gpt-4o"
+                    instructions: "You are a code review expert. Review code for bugs, performance, and style issues."
+                    toolRefs: []
+              workflow:
+                summary: Workflow Agent
+                value:
+                  name: "incident-triage-agent"
+                  description: "Workflow-based incident triage"
+                  agentType: "Workflow"
+                  workflowRef: "550e8400-e29b-41d4-a716-446655440000"
+      responses:
+        "201":
+          description: Agent registered successfully
+          headers:
+            Location:
+              schema:
+                type: string
+              description: URL to the created agent resource
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentResult"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResult"
+        "409":
+          description: Agent name conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResult"
+
+    get:
+      operationId: getAgents
+      summary: List all registered Agents
+      tags: [Agents]
+      parameters:
+        - name: type
+          in: query
+          required: false
+          description: Filter by agent type
+          schema:
+            $ref: "#/components/schemas/AgentType"
+      responses:
+        "200":
+          description: Agent list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentListResult"
+
+  /api/agents/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+
+    get:
+      operationId: getAgentById
+      summary: Get Agent details by ID
+      tags: [Agents]
+      responses:
+        "200":
+          description: Agent details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentResult"
+        "404":
+          description: Agent not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResult"
+
+    put:
+      operationId: updateAgent
+      summary: Update Agent registration
+      tags: [Agents]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateAgentRequest"
+      responses:
+        "200":
+          description: Agent updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentResult"
+        "400":
+          description: Validation error (including type change attempt)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResult"
+        "404":
+          description: Agent not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResult"
+
+    delete:
+      operationId: deleteAgent
+      summary: Deregister (delete) an Agent
+      tags: [Agents]
+      responses:
+        "204":
+          description: Agent deleted successfully
+        "404":
+          description: Agent not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResult"
+
+components:
+  schemas:
+    AgentType:
+      type: string
+      enum: [A2A, ChatClient, Workflow]
+
+    AgentStatus:
+      type: string
+      enum: [Registered, Active, Inactive, Error]
+
+    AgentSkill:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+
+    AgentInterface:
+      type: object
+      required: [protocol]
+      properties:
+        protocol:
+          type: string
+          description: "Communication protocol (e.g., HTTP+SSE, WebSocket)"
+        path:
+          type: string
+
+    SecurityScheme:
+      type: object
+      required: [type]
+      properties:
+        type:
+          type: string
+          description: "Scheme type (e.g., apiKey, oauth2, bearer)"
+        parameters:
+          type: string
+          nullable: true
+
+    AgentCard:
+      type: object
+      properties:
+        skills:
+          type: array
+          items:
+            $ref: "#/components/schemas/AgentSkill"
+          default: []
+        interfaces:
+          type: array
+          items:
+            $ref: "#/components/schemas/AgentInterface"
+          default: []
+        securitySchemes:
+          type: array
+          items:
+            $ref: "#/components/schemas/SecurityScheme"
+          default: []
+
+    LlmConfig:
+      type: object
+      required: [modelId]
+      properties:
+        modelId:
+          type: string
+        instructions:
+          type: string
+          nullable: true
+        toolRefs:
+          type: array
+          items:
+            type: string
+            format: uuid
+          default: []
+
+    RegisterAgentRequest:
+      type: object
+      required: [name, agentType]
+      properties:
+        name:
+          type: string
+          maxLength: 200
+        description:
+          type: string
+          nullable: true
+        agentType:
+          $ref: "#/components/schemas/AgentType"
+        endpoint:
+          type: string
+          format: uri
+          maxLength: 2048
+          nullable: true
+          description: "Required for A2A agents"
+        agentCard:
+          $ref: "#/components/schemas/AgentCard"
+          nullable: true
+          description: "Required for A2A agents"
+        llmConfig:
+          $ref: "#/components/schemas/LlmConfig"
+          nullable: true
+          description: "Required for ChatClient agents"
+        workflowRef:
+          type: string
+          format: uuid
+          nullable: true
+          description: "Required for Workflow agents"
+
+    UpdateAgentRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          maxLength: 200
+        description:
+          type: string
+          nullable: true
+        endpoint:
+          type: string
+          format: uri
+          maxLength: 2048
+          nullable: true
+        agentCard:
+          $ref: "#/components/schemas/AgentCard"
+          nullable: true
+        llmConfig:
+          $ref: "#/components/schemas/LlmConfig"
+          nullable: true
+        workflowRef:
+          type: string
+          format: uuid
+          nullable: true
+
+    AgentSummary:
+      type: object
+      required: [id, name, agentType, status, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        agentType:
+          $ref: "#/components/schemas/AgentType"
+        status:
+          $ref: "#/components/schemas/AgentStatus"
+        createdAt:
+          type: string
+          format: date-time
+
+    AgentDetail:
+      type: object
+      required: [id, name, agentType, status, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        agentType:
+          $ref: "#/components/schemas/AgentType"
+        status:
+          $ref: "#/components/schemas/AgentStatus"
+        endpoint:
+          type: string
+          nullable: true
+        agentCard:
+          $ref: "#/components/schemas/AgentCard"
+          nullable: true
+        llmConfig:
+          $ref: "#/components/schemas/LlmConfig"
+          nullable: true
+        workflowRef:
+          type: string
+          format: uuid
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    AgentResult:
+      type: object
+      required: [success]
+      properties:
+        success:
+          type: boolean
+        data:
+          $ref: "#/components/schemas/AgentDetail"
+        message:
+          type: string
+          nullable: true
+
+    AgentListResult:
+      type: object
+      required: [success]
+      properties:
+        success:
+          type: boolean
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/AgentSummary"
+        message:
+          type: string
+          nullable: true
+
+    ErrorResult:
+      type: object
+      required: [success, message]
+      properties:
+        success:
+          type: boolean
+          enum: [false]
+        message:
+          type: string
+        errors:
+          type: array
+          items:
+            type: string
+          nullable: true

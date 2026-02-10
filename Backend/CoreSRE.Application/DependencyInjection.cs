@@ -1,5 +1,7 @@
 using System.Reflection;
+using CoreSRE.Application.Common.Behaviors;
 using FluentValidation;
+using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace CoreSRE.Application;
@@ -13,7 +15,11 @@ public static class DependencyInjection
     {
         var assembly = Assembly.GetExecutingAssembly();
 
-        services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(assembly));
+        services.AddMediatR(cfg =>
+        {
+            cfg.RegisterServicesFromAssembly(assembly);
+            cfg.AddBehavior(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));
+        });
         services.AddAutoMapper(assembly);
         services.AddValidatorsFromAssembly(assembly);
 

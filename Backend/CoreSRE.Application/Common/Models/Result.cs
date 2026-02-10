@@ -10,6 +10,12 @@ public class Result<T>
     public string? Message { get; set; }
     public List<string>? Errors { get; set; }
 
+    /// <summary>
+    /// 错误码，用于表达 HTTP 状态码语义（如 404, 409）。
+    /// Application 层对 HTTP 无感知，仅是整数语义，API 层可直接映射。
+    /// </summary>
+    public int? ErrorCode { get; set; }
+
     public static Result<T> Ok(T data, string? message = null) => new()
     {
         Success = true,
@@ -22,5 +28,21 @@ public class Result<T>
         Success = false,
         Message = message,
         Errors = errors
+    };
+
+    /// <summary>资源未找到（404 语义）</summary>
+    public static Result<T> NotFound(string message = "Resource not found.") => new()
+    {
+        Success = false,
+        Message = message,
+        ErrorCode = 404
+    };
+
+    /// <summary>冲突（409 语义，如名称重复）</summary>
+    public static Result<T> Conflict(string message = "Resource already exists.") => new()
+    {
+        Success = false,
+        Message = message,
+        ErrorCode = 409
     };
 }

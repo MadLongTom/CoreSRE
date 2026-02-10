@@ -1,5 +1,7 @@
 using CoreSRE.Domain.Interfaces;
 using CoreSRE.Infrastructure.Persistence;
+using CoreSRE.Infrastructure.Persistence.Sessions;
+using Microsoft.Agents.AI.Hosting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -16,9 +18,30 @@ public static class DependencyInjection
         services.AddDbContext<AppDbContext>(options =>
             options.UseNpgsql(configuration.GetConnectionString("coresre")));
 
+        // IDbContextFactory for services that need to create DbContext outside of scoped lifetime
+        // (e.g., singleton AgentSessionStore)
+        services.AddDbContextFactory<AppDbContext>(options =>
+            options.UseNpgsql(configuration.GetConnectionString("coresre")), ServiceLifetime.Scoped);
+
         services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
+        services.AddScoped<IAgentRegistrationRepository, AgentRegistrationRepository>();
         services.AddScoped<IUnitOfWork>(sp => sp.GetRequiredService<AppDbContext>());
 
         return services;
+    }
+
+    /// <summary>
+    /// 创建 PostgresAgentSessionStore 工厂委托，用于 Agent Framework 的 WithSessionStore 注册。
+    /// <para>
+    /// 使用示例（在 Program.cs 中）:
+    /// <code>
+    /// agentBuilder.WithSessionStore(DependencyInjection.CreatePostgresSessionStore);
+    /// </code>
+    /// </para>
+    /// </summary>
+    public static AgentSessionStore CreatePostgresSessionStore(IServiceProvider serviceProvider, string agentName)
+    {
+        var contextFactory = serviceProvider.GetRequiredService<IDbContextFactory<AppDbContext>>();
+        return new PostgresAgentSessionStore(contextFactory);
     }
 }
