@@ -13,6 +13,7 @@ public class AppDbContext : DbContext, IUnitOfWork
 
     public DbSet<AgentRegistration> AgentRegistrations => Set<AgentRegistration>();
     public DbSet<AgentSessionRecord> AgentSessions => Set<AgentSessionRecord>();
+    public DbSet<LlmProvider> LlmProviders => Set<LlmProvider>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

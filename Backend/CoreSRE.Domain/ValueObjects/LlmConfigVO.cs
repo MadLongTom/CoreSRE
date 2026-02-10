@@ -5,6 +5,9 @@ namespace CoreSRE.Domain.ValueObjects;
 /// </summary>
 public sealed record LlmConfigVO
 {
+    /// <summary>关联的 LLM Provider ID（nullable，向后兼容）</summary>
+    public Guid? ProviderId { get; init; }
+
     /// <summary>LLM 模型标识符</summary>
     public string ModelId { get; init; } = string.Empty;
 

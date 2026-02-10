@@ -5,6 +5,8 @@ namespace CoreSRE.Application.Agents.DTOs;
 /// </summary>
 public class LlmConfigDto
 {
+    public Guid? ProviderId { get; set; }
+    public string? ProviderName { get; set; }
     public string ModelId { get; set; } = string.Empty;
     public string? Instructions { get; set; }
     public List<Guid> ToolRefs { get; set; } = [];

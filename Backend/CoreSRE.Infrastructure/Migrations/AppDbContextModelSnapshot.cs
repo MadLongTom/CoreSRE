@@ -117,6 +117,56 @@ namespace CoreSRE.Infrastructure.Migrations
                     b.ToTable("agent_sessions", (string)null);
                 });
 
+            modelBuilder.Entity("CoreSRE.Domain.Entities.LlmProvider", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("ApiKey")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("api_key");
+
+                    b.Property<string>("BaseUrl")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("base_url");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.PrimitiveCollection<string>("DiscoveredModels")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("discovered_models");
+
+                    b.Property<DateTime?>("ModelsRefreshedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("models_refreshed_at");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("name");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("llm_providers", (string)null);
+                });
+
             modelBuilder.Entity("CoreSRE.Domain.Entities.AgentRegistration", b =>
                 {
                     b.OwnsOne("CoreSRE.Domain.ValueObjects.AgentCardVO", "AgentCard", b1 =>
@@ -231,6 +281,8 @@ namespace CoreSRE.Infrastructure.Migrations
 
                             b1.Property<string>("ModelId")
                                 .IsRequired();
+
+                            b1.Property<Guid?>("ProviderId");
 
                             b1.PrimitiveCollection<string>("ToolRefs")
                                 .IsRequired();

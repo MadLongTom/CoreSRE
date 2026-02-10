@@ -1,6 +1,8 @@
+using CoreSRE.Application.Common.Interfaces;
 using CoreSRE.Domain.Interfaces;
 using CoreSRE.Infrastructure.Persistence;
 using CoreSRE.Infrastructure.Persistence.Sessions;
+using CoreSRE.Infrastructure.Services;
 using Microsoft.Agents.AI.Hosting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -25,7 +27,12 @@ public static class DependencyInjection
 
         services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
         services.AddScoped<IAgentRegistrationRepository, AgentRegistrationRepository>();
+        services.AddScoped<ILlmProviderRepository, LlmProviderRepository>();
         services.AddScoped<IUnitOfWork>(sp => sp.GetRequiredService<AppDbContext>());
+
+        // Model discovery service + named HttpClient
+        services.AddHttpClient("ModelDiscovery");
+        services.AddScoped<IModelDiscoveryService, ModelDiscoveryService>();
 
         return services;
     }

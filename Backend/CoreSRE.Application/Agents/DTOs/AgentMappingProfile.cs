@@ -33,6 +33,7 @@ public class AgentMappingProfile : Profile
         CreateMap<AgentSkillDto, AgentSkillVO>();
         CreateMap<AgentInterfaceDto, AgentInterfaceVO>();
         CreateMap<SecuritySchemeDto, SecuritySchemeVO>();
-        CreateMap<LlmConfigDto, LlmConfigVO>();
+        CreateMap<LlmConfigDto, LlmConfigVO>()
+            .ForSourceMember(s => s.ProviderName, opt => opt.DoNotValidate());
     }
 }

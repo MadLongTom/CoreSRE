@@ -45,4 +45,13 @@ public class Result<T>
         Message = message,
         ErrorCode = 409
     };
+
+    /// <summary>网关错误（502 语义，如外部服务调用失败）</summary>
+    public static Result<T> BadGateway(string message, List<string>? errors = null) => new()
+    {
+        Success = false,
+        Message = message,
+        Errors = errors,
+        ErrorCode = 502
+    };
 }
