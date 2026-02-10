@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/card";
 import { AgentTypeBadge } from "@/components/agents/AgentTypeBadge";
 import SkillHighlight from "@/components/agents/SkillHighlight";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { searchAgents, ApiError } from "@/lib/api/agents";
 import type { AgentSearchResponse } from "@/types/agent";
 
@@ -54,9 +55,10 @@ export default function AgentSearchPage() {
   }, [query]);
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-bold">搜索 Agent 技能</h1>
+    <div className="flex flex-1 flex-col overflow-hidden">
+      <PageHeader title="搜索 Agent 技能" />
 
+      <div className="flex-1 overflow-y-auto p-6 space-y-6">
       {/* Search input */}
       <div className="relative max-w-xl">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -163,6 +165,7 @@ export default function AgentSearchPage() {
           )}
         </div>
       )}
+      </div>
     </div>
   );
 }

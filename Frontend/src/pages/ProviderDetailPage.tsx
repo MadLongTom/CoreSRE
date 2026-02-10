@@ -27,6 +27,7 @@ import {
   ApiError,
 } from "@/lib/api/providers";
 import { DeleteProviderDialog } from "@/components/providers/DeleteProviderDialog";
+import { PageHeader } from "@/components/layout/PageHeader";
 import type { LlmProvider } from "@/types/provider";
 
 export default function ProviderDetailPage() {
@@ -197,7 +198,7 @@ export default function ProviderDetailPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-20">
+      <div className="flex flex-1 items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
     );
@@ -205,7 +206,7 @@ export default function ProviderDetailPage() {
 
   if (notFound) {
     return (
-      <div className="flex flex-col items-center gap-4 py-20">
+      <div className="flex flex-1 flex-col items-center justify-center gap-4">
         <XCircle className="h-12 w-12 text-muted-foreground" />
         <h2 className="text-xl font-semibold">Provider 未找到</h2>
         <Button asChild variant="outline">
@@ -217,7 +218,7 @@ export default function ProviderDetailPage() {
 
   if (error || !provider) {
     return (
-      <div className="flex flex-col items-center gap-4 py-20">
+      <div className="flex flex-1 flex-col items-center justify-center gap-4">
         <p className="text-destructive">{error ?? "加载失败"}</p>
         <Button variant="outline" onClick={fetchProvider}>
           重试
@@ -227,36 +228,37 @@ export default function ProviderDetailPage() {
   }
 
   return (
-    <div className="max-w-3xl space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
+    <div className="flex flex-1 flex-col overflow-hidden">
+      <PageHeader
+        title={editing ? "编辑 Provider" : provider.name}
+        leading={
           <Button variant="ghost" size="icon" asChild>
             <Link to="/providers">
               <ArrowLeft className="h-4 w-4" />
             </Link>
           </Button>
-          <h1 className="text-2xl font-bold">
-            {editing ? "编辑 Provider" : provider.name}
-          </h1>
-        </div>
-        <div className="flex gap-2">
-          {!editing && (
+        }
+        actions={
+          !editing ? (
             <>
-              <Button variant="outline" onClick={startEditing}>
+              <Button variant="outline" size="sm" onClick={startEditing}>
                 <Pencil className="mr-2 h-4 w-4" />
                 编辑
               </Button>
               <Button
                 variant="destructive"
+                size="sm"
                 onClick={() => setShowDelete(true)}
               >
                 删除
               </Button>
             </>
-          )}
-        </div>
-      </div>
+          ) : undefined
+        }
+      />
+
+      <div className="flex-1 overflow-y-auto p-6">
+      <div className="max-w-3xl space-y-6">
 
       {/* Save errors */}
       {saveErrors.length > 0 && (
@@ -442,6 +444,8 @@ export default function ProviderDetailPage() {
           onDeleted={() => navigate("/providers")}
         />
       )}
+    </div>
+    </div>
     </div>
   );
 }

@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import ProviderModelSelect from "@/components/agents/ProviderModelSelect";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { createAgent, ApiError } from "@/lib/api/agents";
 import type {
   AgentType,
@@ -130,19 +131,22 @@ export default function AgentCreatePage() {
   };
 
   return (
-    <div className="max-w-3xl space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-4">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => (step === 2 ? setStep(1) : navigate("/agents"))}
-        >
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
-        <h1 className="text-2xl font-bold">新建 Agent</h1>
-      </div>
+    <div className="flex flex-1 flex-col overflow-hidden">
+      <PageHeader
+        title="新建 Agent"
+        leading={
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => (step === 2 ? setStep(1) : navigate("/agents"))}
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+        }
+      />
 
+      <div className="flex-1 overflow-y-auto p-6">
+      <div className="max-w-3xl space-y-6">
       {/* Step 1: Type selection */}
       {step === 1 && (
         <div className="grid gap-4 md:grid-cols-3">
@@ -477,6 +481,8 @@ export default function AgentCreatePage() {
           </div>
         </div>
       )}
+    </div>
+    </div>
     </div>
   );
 }

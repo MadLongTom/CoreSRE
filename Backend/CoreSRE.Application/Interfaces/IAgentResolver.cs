@@ -1,0 +1,20 @@
+using Microsoft.Agents.AI;
+
+namespace CoreSRE.Application.Interfaces;
+
+/// <summary>
+/// 解析 AgentRegistration ID 为可运行的 AIAgent 实例。
+/// Infrastructure 层实现负责从 AgentRegistration 获取 LlmProvider 配置，
+/// 构建 OpenAIClient → IChatClient → ChatClientAgent。
+/// </summary>
+public interface IAgentResolver
+{
+    /// <summary>
+    /// 根据 AgentRegistration ID 解析并构建 AIAgent。
+    /// </summary>
+    /// <param name="agentRegistrationId">AgentRegistration 的主键 ID</param>
+    /// <param name="conversationId">对话 ID，用于配置 ChatHistoryProvider 的 session key</param>
+    /// <param name="cancellationToken">取消令牌</param>
+    /// <returns>就绪的 AIAgent 实例</returns>
+    Task<AIAgent> ResolveAsync(Guid agentRegistrationId, string conversationId, CancellationToken cancellationToken = default);
+}

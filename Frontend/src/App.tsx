@@ -7,6 +7,7 @@ import AgentSearchPage from "@/pages/AgentSearchPage";
 import ProviderListPage from "@/pages/ProviderListPage";
 import ProviderCreatePage from "@/pages/ProviderCreatePage";
 import ProviderDetailPage from "@/pages/ProviderDetailPage";
+import ChatPage from "@/pages/ChatPage";
 import NotFoundPage from "@/pages/NotFoundPage";
 
 const router = createBrowserRouter([
@@ -21,6 +22,7 @@ const router = createBrowserRouter([
       { path: "providers", element: <ProviderListPage /> },
       { path: "providers/new", element: <ProviderCreatePage /> },
       { path: "providers/:id", element: <ProviderDetailPage /> },
+      { path: "chat", element: <ChatPage /> },
       { path: "*", element: <NotFoundPage /> },
     ],
   },

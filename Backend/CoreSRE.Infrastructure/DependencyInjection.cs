@@ -1,4 +1,5 @@
 using CoreSRE.Application.Common.Interfaces;
+using CoreSRE.Application.Interfaces;
 using CoreSRE.Domain.Interfaces;
 using CoreSRE.Infrastructure.Persistence;
 using CoreSRE.Infrastructure.Persistence.Sessions;
@@ -28,7 +29,14 @@ public static class DependencyInjection
         services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
         services.AddScoped<IAgentRegistrationRepository, AgentRegistrationRepository>();
         services.AddScoped<ILlmProviderRepository, LlmProviderRepository>();
+        services.AddScoped<IConversationRepository, ConversationRepository>();
         services.AddScoped<IUnitOfWork>(sp => sp.GetRequiredService<AppDbContext>());
+
+        // Agent resolver — resolves AgentRegistration → AIAgent for AG-UI chat
+        services.AddScoped<IAgentResolver, AgentResolverService>();
+
+        // Chat history reader — reads messages from AgentSessionRecord.SessionData
+        services.AddScoped<IChatHistoryReader, ChatHistoryReader>();
 
         // Model discovery service + named HttpClient
         services.AddHttpClient("ModelDiscovery");

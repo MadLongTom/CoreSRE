@@ -16,6 +16,7 @@ import { AgentStatusBadge } from "@/components/agents/AgentStatusBadge";
 import AgentCardSection from "@/components/agents/AgentCardSection";
 import LlmConfigSection from "@/components/agents/LlmConfigSection";
 import { DeleteAgentDialog } from "@/components/agents/DeleteAgentDialog";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { getAgentById, updateAgent, ApiError } from "@/lib/api/agents";
 import type {
   AgentRegistration,
@@ -186,7 +187,7 @@ export default function AgentDetailPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-20">
+      <div className="flex flex-1 items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
     );
@@ -194,7 +195,7 @@ export default function AgentDetailPage() {
 
   if (notFound) {
     return (
-      <div className="flex flex-col items-center gap-4 py-20">
+      <div className="flex flex-1 flex-col items-center justify-center gap-4">
         <XCircle className="h-12 w-12 text-muted-foreground" />
         <h2 className="text-xl font-semibold">Agent 未找到</h2>
         <Button asChild variant="outline">
@@ -206,7 +207,7 @@ export default function AgentDetailPage() {
 
   if (error || !agent) {
     return (
-      <div className="flex flex-col items-center gap-4 py-20">
+      <div className="flex flex-1 flex-col items-center justify-center gap-4">
         <p className="text-destructive">{error ?? "加载失败"}</p>
         <Button variant="outline" onClick={fetchAgent}>
           重试
@@ -216,38 +217,39 @@ export default function AgentDetailPage() {
   }
 
   return (
-    <div className="max-w-3xl space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
+    <div className="flex flex-1 flex-col overflow-hidden">
+      <PageHeader
+        title={editing ? "编辑 Agent" : agent.name}
+        leading={
           <Button variant="ghost" size="icon" asChild>
             <Link to="/agents">
               <ArrowLeft className="h-4 w-4" />
             </Link>
           </Button>
-          <h1 className="text-2xl font-bold">
-            {editing ? "编辑 Agent" : agent.name}
-          </h1>
-          <AgentTypeBadge type={agent.agentType} />
-          <AgentStatusBadge status={agent.status} />
-        </div>
-        <div className="flex gap-2">
-          {!editing && (
+        }
+        actions={
+          !editing ? (
             <>
-              <Button variant="outline" onClick={startEditing}>
+              <AgentTypeBadge type={agent.agentType} />
+              <AgentStatusBadge status={agent.status} />
+              <Button variant="outline" size="sm" onClick={startEditing}>
                 <Pencil className="mr-2 h-4 w-4" />
                 编辑
               </Button>
               <Button
                 variant="destructive"
+                size="sm"
                 onClick={() => setShowDelete(true)}
               >
                 删除
               </Button>
             </>
-          )}
-        </div>
-      </div>
+          ) : undefined
+        }
+      />
+
+      <div className="flex-1 overflow-y-auto p-6">
+      <div className="max-w-3xl space-y-6">
 
       {/* Save errors */}
       {saveErrors.length > 0 && (
@@ -469,6 +471,8 @@ export default function AgentDetailPage() {
           onDeleted={() => navigate("/agents")}
         />
       )}
+    </div>
+    </div>
     </div>
   );
 }

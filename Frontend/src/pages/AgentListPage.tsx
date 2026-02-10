@@ -20,6 +20,7 @@ import {
 import { AgentTypeBadge } from "@/components/agents/AgentTypeBadge";
 import { AgentStatusBadge } from "@/components/agents/AgentStatusBadge";
 import { DeleteAgentDialog } from "@/components/agents/DeleteAgentDialog";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { getAgents, type ApiError } from "@/lib/api/agents";
 import type { AgentSummary } from "@/types/agent";
 import { AGENT_TYPES } from "@/types/agent";
@@ -69,34 +70,36 @@ export default function AgentListPage() {
   };
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Agent 列表</h1>
-        <Button asChild>
-          <Link to="/agents/new">
-            <Plus className="mr-2 h-4 w-4" />
-            新建 Agent
-          </Link>
-        </Button>
-      </div>
+    <div className="flex flex-1 flex-col overflow-hidden">
+      <PageHeader
+        title="Agent 列表"
+        actions={
+          <Button asChild size="sm">
+            <Link to="/agents/new">
+              <Plus className="mr-2 h-4 w-4" />
+              新建 Agent
+            </Link>
+          </Button>
+        }
+      />
 
-      {/* Filter bar */}
-      <div className="flex items-center gap-4">
-        <Select value={typeFilter} onValueChange={setTypeFilter}>
-          <SelectTrigger className="w-48">
-            <SelectValue placeholder="筛选类型" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">全部类型</SelectItem>
-            {AGENT_TYPES.map((t) => (
-              <SelectItem key={t} value={t}>
-                {t}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+      <div className="flex-1 overflow-y-auto p-6 space-y-6">
+        {/* Filter bar */}
+        <div className="flex items-center gap-4">
+          <Select value={typeFilter} onValueChange={setTypeFilter}>
+            <SelectTrigger className="w-48">
+              <SelectValue placeholder="筛选类型" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">全部类型</SelectItem>
+              {AGENT_TYPES.map((t) => (
+                <SelectItem key={t} value={t}>
+                  {t}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
 
       {/* Content */}
       {loading ? (
@@ -186,6 +189,7 @@ export default function AgentListPage() {
           onDeleted={handleDeleted}
         />
       )}
+      </div>
     </div>
   );
 }

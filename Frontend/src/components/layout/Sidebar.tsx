@@ -1,9 +1,10 @@
 import { NavLink } from "react-router";
-import { List, Search, Bot, Server } from "lucide-react";
+import { List, Search, Bot, Server, MessageSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Separator } from "@/components/ui/separator";
 
 const navItems = [
+  { to: "/chat", label: "对话", icon: MessageSquare },
   { to: "/agents", label: "Agent 列表", icon: List, end: true },
   { to: "/agents/search", label: "Agent 搜索", icon: Search },
   { to: "/providers", label: "Provider 管理", icon: Server },

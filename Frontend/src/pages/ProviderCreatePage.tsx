@@ -10,6 +10,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { createProvider, ApiError } from "@/lib/api/providers";
 
 export default function ProviderCreatePage() {
@@ -67,19 +68,22 @@ export default function ProviderCreatePage() {
   };
 
   return (
-    <div className="max-w-2xl space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-4">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => navigate("/providers")}
-        >
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
-        <h1 className="text-2xl font-bold">新建 Provider</h1>
-      </div>
+    <div className="flex flex-1 flex-col overflow-hidden">
+      <PageHeader
+        title="新建 Provider"
+        leading={
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => navigate("/providers")}
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+        }
+      />
 
+      <div className="flex-1 overflow-y-auto p-6">
+      <div className="max-w-2xl space-y-6">
       {/* Error display */}
       {errors.length > 0 && (
         <div className="rounded-md border border-destructive/50 bg-destructive/10 p-4">
@@ -144,6 +148,8 @@ export default function ProviderCreatePage() {
           创建 Provider
         </Button>
       </div>
+    </div>
+    </div>
     </div>
   );
 }

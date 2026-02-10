@@ -117,6 +117,42 @@ namespace CoreSRE.Infrastructure.Migrations
                     b.ToTable("agent_sessions", (string)null);
                 });
 
+            modelBuilder.Entity("CoreSRE.Domain.Entities.Conversation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("AgentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("agent_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Title")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("title");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AgentId")
+                        .HasDatabaseName("IX_conversations_agent_id");
+
+                    b.HasIndex("UpdatedAt")
+                        .IsDescending()
+                        .HasDatabaseName("IX_conversations_updated_at");
+
+                    b.ToTable("conversations", (string)null);
+                });
+
             modelBuilder.Entity("CoreSRE.Domain.Entities.LlmProvider", b =>
                 {
                     b.Property<Guid>("Id")
@@ -305,6 +341,15 @@ namespace CoreSRE.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("LlmConfig");
+                });
+
+            modelBuilder.Entity("CoreSRE.Domain.Entities.Conversation", b =>
+                {
+                    b.HasOne("CoreSRE.Domain.Entities.AgentRegistration", null)
+                        .WithMany()
+                        .HasForeignKey("AgentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 #pragma warning restore 612, 618
         }

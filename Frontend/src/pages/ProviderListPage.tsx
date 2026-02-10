@@ -10,6 +10,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { getProviders, type ApiError } from "@/lib/api/providers";
 import type { LlmProviderSummary } from "@/types/provider";
 
@@ -46,16 +47,18 @@ export default function ProviderListPage() {
   }, [fetchProviders]);
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Provider 列表</h1>
-        <Button onClick={() => navigate("/providers/new")}>
-          <Plus className="mr-2 h-4 w-4" />
-          新建 Provider
-        </Button>
-      </div>
+    <div className="flex flex-1 flex-col overflow-hidden">
+      <PageHeader
+        title="Provider 列表"
+        actions={
+          <Button size="sm" onClick={() => navigate("/providers/new")}>
+            <Plus className="mr-2 h-4 w-4" />
+            新建 Provider
+          </Button>
+        }
+      />
 
+      <div className="flex-1 overflow-y-auto p-6 space-y-6">
       {/* Content */}
       {loading ? (
         <div className="flex items-center justify-center py-20">
@@ -115,6 +118,7 @@ export default function ProviderListPage() {
           </Table>
         </div>
       )}
+      </div>
     </div>
   );
 }

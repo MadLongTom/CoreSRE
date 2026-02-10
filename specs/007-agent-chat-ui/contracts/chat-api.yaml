@@ -1,0 +1,280 @@
+openapi: 3.0.3
+info:
+  title: CoreSRE Chat API
+  description: |
+    API for single-Agent chat conversations.
+    - REST endpoints for conversation CRUD
+    - AG-UI SSE endpoint for real-time agent streaming (via MapAGUI)
+  version: 1.0.0
+
+paths:
+  /api/chat/conversations:
+    get:
+      operationId: getConversations
+      summary: List all conversations
+      description: Returns all conversations ordered by most recently active first
+      tags: [Chat]
+      responses:
+        "200":
+          description: List of conversation summaries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ConversationSummaryDto"
+
+    post:
+      operationId: createConversation
+      summary: Create a new conversation
+      description: Creates a new conversation bound to a specific Agent. Agent binding is immutable.
+      tags: [Chat]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateConversationRequest"
+      responses:
+        "201":
+          description: Conversation created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConversationDto"
+        "400":
+          description: Invalid request (missing agentId)
+        "404":
+          description: Agent not found
+
+  /api/chat/conversations/{conversationId}:
+    parameters:
+      - $ref: "#/components/parameters/ConversationId"
+
+    get:
+      operationId: getConversation
+      summary: Get conversation with full message history
+      description: |
+        Returns the conversation details and all messages extracted from the
+        associated AgentSessionRecord.SessionData (JSONB).
+        Messages are projected from ChatHistoryProviderState.Messages[] at read time.
+      tags: [Chat]
+      responses:
+        "200":
+          description: Conversation with messages
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConversationDto"
+        "404":
+          description: Conversation not found
+
+    delete:
+      operationId: deleteConversation
+      summary: Delete a conversation
+      description: Permanently deletes a conversation and all its messages
+      tags: [Chat]
+      responses:
+        "204":
+          description: Conversation deleted
+        "404":
+          description: Conversation not found
+
+  /api/chat/stream:
+    post:
+      operationId: agentChatStream
+      summary: AG-UI streaming endpoint (via MapAGUI)
+      description: |
+        AG-UI protocol endpoint mapped via `MapAGUI("/api/chat/stream", agentResolver)`.
+        Accepts a `RunAgentInput` JSON body and returns an SSE stream of AG-UI events.
+        
+        **Request flow**:
+        1. Client POSTs `RunAgentInput` with `threadId` (= conversationId), `messages`, and `context`
+        2. Backend resolves agent via `IAgentResolver` using context (agentId from conversation)
+        3. Agent runs `RunStreamingAsync` → MapAGUI translates to AG-UI events → SSE stream
+        
+        **AG-UI Event sequence**:
+        ```
+        RUN_STARTED
+        TEXT_MESSAGE_START {messageId, role: "assistant"}
+        TEXT_MESSAGE_CONTENT {messageId, delta: "token"} (repeated)
+        TEXT_MESSAGE_END {messageId}
+        RUN_FINISHED
+        ```
+        
+        **Error handling**: If agent fails mid-stream, a `RUN_ERROR` event is emitted.
+        **Cancellation**: Client can abort the fetch request; backend CancellationToken propagates.
+        
+        Note: This endpoint is auto-registered by `MapAGUI()` and does NOT follow standard REST conventions.
+        The `@ag-ui/client` `HttpAgent` handles all serialization/deserialization automatically.
+      tags: [Chat, AG-UI]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RunAgentInput"
+      responses:
+        "200":
+          description: SSE stream of AG-UI events
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                description: |
+                  SSE stream where each `data:` line is a JSON AG-UI event.
+                  Event types: RUN_STARTED, TEXT_MESSAGE_START, TEXT_MESSAGE_CONTENT,
+                  TEXT_MESSAGE_END, RUN_FINISHED, RUN_ERROR, TOOL_CALL_START,
+                  TOOL_CALL_ARGS, TOOL_CALL_END, STATE_SNAPSHOT, STATE_DELTA, CUSTOM.
+        "400":
+          description: Invalid RunAgentInput
+
+components:
+  parameters:
+    ConversationId:
+      name: conversationId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  schemas:
+    CreateConversationRequest:
+      type: object
+      required: [agentId]
+      properties:
+        agentId:
+          type: string
+          format: uuid
+          description: The Agent to bind this conversation to (immutable after creation)
+
+    RunAgentInput:
+      type: object
+      description: AG-UI protocol input for agent invocation (defined by @ag-ui/core)
+      required: [threadId, runId, messages]
+      properties:
+        threadId:
+          type: string
+          description: Maps to conversationId. Used to identify the conversation thread.
+        runId:
+          type: string
+          description: Unique ID for this specific run/invocation
+        messages:
+          type: array
+          description: Full message history for context
+          items:
+            $ref: "#/components/schemas/AGUIMessage"
+        tools:
+          type: array
+          description: Available tools the agent can call (optional)
+          items:
+            type: object
+        context:
+          type: array
+          description: Additional context items (used to pass agentId, conversationId)
+          items:
+            $ref: "#/components/schemas/AGUIContext"
+        forwardedProps:
+          type: object
+          description: Additional properties forwarded to the agent
+        state:
+          type: object
+          description: Shared state snapshot (for stateful agents)
+
+    AGUIMessage:
+      type: object
+      description: AG-UI message format (from @ag-ui/core)
+      required: [id, role, content]
+      properties:
+        id:
+          type: string
+        role:
+          type: string
+          enum: [user, assistant, system]
+        content:
+          type: string
+
+    AGUIContext:
+      type: object
+      description: Context item passed with RunAgentInput
+      properties:
+        description:
+          type: string
+        value:
+          type: string
+
+    ConversationSummaryDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        agentId:
+          type: string
+          format: uuid
+        agentName:
+          type: string
+          description: Name of the bound Agent
+        agentType:
+          type: string
+          description: Type of the bound Agent (A2A, ChatClient, Workflow)
+        title:
+          type: string
+          nullable: true
+          description: Conversation title (auto-generated from first message)
+        lastMessage:
+          type: string
+          nullable: true
+          description: Preview of the last message (truncated to 100 chars)
+        lastMessageAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Timestamp of the last message
+        createdAt:
+          type: string
+          format: date-time
+
+    ConversationDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        agentId:
+          type: string
+          format: uuid
+        agentName:
+          type: string
+        agentType:
+          type: string
+        title:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+          nullable: true
+        messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/ChatMessageDto"
+
+    ChatMessageDto:
+      type: object
+      description: |
+        Projected from AgentSessionRecord.SessionData → ChatHistoryProviderState.Messages[].
+        NOT a separate database entity — extracted at read time from the session's JSONB.
+      properties:
+        index:
+          type: integer
+          description: Message position in conversation (0-based, from array index)
+        role:
+          type: string
+          enum: [user, assistant]
+        content:
+          type: string
