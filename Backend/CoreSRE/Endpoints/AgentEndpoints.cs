@@ -3,6 +3,7 @@ using CoreSRE.Application.Agents.Commands.RegisterAgent;
 using CoreSRE.Application.Agents.Commands.UpdateAgent;
 using CoreSRE.Application.Agents.Queries.GetAgentById;
 using CoreSRE.Application.Agents.Queries.GetAgents;
+using CoreSRE.Application.Agents.Queries.ResolveAgentCard;
 using CoreSRE.Application.Agents.Queries.SearchAgents;
 using CoreSRE.Application.Common.Models;
 using CoreSRE.Domain.Enums;
@@ -22,6 +23,7 @@ public static class AgentEndpoints
             .WithTags("Agents");
 
         group.MapPost("/", RegisterAgent);
+        group.MapPost("/resolve-card", ResolveCard);
         group.MapGet("/", GetAgents);
         group.MapGet("/search", SearchAgents);
         group.MapGet("/{id:guid}", GetAgentById);
@@ -137,5 +139,26 @@ public static class AgentEndpoints
         // ValidationException is caught by ExceptionHandlingMiddleware → 400.
         var result = await sender.Send(new SearchAgentsQuery(q ?? string.Empty));
         return Results.Ok(result.Data);
+    }
+
+    /// <summary>POST /api/agents/resolve-card — 从远程 A2A 端点解析 AgentCard</summary>
+    private static async Task<IResult> ResolveCard(
+        ResolveAgentCardQuery query,
+        ISender sender)
+    {
+        var result = await sender.Send(query);
+
+        if (!result.Success)
+        {
+            return result.ErrorCode switch
+            {
+                422 => Results.UnprocessableEntity(result),
+                502 => Results.Json(result, statusCode: 502),
+                504 => Results.Json(result, statusCode: 504),
+                _ => Results.BadRequest(result)
+            };
+        }
+
+        return Results.Ok(result);
     }
 }

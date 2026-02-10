@@ -1,0 +1,206 @@
+openapi: 3.0.3
+info:
+  title: CoreSRE - A2A AgentCard Resolution API
+  description: |
+    Agent Card resolution endpoint for A2A agent registration.
+    Fetches and parses a remote A2A Agent's AgentCard from its well-known endpoint.
+  version: 1.0.0
+
+paths:
+  /api/agents/resolve-card:
+    post:
+      operationId: resolveAgentCard
+      summary: 解析远程 A2A Agent 的 AgentCard
+      description: |
+        接收一个 A2A Agent 的 Endpoint URL，从该端点的 `/.well-known/agent-card.json` 获取 AgentCard，
+        映射为简化结构后返回。用于前端创建 A2A Agent 时自动填充表单。
+      tags:
+        - Agents
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResolveAgentCardRequest'
+            example:
+              url: "https://my-agent.example.com/a2a"
+      responses:
+        '200':
+          description: AgentCard 解析成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResolveAgentCardSuccessResponse'
+              example:
+                success: true
+                data:
+                  name: "Translation Agent"
+                  description: "An agent that translates text between languages"
+                  url: "https://my-agent.internal.com/a2a"
+                  version: "1.0.0"
+                  skills:
+                    - name: "translate"
+                      description: "Translate text from one language to another"
+                    - name: "detect-language"
+                      description: "Detect the language of input text"
+                  interfaces:
+                    - protocol: "JsonRpc"
+                      path: "https://my-agent.internal.com/a2a"
+                  securitySchemes:
+                    - type: "bearer"
+                      parameters: '{"bearerFormat":"JWT"}'
+        '400':
+          description: 请求参数无效（URL 为空、格式不合法等）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                message: "Validation failed"
+                errors:
+                  - "Url is required."
+        '422':
+          description: 远程端点返回的数据无法解析为有效的 AgentCard
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                message: "The remote endpoint returned data that could not be parsed as a valid A2A AgentCard."
+        '502':
+          description: 无法连接到远程端点（网络错误、HTTP 错误等）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                message: "Failed to connect to the remote agent endpoint: Connection refused"
+        '504':
+          description: 连接远程端点超时
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                message: "Request to the remote agent endpoint timed out after 10 seconds."
+
+components:
+  schemas:
+    ResolveAgentCardRequest:
+      type: object
+      required:
+        - url
+      properties:
+        url:
+          type: string
+          format: uri
+          maxLength: 2048
+          description: A2A Agent 的 Endpoint URL
+          example: "https://my-agent.example.com/a2a"
+
+    ResolvedAgentCard:
+      type: object
+      required:
+        - name
+        - description
+        - url
+        - version
+        - skills
+        - interfaces
+        - securitySchemes
+      properties:
+        name:
+          type: string
+          description: Agent 名称（来自 AgentCard）
+        description:
+          type: string
+          description: Agent 描述（来自 AgentCard）
+        url:
+          type: string
+          format: uri
+          description: AgentCard 中记录的 URL（可能与用户输入的 URL 不同）
+        version:
+          type: string
+          description: Agent 版本号
+        skills:
+          type: array
+          items:
+            $ref: '#/components/schemas/AgentSkill'
+          description: Agent 技能列表
+        interfaces:
+          type: array
+          items:
+            $ref: '#/components/schemas/AgentInterface'
+          description: Agent 支持的通信接口
+        securitySchemes:
+          type: array
+          items:
+            $ref: '#/components/schemas/SecurityScheme'
+          description: Agent 安全认证方案
+
+    AgentSkill:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          description: 技能名称
+        description:
+          type: string
+          nullable: true
+          description: 技能描述
+
+    AgentInterface:
+      type: object
+      required:
+        - protocol
+      properties:
+        protocol:
+          type: string
+          description: 协议类型（如 "JsonRpc", "Streaming"）
+        path:
+          type: string
+          nullable: true
+          description: 接口 URL 路径
+
+    SecurityScheme:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          description: 方案类型（如 "apiKey", "oauth2", "bearer"）
+        parameters:
+          type: string
+          nullable: true
+          description: 配置参数（JSON 字符串）
+
+    ResolveAgentCardSuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          $ref: '#/components/schemas/ResolvedAgentCard'
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+          description: 错误描述
+        errors:
+          type: array
+          items:
+            type: string
+          description: 详细错误列表（验证错误时使用）

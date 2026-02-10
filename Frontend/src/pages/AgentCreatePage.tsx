@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router";
-import { ArrowLeft, Loader2, Plus, X } from "lucide-react";
+import { ArrowLeft, Loader2, Plus, X, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,13 +15,14 @@ import {
 import { Separator } from "@/components/ui/separator";
 import ProviderModelSelect from "@/components/agents/ProviderModelSelect";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { createAgent, ApiError } from "@/lib/api/agents";
+import { createAgent, resolveAgentCard, ApiError } from "@/lib/api/agents";
 import type {
   AgentType,
   CreateAgentRequest,
   AgentSkill,
   AgentInterface,
   SecurityScheme,
+  ResolvedAgentCard,
 } from "@/types/agent";
 
 const TYPE_DESCRIPTIONS: Record<AgentType, string> = {
@@ -51,6 +52,20 @@ export default function AgentCreatePage() {
   ]);
   const [securitySchemes, setSecuritySchemes] = useState<SecurityScheme[]>([]);
 
+  // Resolve state
+  const [resolving, setResolving] = useState(false);
+  const [resolveError, setResolveError] = useState<string | null>(null);
+  const [resolvedCard, setResolvedCard] = useState<ResolvedAgentCard | null>(null);
+  const [useUserUrl, setUseUserUrl] = useState(true);
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  // Cleanup abort controller on unmount
+  useEffect(() => {
+    return () => {
+      abortControllerRef.current?.abort();
+    };
+  }, []);
+
   // ChatClient fields
   const [providerId, setProviderId] = useState<string | null>(null);
   const [modelId, setModelId] = useState("");
@@ -63,6 +78,75 @@ export default function AgentCreatePage() {
   const handleSelectType = (type: AgentType) => {
     setSelectedType(type);
     setStep(2);
+  };
+
+  const handleResolve = async () => {
+    // Validate URL
+    if (!endpoint.trim()) {
+      setResolveError("请输入 Endpoint URL");
+      return;
+    }
+    if (!isValidUrl(endpoint.trim())) {
+      setResolveError("Endpoint 必须是合法的 HTTP/HTTPS URL");
+      return;
+    }
+
+    // Cancel any previous in-flight request
+    abortControllerRef.current?.abort();
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
+    setResolving(true);
+    setResolveError(null);
+    setResolvedCard(null);
+
+    try {
+      const result = await resolveAgentCard(endpoint.trim(), controller.signal);
+      if (result.success && result.data) {
+        const card = result.data;
+        setResolvedCard(card);
+        setUseUserUrl(true);
+
+        // Auto-fill skills
+        if (card.skills.length > 0) {
+          setSkills(card.skills.map((s) => ({ name: s.name, description: s.description ?? "" })));
+        }
+        // Auto-fill interfaces
+        if (card.interfaces.length > 0) {
+          setInterfaces(card.interfaces.map((i) => ({ protocol: i.protocol, path: i.path ?? "" })));
+        }
+        // Auto-fill security schemes
+        if (card.securitySchemes.length > 0) {
+          setSecuritySchemes(card.securitySchemes.map((s) => ({ type: s.type, parameters: s.parameters ?? "" })));
+        }
+
+        // US3: Pre-fill name/description only if empty
+        if (!name.trim() && card.name) {
+          setName(card.name);
+        }
+        if (!description.trim() && card.description) {
+          setDescription(card.description);
+        }
+      } else {
+        setResolveError(result.message ?? "解析失败");
+      }
+    } catch (err) {
+      if (controller.signal.aborted) return; // user cancelled, ignore
+      const apiErr = err as ApiError;
+      if (apiErr.status === 502) {
+        setResolveError("无法连接到远程 Agent 端点");
+      } else if (apiErr.status === 504) {
+        setResolveError("请求超时，远程端点未响应");
+      } else if (apiErr.status === 422) {
+        setResolveError("远程端点返回的数据无法解析为 AgentCard");
+      } else {
+        setResolveError(apiErr.message ?? "解析失败，请重试");
+      }
+    } finally {
+      if (!controller.signal.aborted) {
+        setResolving(false);
+      }
+    }
   };
 
   const handleSubmit = async () => {
@@ -89,7 +173,12 @@ export default function AgentCreatePage() {
     };
 
     if (selectedType === "A2A") {
-      request.endpoint = endpoint.trim() || undefined;
+      // Respect URL override: if resolvedCard exists and user chose AgentCard URL, use that
+      const finalEndpoint =
+        resolvedCard && !useUserUrl
+          ? resolvedCard.url
+          : endpoint.trim();
+      request.endpoint = finalEndpoint || undefined;
       request.agentCard = {
         skills: skills.filter((s) => s.name.trim()),
         interfaces: interfaces.filter((i) => i.protocol.trim()),
@@ -220,14 +309,62 @@ export default function AgentCreatePage() {
               <CardContent className="space-y-6">
                 <div className="space-y-2">
                   <Label htmlFor="endpoint">Endpoint</Label>
-                  <Input
-                    id="endpoint"
-                    value={endpoint}
-                    onChange={(e) => setEndpoint(e.target.value)}
-                    placeholder="https://example.com/agent"
-                    type="url"
-                  />
+                  <div className="flex gap-2">
+                    <Input
+                      id="endpoint"
+                      value={endpoint}
+                      onChange={(e) => {
+                        setEndpoint(e.target.value);
+                        // Reset resolve state when URL changes
+                        setResolvedCard(null);
+                        setResolveError(null);
+                      }}
+                      placeholder="https://example.com/agent"
+                      type="url"
+                      className="flex-1"
+                    />
+                    <Button
+                      variant="outline"
+                      onClick={handleResolve}
+                      disabled={resolving || !endpoint.trim()}
+                      type="button"
+                    >
+                      {resolving ? (
+                        <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                      ) : (
+                        <Search className="mr-1 h-4 w-4" />
+                      )}
+                      解析
+                    </Button>
+                  </div>
+                  {resolveError && (
+                    <p className="text-sm text-destructive">{resolveError}</p>
+                  )}
+                  {resolvedCard && (
+                    <p className="text-sm text-muted-foreground">
+                      ✓ 已解析: {resolvedCard.name} (v{resolvedCard.version})
+                    </p>
+                  )}
                 </div>
+
+                {/* URL Override Switch — only show when resolved URL differs from input */}
+                {resolvedCard && resolvedCard.url !== endpoint.trim() && (
+                  <div className="flex items-center gap-2 rounded-md border p-3 bg-muted/50">
+                    <input
+                      type="checkbox"
+                      id="urlOverride"
+                      checked={useUserUrl}
+                      onChange={(e) => setUseUserUrl(e.target.checked)}
+                      className="h-4 w-4 rounded border-gray-300"
+                    />
+                    <Label htmlFor="urlOverride" className="text-sm font-normal cursor-pointer">
+                      使用我输入的 URL 覆盖 AgentCard 中的 URL
+                    </Label>
+                    <span className="ml-auto text-xs text-muted-foreground">
+                      AgentCard URL: {resolvedCard.url}
+                    </span>
+                  </div>
+                )}
 
                 <Separator />
 

@@ -9,4 +9,8 @@
     <Project Path="..\CoreSRE.AppHost\CoreSRE.AppHost.csproj" />
     <Project Path="..\CoreSRE.ServiceDefaults\CoreSRE.ServiceDefaults.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="..\CoreSRE.Application.Tests\CoreSRE.Application.Tests.csproj" />
+    <Project Path="..\CoreSRE.Infrastructure.Tests\CoreSRE.Infrastructure.Tests.csproj" />
+  </Folder>
 </Solution>

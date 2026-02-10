@@ -160,3 +160,18 @@ export interface UpdateAgentRequest {
   llmConfig?: LlmConfig;
   workflowRef?: string;
 }
+
+// ---------------------------------------------------------------------------
+// Resolved AgentCard (from remote A2A endpoint)
+// ---------------------------------------------------------------------------
+
+/** Maps to backend ResolvedAgentCardDto — returned by POST /api/agents/resolve-card */
+export interface ResolvedAgentCard {
+  name: string;
+  description: string;
+  url: string;
+  version: string;
+  skills: AgentSkill[];
+  interfaces: AgentInterface[];
+  securitySchemes: SecurityScheme[];
+}

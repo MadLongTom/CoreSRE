@@ -9,6 +9,7 @@ import type {
   AgentSummary,
   ApiResult,
   CreateAgentRequest,
+  ResolvedAgentCard,
   UpdateAgentRequest,
 } from "@/types/agent";
 
@@ -184,5 +185,36 @@ export async function searchAgents(
     );
   }
   // Search endpoint returns unwrapped AgentSearchResponse (not wrapped in ApiResult)
+  return res.json();
+}
+
+/**
+ * POST /api/agents/resolve-card
+ * Resolve AgentCard from a remote A2A endpoint URL.
+ */
+export async function resolveAgentCard(
+  url: string,
+  signal?: AbortSignal,
+): Promise<ApiResult<ResolvedAgentCard>> {
+  const res = await fetch("/api/agents/resolve-card", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url }),
+    signal,
+  });
+  if (!res.ok) {
+    let body: ApiResult<unknown> | undefined;
+    try {
+      body = await res.json();
+    } catch {
+      // response may not be JSON
+    }
+    throw new ApiError(
+      res.status,
+      body?.errors,
+      body?.errorCode,
+      body?.message ?? `Resolve failed with status ${res.status}`,
+    );
+  }
   return res.json();
 }

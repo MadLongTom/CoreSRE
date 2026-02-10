@@ -17,7 +17,7 @@ interface AgentSelectorProps {
 }
 
 /**
- * Agent 选择器 — 下拉选择已注册的 ChatClient 类型 Agent。
+ * Agent 选择器 — 下拉选择已注册的 ChatClient 或 A2A 类型 Agent。
  * 第一条消息发送后锁定（disabled=true）。
  */
 export function AgentSelector({
@@ -27,9 +27,9 @@ export function AgentSelector({
   disabled = false,
   loading = false,
 }: AgentSelectorProps) {
-  // 只展示 ChatClient 类型的 Agent
+  // 展示 ChatClient 和 A2A 类型的 Agent
   const chatAgents = useMemo(
-    () => agents.filter((a) => a.agentType === "ChatClient"),
+    () => agents.filter((a) => a.agentType === "ChatClient" || a.agentType === "A2A"),
     [agents],
   );
 
@@ -60,7 +60,14 @@ export function AgentSelector({
       <SelectContent>
         {chatAgents.map((agent) => (
           <SelectItem key={agent.id} value={agent.id}>
-            {agent.name}
+            <span className="flex items-center gap-1.5">
+              {agent.name}
+              {agent.agentType === "A2A" && (
+                <span className="rounded bg-blue-100 px-1 py-0.5 text-[10px] font-medium text-blue-700 dark:bg-blue-900 dark:text-blue-300">
+                  A2A
+                </span>
+              )}
+            </span>
           </SelectItem>
         ))}
       </SelectContent>

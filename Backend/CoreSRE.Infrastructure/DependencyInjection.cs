@@ -42,6 +42,10 @@ public static class DependencyInjection
         services.AddHttpClient("ModelDiscovery");
         services.AddScoped<IModelDiscoveryService, ModelDiscoveryService>();
 
+        // A2A AgentCard resolver + named HttpClient
+        services.AddHttpClient("A2ACardResolver");
+        services.AddScoped<IAgentCardResolver, A2ACardResolverService>();
+
         return services;
     }
 

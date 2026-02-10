@@ -1,3 +1,4 @@
+using A2A;
 using CoreSRE.Application.Interfaces;
 using CoreSRE.Domain.Interfaces;
 using Microsoft.Agents.AI;
@@ -8,8 +9,9 @@ using System.ClientModel;
 namespace CoreSRE.Infrastructure.Services;
 
 /// <summary>
-/// Agent 解析服务 — 从 AgentRegistration ID 构建就绪的 ChatClientAgent。
-/// 流程：AgentRegistration → LlmProvider → OpenAIClient → IChatClient → AsAIAgent → ChatClientAgent
+/// Agent 解析服务 — 从 AgentRegistration ID 构建就绪的 AIAgent。
+/// ChatClient 类型：AgentRegistration → LlmProvider → OpenAIClient → IChatClient → ChatClientAgent
+/// A2A 类型：AgentRegistration → Endpoint → A2AClient → A2AAgent
 /// AG-UI 协议是无状态的（每次请求携带完整消息历史），因此无需配置 ChatHistoryProvider。
 /// 对话历史持久化由 AgentSessionRecord + AG-UI 事件流自动处理。
 /// </summary>
@@ -17,13 +19,16 @@ public class AgentResolverService : IAgentResolver
 {
     private readonly IAgentRegistrationRepository _agentRepo;
     private readonly ILlmProviderRepository _providerRepo;
+    private readonly IHttpClientFactory _httpClientFactory;
 
     public AgentResolverService(
         IAgentRegistrationRepository agentRepo,
-        ILlmProviderRepository providerRepo)
+        ILlmProviderRepository providerRepo,
+        IHttpClientFactory httpClientFactory)
     {
         _agentRepo = agentRepo;
         _providerRepo = providerRepo;
+        _httpClientFactory = httpClientFactory;
     }
 
     public async Task<AIAgent> ResolveAsync(
@@ -35,9 +40,16 @@ public class AgentResolverService : IAgentResolver
         var agent = await _agentRepo.GetByIdAsync(agentRegistrationId, cancellationToken)
             ?? throw new InvalidOperationException($"AgentRegistration '{agentRegistrationId}' not found.");
 
-        if (agent.AgentType != Domain.Enums.AgentType.ChatClient)
-            throw new NotSupportedException($"Agent type '{agent.AgentType}' is not supported for chat. Only ChatClient agents are supported.");
+        return agent.AgentType switch
+        {
+            Domain.Enums.AgentType.ChatClient => await ResolveChatClientAgent(agent),
+            Domain.Enums.AgentType.A2A => ResolveA2AAgent(agent),
+            _ => throw new NotSupportedException($"Agent type '{agent.AgentType}' is not supported for chat.")
+        };
+    }
 
+    private async Task<AIAgent> ResolveChatClientAgent(Domain.Entities.AgentRegistration agent)
+    {
         if (agent.LlmConfig is null)
             throw new InvalidOperationException($"Agent '{agent.Name}' has no LLM configuration.");
 
@@ -45,7 +57,7 @@ public class AgentResolverService : IAgentResolver
         if (agent.LlmConfig.ProviderId is null || agent.LlmConfig.ProviderId == Guid.Empty)
             throw new InvalidOperationException($"Agent '{agent.Name}' has no LLM provider configured.");
 
-        var provider = await _providerRepo.GetByIdAsync(agent.LlmConfig.ProviderId.Value, cancellationToken)
+        var provider = await _providerRepo.GetByIdAsync(agent.LlmConfig.ProviderId.Value)
             ?? throw new InvalidOperationException($"LlmProvider '{agent.LlmConfig.ProviderId}' not found.");
 
         // 3. 构建 OpenAIClient → IChatClient
@@ -73,5 +85,18 @@ public class AgentResolverService : IAgentResolver
         }
 
         return chatClient.AsAIAgent(options);
+    }
+
+    private AIAgent ResolveA2AAgent(Domain.Entities.AgentRegistration agent)
+    {
+        if (string.IsNullOrWhiteSpace(agent.Endpoint))
+            throw new InvalidOperationException($"A2A Agent '{agent.Name}' has no endpoint configured.");
+
+        var httpClient = _httpClientFactory.CreateClient("A2ACardResolver");
+        var a2aClient = new A2AClient(new Uri(agent.Endpoint), httpClient);
+
+        return a2aClient.AsAIAgent(
+            name: agent.Name,
+            description: agent.Description);
     }
 }

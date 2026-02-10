@@ -4,3 +4,13 @@ GET {{CoreSRE_HostAddress}}/weatherforecast/
 Accept: application/json
 
 ###
+
+### Resolve AgentCard from remote A2A endpoint
+POST {{CoreSRE_HostAddress}}/api/agents/resolve-card
+Content-Type: application/json
+
+{
+  "url": "http://localhost:5100"
+}
+
+###
