@@ -12,6 +12,10 @@ import ToolCreatePage from "@/pages/ToolCreatePage";
 import ToolDetailPage from "@/pages/ToolDetailPage";
 import OpenApiImportPage from "@/pages/OpenApiImportPage";
 import ChatPage from "@/pages/ChatPage";
+import WorkflowListPage from "@/pages/WorkflowListPage";
+import WorkflowCreatePage from "@/pages/WorkflowCreatePage";
+import WorkflowDetailPage from "@/pages/WorkflowDetailPage";
+import WorkflowExecutionDetailPage from "@/pages/WorkflowExecutionDetailPage";
 import NotFoundPage from "@/pages/NotFoundPage";
 
 const router = createBrowserRouter([
@@ -30,6 +34,10 @@ const router = createBrowserRouter([
       { path: "tools/new", element: <ToolCreatePage /> },
       { path: "tools/import", element: <OpenApiImportPage /> },
       { path: "tools/:id", element: <ToolDetailPage /> },
+      { path: "workflows", element: <WorkflowListPage /> },
+      { path: "workflows/new", element: <WorkflowCreatePage /> },
+      { path: "workflows/:id", element: <WorkflowDetailPage /> },
+      { path: "workflows/:id/executions/:execId", element: <WorkflowExecutionDetailPage /> },
       { path: "chat", element: <ChatPage /> },
       { path: "*", element: <NotFoundPage /> },
     ],

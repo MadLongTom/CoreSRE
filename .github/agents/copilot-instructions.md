@@ -22,6 +22,8 @@ Auto-generated from all feature plans. Last updated: 2026-02-09
 - PostgreSQL (via Npgsql.EntityFrameworkCore.PostgreSQL), JSONB for value objects (011-workflow-crud)
 - C# / .NET 10.0 (net10.0) + Agent Framework (`Microsoft.Agents.AI.Workflows` 1.0.0-preview.260209.1), MediatR (CQRS), FluentValidation, AutoMapper, EF Core 10.0.2 + Npgsql (PostgreSQL) (012-workflow-execution-engine)
 - PostgreSQL (via Aspire Npgsql), JSONB for NodeExecutionVO 列表和 DAG 图快照 (012-workflow-execution-engine)
+- TypeScript 5.9 / React 19.2 / Vite 7.3 + @xyflow/react (React Flow v12), @dagrejs/dagre, shadcn/ui, react-router 7.13, lucide-react, zod 4.3, react-hook-form 7.71 (013-workflow-frontend)
+- N/A (frontend only, all persistence via backend API) (013-workflow-frontend)
 
 - C# / .NET 10.0 (`net10.0`) (001-aspire-apphost-setup)
 
@@ -42,9 +44,9 @@ tests/
 C# / .NET 10.0 (`net10.0`): Follow standard conventions
 
 ## Recent Changes
+- 013-workflow-frontend: Added TypeScript 5.9 / React 19.2 / Vite 7.3 + @xyflow/react (React Flow v12), @dagrejs/dagre, shadcn/ui, react-router 7.13, lucide-react, zod 4.3, react-hook-form 7.71
 - 012-workflow-execution-engine: Added C# / .NET 10.0 (net10.0) + Agent Framework (`Microsoft.Agents.AI.Workflows` 1.0.0-preview.260209.1), MediatR (CQRS), FluentValidation, AutoMapper, EF Core 10.0.2 + Npgsql (PostgreSQL)
 - 011-workflow-crud: Added C# / .NET 10.0 + MediatR (CQRS), FluentValidation, EF Core 10.0, Microsoft.Agents.AI.Workflows 1.0.0-preview (runtime mapping, SPEC-021 scope)
-- 010-chatclient-tool-binding: Added .NET 10.0 (backend), TypeScript 5.9 / React 19.2 (frontend)
 
 
 <!-- MANUAL ADDITIONS START -->
