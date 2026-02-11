@@ -1,5 +1,6 @@
 using CoreSRE.Application.Common.Interfaces;
 using CoreSRE.Application.Interfaces;
+using CoreSRE.Application.Workflows.Commands.ExecuteWorkflow;
 using CoreSRE.Domain.Interfaces;
 using CoreSRE.Infrastructure.Persistence;
 using CoreSRE.Infrastructure.Persistence.Sessions;
@@ -52,6 +53,7 @@ public static class DependencyInjection
         services.AddScoped<IToolRegistrationRepository, ToolRegistrationRepository>();
         services.AddScoped<IMcpToolItemRepository, McpToolItemRepository>();
         services.AddScoped<IWorkflowDefinitionRepository, WorkflowDefinitionRepository>();
+        services.AddScoped<IWorkflowExecutionRepository, WorkflowExecutionRepository>();
         services.AddScoped<ICredentialEncryptionService, CredentialEncryptionService>();
         services.AddScoped<IMcpToolDiscoveryService, McpToolDiscoveryService>();
         services.AddScoped<IOpenApiParserService, OpenApiParserService>();
@@ -69,6 +71,13 @@ public static class DependencyInjection
 
         // Tool-to-AIFunction conversion factory (for ChatClient tool binding)
         services.AddScoped<IToolFunctionFactory, ToolFunctionFactory>();
+
+        // Workflow Execution Engine + background service + channel
+        services.AddScoped<IWorkflowEngine, WorkflowEngine>();
+        services.AddScoped<IConditionEvaluator, ConditionEvaluator>();
+        var workflowExecutionChannel = System.Threading.Channels.Channel.CreateUnbounded<ExecuteWorkflowRequest>();
+        services.AddSingleton(workflowExecutionChannel);
+        services.AddHostedService<WorkflowExecutionBackgroundService>();
 
         return services;
     }

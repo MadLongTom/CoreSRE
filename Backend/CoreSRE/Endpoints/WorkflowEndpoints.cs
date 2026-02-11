@@ -1,8 +1,11 @@
 using CoreSRE.Application.Workflows.Commands.CreateWorkflow;
 using CoreSRE.Application.Workflows.Commands.DeleteWorkflow;
+using CoreSRE.Application.Workflows.Commands.ExecuteWorkflow;
 using CoreSRE.Application.Workflows.Commands.UpdateWorkflow;
 using CoreSRE.Application.Workflows.Queries.GetWorkflowById;
 using CoreSRE.Application.Workflows.Queries.GetWorkflows;
+using CoreSRE.Application.Workflows.Queries.GetWorkflowExecutions;
+using CoreSRE.Application.Workflows.Queries.GetWorkflowExecutionById;
 using CoreSRE.Domain.Enums;
 using MediatR;
 
@@ -21,6 +24,9 @@ public static class WorkflowEndpoints
         group.MapGet("/{id:guid}", GetWorkflowById);
         group.MapPut("/{id:guid}", UpdateWorkflow);
         group.MapDelete("/{id:guid}", DeleteWorkflow);
+        group.MapPost("/{id:guid}/execute", ExecuteWorkflow);
+        group.MapGet("/{id:guid}/executions", GetWorkflowExecutions);
+        group.MapGet("/{id:guid}/executions/{execId:guid}", GetWorkflowExecutionById);
 
         return app;
     }
@@ -98,5 +104,51 @@ public static class WorkflowEndpoints
             };
         }
         return Results.NoContent();
+    }
+
+    private static async Task<IResult> ExecuteWorkflow(
+        Guid id, ExecuteWorkflowCommand command, ISender sender)
+    {
+        var commandWithId = command with { WorkflowDefinitionId = id };
+        var result = await sender.Send(commandWithId);
+        if (!result.Success)
+        {
+            return result.ErrorCode switch
+            {
+                404 => Results.NotFound(result),
+                _ => Results.BadRequest(result)
+            };
+        }
+        return Results.Accepted($"/api/workflows/{id}/executions/{result.Data!.Id}", result);
+    }
+
+    private static async Task<IResult> GetWorkflowExecutions(
+        Guid id, ISender sender, string? status = null)
+    {
+        var result = await sender.Send(new GetWorkflowExecutionsQuery(id, status));
+        if (!result.Success)
+        {
+            return result.ErrorCode switch
+            {
+                404 => Results.NotFound(result),
+                _ => Results.BadRequest(result)
+            };
+        }
+        return Results.Ok(result);
+    }
+
+    private static async Task<IResult> GetWorkflowExecutionById(
+        Guid id, Guid execId, ISender sender)
+    {
+        var result = await sender.Send(new GetWorkflowExecutionByIdQuery(id, execId));
+        if (!result.Success)
+        {
+            return result.ErrorCode switch
+            {
+                404 => Results.NotFound(result),
+                _ => Results.BadRequest(result)
+            };
+        }
+        return Results.Ok(result);
     }
 }

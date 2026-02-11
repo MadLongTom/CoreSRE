@@ -20,6 +20,8 @@ Auto-generated from all feature plans. Last updated: 2026-02-09
 - PostgreSQL (Aspire-hosted, Npgsql), EF Core Code-First, JSONB columns for value objects (010-chatclient-tool-binding)
 - C# / .NET 10.0 + MediatR (CQRS), FluentValidation, EF Core 10.0, Microsoft.Agents.AI.Workflows 1.0.0-preview (runtime mapping, SPEC-021 scope) (011-workflow-crud)
 - PostgreSQL (via Npgsql.EntityFrameworkCore.PostgreSQL), JSONB for value objects (011-workflow-crud)
+- C# / .NET 10.0 (net10.0) + Agent Framework (`Microsoft.Agents.AI.Workflows` 1.0.0-preview.260209.1), MediatR (CQRS), FluentValidation, AutoMapper, EF Core 10.0.2 + Npgsql (PostgreSQL) (012-workflow-execution-engine)
+- PostgreSQL (via Aspire Npgsql), JSONB for NodeExecutionVO 列表和 DAG 图快照 (012-workflow-execution-engine)
 
 - C# / .NET 10.0 (`net10.0`) (001-aspire-apphost-setup)
 
@@ -40,9 +42,9 @@ tests/
 C# / .NET 10.0 (`net10.0`): Follow standard conventions
 
 ## Recent Changes
+- 012-workflow-execution-engine: Added C# / .NET 10.0 (net10.0) + Agent Framework (`Microsoft.Agents.AI.Workflows` 1.0.0-preview.260209.1), MediatR (CQRS), FluentValidation, AutoMapper, EF Core 10.0.2 + Npgsql (PostgreSQL)
 - 011-workflow-crud: Added C# / .NET 10.0 + MediatR (CQRS), FluentValidation, EF Core 10.0, Microsoft.Agents.AI.Workflows 1.0.0-preview (runtime mapping, SPEC-021 scope)
 - 010-chatclient-tool-binding: Added .NET 10.0 (backend), TypeScript 5.9 / React 19.2 (frontend)
-- 009-tool-gateway-crud: Added C# / .NET 10.0 + MediatR 12.4.1, FluentValidation 11.11.0, AutoMapper 13.0.1, EF Core 10.0.2, Npgsql 10.0.0, Microsoft.OpenApi (OpenAPI 文档解析), Microsoft.AspNetCore.DataProtection (凭据加密)
 
 
 <!-- MANUAL ADDITIONS START -->

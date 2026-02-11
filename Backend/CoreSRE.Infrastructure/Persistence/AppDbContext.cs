@@ -18,6 +18,7 @@ public class AppDbContext : DbContext, IUnitOfWork
     public DbSet<ToolRegistration> ToolRegistrations => Set<ToolRegistration>();
     public DbSet<McpToolItem> McpToolItems => Set<McpToolItem>();
     public DbSet<WorkflowDefinition> WorkflowDefinitions => Set<WorkflowDefinition>();
+    public DbSet<WorkflowExecution> WorkflowExecutions => Set<WorkflowExecution>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

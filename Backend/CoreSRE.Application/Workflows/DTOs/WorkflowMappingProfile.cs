@@ -30,5 +30,17 @@ public class WorkflowMappingProfile : Profile
         // WorkflowEdgeVO → WorkflowEdgeDto
         CreateMap<WorkflowEdgeVO, WorkflowEdgeDto>()
             .ForMember(d => d.EdgeType, opt => opt.MapFrom(s => s.EdgeType.ToString()));
+
+        // WorkflowExecution → WorkflowExecutionDto
+        CreateMap<WorkflowExecution, WorkflowExecutionDto>()
+            .ForMember(d => d.Status, opt => opt.MapFrom(s => s.Status.ToString()));
+
+        // WorkflowExecution → WorkflowExecutionSummaryDto
+        CreateMap<WorkflowExecution, WorkflowExecutionSummaryDto>()
+            .ForMember(d => d.Status, opt => opt.MapFrom(s => s.Status.ToString()));
+
+        // NodeExecutionVO → NodeExecutionDto
+        CreateMap<NodeExecutionVO, NodeExecutionDto>()
+            .ForMember(d => d.Status, opt => opt.MapFrom(s => s.Status.ToString()));
     }
 }
