@@ -28,7 +28,7 @@
 
 **Purpose**: Verify clean starting point on feature branch
 
-- [ ] T001 Verify project compiles and existing tests pass on `011-workflow-crud` branch
+- [X] T001 Verify project compiles and existing tests pass on `011-workflow-crud` branch
 
 ---
 
@@ -40,34 +40,34 @@
 
 ### Domain Types (Interface-Before-Implementation)
 
-- [ ] T002 [P] Create WorkflowNodeType, WorkflowEdgeType, WorkflowStatus enums in Backend/CoreSRE.Domain/Enums/ (3 files)
-- [ ] T003 [P] Create WorkflowNodeVO value object in Backend/CoreSRE.Domain/ValueObjects/WorkflowNodeVO.cs
-- [ ] T004 [P] Create WorkflowEdgeVO value object in Backend/CoreSRE.Domain/ValueObjects/WorkflowEdgeVO.cs
-- [ ] T005 Create WorkflowGraphVO with DAG validation via Kahn's algorithm in Backend/CoreSRE.Domain/ValueObjects/WorkflowGraphVO.cs
-- [ ] T006 Create WorkflowDefinition aggregate root with Create/Update factory methods and status guards in Backend/CoreSRE.Domain/Entities/WorkflowDefinition.cs
-- [ ] T007 Create IWorkflowDefinitionRepository interface in Backend/CoreSRE.Domain/Interfaces/IWorkflowDefinitionRepository.cs
+- [X] T002 [P] Create WorkflowNodeType, WorkflowEdgeType, WorkflowStatus enums in Backend/CoreSRE.Domain/Enums/ (3 files)
+- [X] T003 [P] Create WorkflowNodeVO value object in Backend/CoreSRE.Domain/ValueObjects/WorkflowNodeVO.cs
+- [X] T004 [P] Create WorkflowEdgeVO value object in Backend/CoreSRE.Domain/ValueObjects/WorkflowEdgeVO.cs
+- [X] T005 Create WorkflowGraphVO with DAG validation via Kahn's algorithm in Backend/CoreSRE.Domain/ValueObjects/WorkflowGraphVO.cs
+- [X] T006 Create WorkflowDefinition aggregate root with Create/Update factory methods and status guards in Backend/CoreSRE.Domain/Entities/WorkflowDefinition.cs
+- [X] T007 Create IWorkflowDefinitionRepository interface in Backend/CoreSRE.Domain/Interfaces/IWorkflowDefinitionRepository.cs
 
 ### Domain Tests (TDD — verify entity invariants and DAG validation)
 
-- [ ] T008 [P] Write WorkflowDefinition entity unit tests (Create factory, Update guard, Publish transition, invalid inputs) in Backend/CoreSRE.Infrastructure.Tests/Workflows/WorkflowDefinitionTests.cs
-- [ ] T009 [P] Write DAG validation unit tests (cycle detection, orphan nodes, self-loop, duplicate node ID, invalid edge refs, duplicate edges, empty graph, max node warning) in Backend/CoreSRE.Infrastructure.Tests/Workflows/DagValidationTests.cs
+- [X] T008 [P] Write WorkflowDefinition entity unit tests (Create factory, Update guard, Publish transition, invalid inputs) in Backend/CoreSRE.Infrastructure.Tests/Workflows/WorkflowDefinitionTests.cs
+- [X] T009 [P] Write DAG validation unit tests (cycle detection, orphan nodes, self-loop, duplicate node ID, invalid edge refs, duplicate edges, empty graph, max node warning) in Backend/CoreSRE.Infrastructure.Tests/Workflows/DagValidationTests.cs
 
 ### Application Shared (DTOs & Mapping)
 
-- [ ] T010 [P] Create Workflow DTOs (WorkflowDefinitionDto, WorkflowSummaryDto, WorkflowGraphDto, WorkflowNodeDto, WorkflowEdgeDto) in Backend/CoreSRE.Application/Workflows/DTOs/
-- [ ] T011 [P] Create WorkflowMappingProfile (AutoMapper) in Backend/CoreSRE.Application/Workflows/DTOs/WorkflowMappingProfile.cs
+- [X] T010 [P] Create Workflow DTOs (WorkflowDefinitionDto, WorkflowSummaryDto, WorkflowGraphDto, WorkflowNodeDto, WorkflowEdgeDto) in Backend/CoreSRE.Application/Workflows/DTOs/
+- [X] T011 [P] Create WorkflowMappingProfile (AutoMapper) in Backend/CoreSRE.Application/Workflows/DTOs/WorkflowMappingProfile.cs
 
 ### Infrastructure (Repository & EF Core)
 
-- [ ] T012 Create WorkflowDefinitionConfiguration (OwnsOne+ToJson, OwnsMany for nodes/edges, enum string conversion) in Backend/CoreSRE.Infrastructure/Persistence/Configurations/WorkflowDefinitionConfiguration.cs
-- [ ] T013 Add DbSet\<WorkflowDefinition\> to AppDbContext in Backend/CoreSRE.Infrastructure/Persistence/AppDbContext.cs
-- [ ] T014 Create WorkflowDefinitionRepository (GetByNameAsync, GetByStatusAsync, ExistsWithNameAsync, IsReferencedByAgentAsync) in Backend/CoreSRE.Infrastructure/Persistence/WorkflowDefinitionRepository.cs
-- [ ] T015 Register IWorkflowDefinitionRepository → WorkflowDefinitionRepository in Backend/CoreSRE.Infrastructure/DependencyInjection.cs
-- [ ] T016 Generate EF Core migration for workflow_definitions table
+- [X] T012 Create WorkflowDefinitionConfiguration (OwnsOne+ToJson, OwnsMany for nodes/edges, enum string conversion) in Backend/CoreSRE.Infrastructure/Persistence/Configurations/WorkflowDefinitionConfiguration.cs
+- [X] T013 Add DbSet\<WorkflowDefinition\> to AppDbContext in Backend/CoreSRE.Infrastructure/Persistence/AppDbContext.cs
+- [X] T014 Create WorkflowDefinitionRepository (GetByNameAsync, GetByStatusAsync, ExistsWithNameAsync, IsReferencedByAgentAsync) in Backend/CoreSRE.Infrastructure/Persistence/WorkflowDefinitionRepository.cs
+- [X] T015 Register IWorkflowDefinitionRepository → WorkflowDefinitionRepository in Backend/CoreSRE.Infrastructure/DependencyInjection.cs
+- [X] T016 Generate EF Core migration for workflow_definitions table
 
 ### Verify Foundation
 
-- [ ] T017 Run domain entity and DAG validation tests — all must pass
+- [X] T017 Run domain entity and DAG validation tests — all must pass
 
 **Checkpoint**: Foundation ready — user story implementation can now begin
 
@@ -83,16 +83,16 @@
 
 > **Write tests FIRST. They will fail until implementation is complete.**
 
-- [ ] T018 [P] [US1] Write CreateWorkflowCommandHandler unit tests (success creates Draft, name conflict returns 409, invalid Agent/Tool reference returns 400, DAG cycle returns 400, orphan node returns 400) in Backend/CoreSRE.Application.Tests/Workflows/Commands/CreateWorkflowCommandHandlerTests.cs
-- [ ] T019 [P] [US1] Write CreateWorkflowCommandValidator unit tests (name empty, name too long >200, graph null, nodes empty, nodeId empty, displayName empty, invalid nodeType, edgeId empty, sourceNodeId empty, conditional edge missing condition) in Backend/CoreSRE.Application.Tests/Workflows/Commands/CreateWorkflowCommandValidatorTests.cs
+- [X] T018 [P] [US1] Write CreateWorkflowCommandHandler unit tests (success creates Draft, name conflict returns 409, invalid Agent/Tool reference returns 400, DAG cycle returns 400, orphan node returns 400) in Backend/CoreSRE.Application.Tests/Workflows/Commands/CreateWorkflowCommandHandlerTests.cs
+- [X] T019 [P] [US1] Write CreateWorkflowCommandValidator unit tests (name empty, name too long >200, graph null, nodes empty, nodeId empty, displayName empty, invalid nodeType, edgeId empty, sourceNodeId empty, conditional edge missing condition) in Backend/CoreSRE.Application.Tests/Workflows/Commands/CreateWorkflowCommandValidatorTests.cs
 
 ### Implementation for User Story 1
 
-- [ ] T020 [US1] Create CreateWorkflowCommand record in Backend/CoreSRE.Application/Workflows/Commands/CreateWorkflow/CreateWorkflowCommand.cs
-- [ ] T021 [US1] Create CreateWorkflowCommandValidator (FluentValidation rules per contracts) in Backend/CoreSRE.Application/Workflows/Commands/CreateWorkflow/CreateWorkflowCommandValidator.cs
-- [ ] T022 [US1] Create CreateWorkflowCommandHandler (uniqueness check → DAG validation → reference validation → Create entity → save) in Backend/CoreSRE.Application/Workflows/Commands/CreateWorkflow/CreateWorkflowCommandHandler.cs
-- [ ] T023 [US1] Create WorkflowEndpoints with POST /api/workflows in Backend/CoreSRE/Endpoints/WorkflowEndpoints.cs
-- [ ] T024 [US1] Register app.MapWorkflowEndpoints() in Backend/CoreSRE/Program.cs
+- [X] T020 [US1] Create CreateWorkflowCommand record in Backend/CoreSRE.Application/Workflows/Commands/CreateWorkflow/CreateWorkflowCommand.cs
+- [X] T021 [US1] Create CreateWorkflowCommandValidator (FluentValidation rules per contracts) in Backend/CoreSRE.Application/Workflows/Commands/CreateWorkflow/CreateWorkflowCommandValidator.cs
+- [X] T022 [US1] Create CreateWorkflowCommandHandler (uniqueness check → DAG validation → reference validation → Create entity → save) in Backend/CoreSRE.Application/Workflows/Commands/CreateWorkflow/CreateWorkflowCommandHandler.cs
+- [X] T023 [US1] Create WorkflowEndpoints with POST /api/workflows in Backend/CoreSRE/Endpoints/WorkflowEndpoints.cs
+- [X] T024 [US1] Register app.MapWorkflowEndpoints() in Backend/CoreSRE/Program.cs
 
 **Checkpoint**: POST /api/workflows works. DAG validation rejects cycles, orphan nodes, invalid references. Tests pass.
 
@@ -108,14 +108,14 @@
 
 > **Write tests FIRST.**
 
-- [ ] T025 [P] [US2] Write GetWorkflowsQueryHandler unit tests (returns all summaries with nodeCount, filters by status, empty result) in Backend/CoreSRE.Application.Tests/Workflows/Queries/GetWorkflowsQueryHandlerTests.cs
-- [ ] T026 [P] [US2] Write GetWorkflowByIdQueryHandler unit tests (found returns full detail, not found returns 404) in Backend/CoreSRE.Application.Tests/Workflows/Queries/GetWorkflowByIdQueryHandlerTests.cs
+- [X] T025 [P] [US2] Write GetWorkflowsQueryHandler unit tests (returns all summaries with nodeCount, filters by status, empty result) in Backend/CoreSRE.Application.Tests/Workflows/Queries/GetWorkflowsQueryHandlerTests.cs
+- [X] T026 [P] [US2] Write GetWorkflowByIdQueryHandler unit tests (found returns full detail, not found returns 404) in Backend/CoreSRE.Application.Tests/Workflows/Queries/GetWorkflowByIdQueryHandlerTests.cs
 
 ### Implementation for User Story 2
 
-- [ ] T027 [P] [US2] Create GetWorkflowsQuery and GetWorkflowsQueryHandler in Backend/CoreSRE.Application/Workflows/Queries/GetWorkflows/
-- [ ] T028 [P] [US2] Create GetWorkflowByIdQuery and GetWorkflowByIdQueryHandler in Backend/CoreSRE.Application/Workflows/Queries/GetWorkflowById/
-- [ ] T029 [US2] Add GET /api/workflows and GET /api/workflows/{id} endpoints to WorkflowEndpoints in Backend/CoreSRE/Endpoints/WorkflowEndpoints.cs
+- [X] T027 [P] [US2] Create GetWorkflowsQuery and GetWorkflowsQueryHandler in Backend/CoreSRE.Application/Workflows/Queries/GetWorkflows/
+- [X] T028 [P] [US2] Create GetWorkflowByIdQuery and GetWorkflowByIdQueryHandler in Backend/CoreSRE.Application/Workflows/Queries/GetWorkflowById/
+- [X] T029 [US2] Add GET /api/workflows and GET /api/workflows/{id} endpoints to WorkflowEndpoints in Backend/CoreSRE/Endpoints/WorkflowEndpoints.cs
 
 **Checkpoint**: List and detail queries work. Status filtering works. 404 for missing IDs. Tests pass.
 
@@ -131,15 +131,15 @@
 
 > **Write tests FIRST.**
 
-- [ ] T030 [P] [US3] Write UpdateWorkflowCommandHandler unit tests (success updates Draft, not found returns 404, published guard returns 400, name conflict returns 409, DAG cycle returns 400, invalid reference returns 400) in Backend/CoreSRE.Application.Tests/Workflows/Commands/UpdateWorkflowCommandHandlerTests.cs
-- [ ] T031 [P] [US3] Write UpdateWorkflowCommandValidator unit tests (id empty, name empty, name too long, graph null, nodes empty, same rules as create) in Backend/CoreSRE.Application.Tests/Workflows/Commands/UpdateWorkflowCommandValidatorTests.cs
+- [X] T030 [P] [US3] Write UpdateWorkflowCommandHandler unit tests (success updates Draft, not found returns 404, published guard returns 400, name conflict returns 409, DAG cycle returns 400, invalid reference returns 400) in Backend/CoreSRE.Application.Tests/Workflows/Commands/UpdateWorkflowCommandHandlerTests.cs
+- [X] T031 [P] [US3] Write UpdateWorkflowCommandValidator unit tests (id empty, name empty, name too long, graph null, nodes empty, same rules as create) in Backend/CoreSRE.Application.Tests/Workflows/Commands/UpdateWorkflowCommandValidatorTests.cs
 
 ### Implementation for User Story 3
 
-- [ ] T032 [US3] Create UpdateWorkflowCommand record in Backend/CoreSRE.Application/Workflows/Commands/UpdateWorkflow/UpdateWorkflowCommand.cs
-- [ ] T033 [US3] Create UpdateWorkflowCommandValidator in Backend/CoreSRE.Application/Workflows/Commands/UpdateWorkflow/UpdateWorkflowCommandValidator.cs
-- [ ] T034 [US3] Create UpdateWorkflowCommandHandler (fetch → status guard → uniqueness check → DAG validation → reference validation → Update entity → save) in Backend/CoreSRE.Application/Workflows/Commands/UpdateWorkflow/UpdateWorkflowCommandHandler.cs
-- [ ] T035 [US3] Add PUT /api/workflows/{id} endpoint to WorkflowEndpoints in Backend/CoreSRE/Endpoints/WorkflowEndpoints.cs
+- [X] T032 [US3] Create UpdateWorkflowCommand record in Backend/CoreSRE.Application/Workflows/Commands/UpdateWorkflow/UpdateWorkflowCommand.cs
+- [X] T033 [US3] Create UpdateWorkflowCommandValidator in Backend/CoreSRE.Application/Workflows/Commands/UpdateWorkflow/UpdateWorkflowCommandValidator.cs
+- [X] T034 [US3] Create UpdateWorkflowCommandHandler (fetch → status guard → uniqueness check → DAG validation → reference validation → Update entity → save) in Backend/CoreSRE.Application/Workflows/Commands/UpdateWorkflow/UpdateWorkflowCommandHandler.cs
+- [X] T035 [US3] Add PUT /api/workflows/{id} endpoint to WorkflowEndpoints in Backend/CoreSRE/Endpoints/WorkflowEndpoints.cs
 
 **Checkpoint**: Update works for Draft workflows. Published guard, name uniqueness, and DAG validation enforced. Tests pass.
 
@@ -155,15 +155,15 @@
 
 > **Write tests FIRST.**
 
-- [ ] T036 [P] [US4] Write DeleteWorkflowCommandHandler unit tests (success deletes Draft, not found returns 404, published guard returns 400, agent reference guard returns 400) in Backend/CoreSRE.Application.Tests/Workflows/Commands/DeleteWorkflowCommandHandlerTests.cs
-- [ ] T037 [P] [US4] Write DeleteWorkflowCommandValidator unit tests (id must not be Guid.Empty) in Backend/CoreSRE.Application.Tests/Workflows/Commands/DeleteWorkflowCommandValidatorTests.cs
+- [X] T036 [P] [US4] Write DeleteWorkflowCommandHandler unit tests (success deletes Draft, not found returns 404, published guard returns 400, agent reference guard returns 400) in Backend/CoreSRE.Application.Tests/Workflows/Commands/DeleteWorkflowCommandHandlerTests.cs
+- [X] T037 [P] [US4] Write DeleteWorkflowCommandValidator unit tests (id must not be Guid.Empty) in Backend/CoreSRE.Application.Tests/Workflows/Commands/DeleteWorkflowCommandValidatorTests.cs
 
 ### Implementation for User Story 4
 
-- [ ] T038 [US4] Create DeleteWorkflowCommand record in Backend/CoreSRE.Application/Workflows/Commands/DeleteWorkflow/DeleteWorkflowCommand.cs
-- [ ] T039 [US4] Create DeleteWorkflowCommandValidator in Backend/CoreSRE.Application/Workflows/Commands/DeleteWorkflow/DeleteWorkflowCommandValidator.cs
-- [ ] T040 [US4] Create DeleteWorkflowCommandHandler (fetch → status guard → agent reference check → delete → save) in Backend/CoreSRE.Application/Workflows/Commands/DeleteWorkflow/DeleteWorkflowCommandHandler.cs
-- [ ] T041 [US4] Add DELETE /api/workflows/{id} endpoint to WorkflowEndpoints in Backend/CoreSRE/Endpoints/WorkflowEndpoints.cs
+- [X] T038 [US4] Create DeleteWorkflowCommand record in Backend/CoreSRE.Application/Workflows/Commands/DeleteWorkflow/DeleteWorkflowCommand.cs
+- [X] T039 [US4] Create DeleteWorkflowCommandValidator in Backend/CoreSRE.Application/Workflows/Commands/DeleteWorkflow/DeleteWorkflowCommandValidator.cs
+- [X] T040 [US4] Create DeleteWorkflowCommandHandler (fetch → status guard → agent reference check → delete → save) in Backend/CoreSRE.Application/Workflows/Commands/DeleteWorkflow/DeleteWorkflowCommandHandler.cs
+- [X] T041 [US4] Add DELETE /api/workflows/{id} endpoint to WorkflowEndpoints in Backend/CoreSRE/Endpoints/WorkflowEndpoints.cs
 
 **Checkpoint**: Delete works for unreferenced Draft workflows. Published guard and agent reference guard enforced. Tests pass.
 
@@ -173,9 +173,9 @@
 
 **Purpose**: Final validation and cleanup across all user stories
 
-- [ ] T042 [P] Run full test suite — all domain, handler, and validator tests must pass
-- [ ] T043 Run quickstart.md verification steps end-to-end (all 6 HTTP scenarios + 13-item checklist)
-- [ ] T044 Code review — validate all patterns match existing codebase conventions (naming, DI, error codes, Result\<T\> usage)
+- [X] T042 [P] Run full test suite — all domain, handler, and validator tests must pass
+- [X] T043 Run quickstart.md verification steps end-to-end (all 6 HTTP scenarios + 13-item checklist)
+- [X] T044 Code review — validate all patterns match existing codebase conventions (naming, DI, error codes, Result\<T\> usage)
 
 ---
 

@@ -55,6 +55,7 @@ app.MapProviderEndpoints();
 app.MapChatEndpoints();
 app.MapAgentChatEndpoints();
 app.MapToolEndpoints();
+app.MapWorkflowEndpoints();
 
 // ===== 自动迁移数据库（开发环境）=====
 using (var scope = app.Services.CreateScope())

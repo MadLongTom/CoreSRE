@@ -51,6 +51,7 @@ public static class DependencyInjection
         services.AddDataProtection();
         services.AddScoped<IToolRegistrationRepository, ToolRegistrationRepository>();
         services.AddScoped<IMcpToolItemRepository, McpToolItemRepository>();
+        services.AddScoped<IWorkflowDefinitionRepository, WorkflowDefinitionRepository>();
         services.AddScoped<ICredentialEncryptionService, CredentialEncryptionService>();
         services.AddScoped<IMcpToolDiscoveryService, McpToolDiscoveryService>();
         services.AddScoped<IOpenApiParserService, OpenApiParserService>();
