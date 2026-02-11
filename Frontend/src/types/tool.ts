@@ -145,3 +145,17 @@ export interface OpenApiImportResult {
   tools: ToolRegistration[];
   errors: string[];
 }
+
+// ---------------------------------------------------------------------------
+// Bindable Tool (for tool picker — flattened REST API + MCP sub-tools)
+// ---------------------------------------------------------------------------
+
+/** Maps to backend BindableToolDto — used in GET /api/tools/available-functions */
+export interface BindableTool {
+  id: string;
+  name: string;
+  description?: string;
+  toolType: "RestApi" | "McpTool";
+  parentName?: string;   // MCP server name for McpTool type
+  status: "Active" | "Inactive";
+}

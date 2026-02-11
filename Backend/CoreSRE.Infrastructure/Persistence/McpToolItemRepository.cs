@@ -37,4 +37,19 @@ public class McpToolItemRepository : Repository<McpToolItem>, IMcpToolItemReposi
             await _context.SaveChangesAsync(cancellationToken);
         }
     }
+
+    /// <inheritdoc/>
+    public async Task<IEnumerable<McpToolItem>> GetByIdsAsync(
+        IEnumerable<Guid> ids,
+        CancellationToken cancellationToken = default)
+    {
+        var idList = ids.ToList();
+        if (idList.Count == 0)
+            return Enumerable.Empty<McpToolItem>();
+
+        return await _dbSet
+            .Where(m => idList.Contains(m.Id))
+            .Include(m => m.ToolRegistration)
+            .ToListAsync(cancellationToken);
+    }
 }

@@ -35,4 +35,9 @@ public interface IToolRegistrationRepository : IRepository<ToolRegistration>
         int page,
         int pageSize,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 按 ID 列表批量查询（用于 ToolRefs 解析），包含关联的 McpToolItems。
+    /// </summary>
+    Task<IEnumerable<ToolRegistration>> GetByIdsAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken = default);
 }

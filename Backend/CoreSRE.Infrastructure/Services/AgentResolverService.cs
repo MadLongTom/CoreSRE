@@ -20,15 +20,18 @@ public class AgentResolverService : IAgentResolver
     private readonly IAgentRegistrationRepository _agentRepo;
     private readonly ILlmProviderRepository _providerRepo;
     private readonly IHttpClientFactory _httpClientFactory;
+    private readonly IToolFunctionFactory _toolFunctionFactory;
 
     public AgentResolverService(
         IAgentRegistrationRepository agentRepo,
         ILlmProviderRepository providerRepo,
-        IHttpClientFactory httpClientFactory)
+        IHttpClientFactory httpClientFactory,
+        IToolFunctionFactory toolFunctionFactory)
     {
         _agentRepo = agentRepo;
         _providerRepo = providerRepo;
         _httpClientFactory = httpClientFactory;
+        _toolFunctionFactory = toolFunctionFactory;
     }
 
     public async Task<AIAgent> ResolveAsync(
@@ -69,6 +72,21 @@ public class AgentResolverService : IAgentResolver
             .GetChatClient(agent.LlmConfig.ModelId)
             .AsIChatClient();
 
+        // 3.5 如果有 ToolRefs，解析为 AIFunction 并用 FunctionInvokingChatClient 包装
+        IReadOnlyList<AIFunction>? aiFunctions = null;
+        if (agent.LlmConfig.ToolRefs is { Count: > 0 } toolRefs)
+        {
+            aiFunctions = await _toolFunctionFactory.CreateFunctionsAsync(toolRefs);
+
+            if (aiFunctions.Count > 0)
+            {
+                chatClient = chatClient
+                    .AsBuilder()
+                    .UseFunctionInvocation()
+                    .Build();
+            }
+        }
+
         // 4. 创建 ChatClientAgent（AG-UI 无状态模式 — 消息随请求体发送）
         var options = new ChatClientAgentOptions
         {
@@ -76,13 +94,20 @@ public class AgentResolverService : IAgentResolver
             Description = agent.Description ?? string.Empty,
         };
 
+        var chatOptions = new ChatOptions();
+
         if (!string.IsNullOrWhiteSpace(agent.LlmConfig.Instructions))
         {
-            options.ChatOptions = new ChatOptions
-            {
-                Instructions = agent.LlmConfig.Instructions
-            };
+            chatOptions.Instructions = agent.LlmConfig.Instructions;
         }
+
+        // 将 AIFunction 列表附加到 ChatOptions.Tools
+        if (aiFunctions is { Count: > 0 })
+        {
+            chatOptions.Tools = aiFunctions.Cast<AITool>().ToList();
+        }
+
+        options.ChatOptions = chatOptions;
 
         return chatClient.AsAIAgent(options);
     }

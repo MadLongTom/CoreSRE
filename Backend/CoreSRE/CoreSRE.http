@@ -14,3 +14,35 @@ Content-Type: application/json
 }
 
 ###
+
+### GET /api/tools/available-functions — 查询所有可绑定工具函数
+GET {{CoreSRE_HostAddress}}/api/tools/available-functions
+Accept: application/json
+
+###
+
+### GET /api/tools/available-functions?search=&status= — 带过滤参数
+GET {{CoreSRE_HostAddress}}/api/tools/available-functions?search=health&status=Active
+Accept: application/json
+
+###
+
+### POST /api/chat/stream — 与工具绑定的 ChatClient Agent 对话（替换 agentId 为实际值）
+POST {{CoreSRE_HostAddress}}/api/chat/stream
+Content-Type: application/json
+
+{
+  "threadId": "{{$guid}}",
+  "runId": "{{$guid}}",
+  "messages": [
+    {
+      "role": "user",
+      "content": "请检查一下系统的健康状态"
+    }
+  ],
+  "context": [
+    { "description": "agentId", "value": "YOUR-CHATCLIENT-AGENT-ID-HERE" }
+  ]
+}
+
+###

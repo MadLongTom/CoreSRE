@@ -4,6 +4,7 @@
 
 import type { ApiResult } from "@/types/agent";
 import type {
+  BindableTool,
   CreateToolRequest,
   McpToolItem,
   OpenApiImportResult,
@@ -180,4 +181,19 @@ export async function importOpenApi(
     body: formData,
   });
   return handleResponse<OpenApiImportResult>(res);
+}
+
+// ── Available Functions (flat tool picker list) ──
+
+export async function getAvailableFunctions(params?: {
+  search?: string;
+  status?: string;
+}): Promise<ApiResult<BindableTool[]>> {
+  const sp = new URLSearchParams();
+  if (params?.search) sp.set("search", params.search);
+  if (params?.status) sp.set("status", params.status);
+  const qs = sp.toString();
+  const url = qs ? `/api/tools/available-functions?${qs}` : "/api/tools/available-functions";
+  const res = await fetchWithTimeout(url);
+  return handleResponse<BindableTool[]>(res);
 }

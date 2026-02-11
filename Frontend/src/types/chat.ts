@@ -43,6 +43,19 @@ export interface Conversation {
 }
 
 // ---------------------------------------------------------------------------
+// Tool Call (AG-UI tool invocation tracking)
+// ---------------------------------------------------------------------------
+
+/** Tracks a single tool call within an assistant message's streaming lifecycle */
+export interface ToolCall {
+  toolCallId: string;
+  toolName: string;
+  status: "calling" | "completed" | "failed";
+  args?: string;   // JSON string of tool arguments
+  result?: string;  // JSON string of tool result or error message
+}
+
+// ---------------------------------------------------------------------------
 // Chat Message (projected from AgentSessionRecord.SessionData)
 // ---------------------------------------------------------------------------
 
@@ -51,6 +64,7 @@ export interface ChatMessage {
   index: number;
   role: "user" | "assistant";
   content: string;
+  toolCalls?: ToolCall[];  // present on assistant messages with tool usage
 }
 
 // ---------------------------------------------------------------------------

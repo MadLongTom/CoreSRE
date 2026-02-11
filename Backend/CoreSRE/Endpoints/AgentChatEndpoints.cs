@@ -145,6 +145,29 @@ public static class AgentChatEndpoints
                             delta = textContent.Text
                         }, cancellationToken);
                     }
+                    else if (content is FunctionCallContent functionCall)
+                    {
+                        // TOOL_CALL_START — LLM has decided to call a tool
+                        var toolCallId = functionCall.CallId ?? Guid.NewGuid().ToString();
+                        await WriteToolCallStartAsync(context.Response, toolCallId, functionCall.Name ?? "unknown", messageId, cancellationToken);
+
+                        // TOOL_CALL_ARGS — serialize arguments
+                        if (functionCall.Arguments is { Count: > 0 })
+                        {
+                            var argsJson = JsonSerializer.Serialize(functionCall.Arguments, s_jsonOptions);
+                            await WriteToolCallArgsAsync(context.Response, toolCallId, argsJson, cancellationToken);
+                        }
+                        else
+                        {
+                            await WriteToolCallArgsAsync(context.Response, toolCallId, "{}", cancellationToken);
+                        }
+                    }
+                    else if (content is FunctionResultContent functionResult)
+                    {
+                        // TOOL_CALL_END — tool execution completed
+                        var toolCallId = functionResult.CallId ?? Guid.NewGuid().ToString();
+                        await WriteToolCallEndAsync(context.Response, toolCallId, cancellationToken);
+                    }
                 }
             }
 
@@ -297,6 +320,36 @@ public static class AgentChatEndpoints
         var json = JsonSerializer.Serialize(eventData, s_jsonOptions);
         await response.WriteAsync($"data: {json}\n\n", cancellationToken);
         await response.Body.FlushAsync(cancellationToken);
+    }
+
+    private static async Task WriteToolCallStartAsync(HttpResponse response, string toolCallId, string toolCallName, string parentMessageId, CancellationToken cancellationToken)
+    {
+        await WriteSseEventAsync(response, new
+        {
+            type = "TOOL_CALL_START",
+            toolCallId,
+            toolCallName,
+            parentMessageId
+        }, cancellationToken);
+    }
+
+    private static async Task WriteToolCallArgsAsync(HttpResponse response, string toolCallId, string delta, CancellationToken cancellationToken)
+    {
+        await WriteSseEventAsync(response, new
+        {
+            type = "TOOL_CALL_ARGS",
+            toolCallId,
+            delta
+        }, cancellationToken);
+    }
+
+    private static async Task WriteToolCallEndAsync(HttpResponse response, string toolCallId, CancellationToken cancellationToken)
+    {
+        await WriteSseEventAsync(response, new
+        {
+            type = "TOOL_CALL_END",
+            toolCallId
+        }, cancellationToken);
     }
 
     private static ChatRole MapRole(string? role) => role?.ToLowerInvariant() switch

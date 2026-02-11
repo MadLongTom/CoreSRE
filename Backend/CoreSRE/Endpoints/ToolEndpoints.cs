@@ -4,6 +4,7 @@ using CoreSRE.Application.Tools.Commands.ImportOpenApi;
 using CoreSRE.Application.Tools.Commands.InvokeTool;
 using CoreSRE.Application.Tools.Commands.RegisterTool;
 using CoreSRE.Application.Tools.Commands.UpdateTool;
+using CoreSRE.Application.Tools.Queries.GetAvailableFunctions;
 using CoreSRE.Application.Tools.Queries.GetMcpTools;
 using CoreSRE.Application.Tools.Queries.GetToolById;
 using CoreSRE.Application.Tools.Queries.GetTools;
@@ -25,6 +26,7 @@ public static class ToolEndpoints
 
         group.MapPost("/", RegisterTool);
         group.MapGet("/", GetTools);
+        group.MapGet("/available-functions", GetAvailableFunctions);
         group.MapGet("/{id:guid}", GetToolById);
         group.MapPut("/{id:guid}", UpdateTool);
         group.MapDelete("/{id:guid}", DeleteTool);
@@ -193,6 +195,17 @@ public static class ToolEndpoints
 
         return Results.Ok(result);
     }
+
+    /// <summary>GET /api/tools/available-functions — 查询所有可绑定工具函数（REST API + MCP 子工具扁平化）</summary>
+    private static async Task<IResult> GetAvailableFunctions(
+        ISender sender,
+        string? search = null,
+        string? status = null)
+    {
+        var result = await sender.Send(new GetAvailableFunctionsQuery(search, status));
+        return Results.Ok(result);
+    }
+
     /// <summary>POST /api/tools/{id}/invoke — 统一工具调用</summary>
     private static async Task<IResult> InvokeTool(
         Guid id,

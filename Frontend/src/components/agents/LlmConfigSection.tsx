@@ -1,4 +1,4 @@
-import { Input } from "@/components/ui/input";
+import { useEffect, useState } from "react";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -9,6 +9,9 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import ProviderModelSelect from "@/components/agents/ProviderModelSelect";
+import ToolRefsPicker from "@/components/agents/ToolRefsPicker";
+import { getAvailableFunctions } from "@/lib/api/tools";
+import type { BindableTool } from "@/types/tool";
 import type { LlmConfig } from "@/types/agent";
 
 interface LlmConfigSectionProps {
@@ -24,6 +27,24 @@ export default function LlmConfigSection({
 }: LlmConfigSectionProps) {
   const update = (partial: Partial<LlmConfig>) =>
     onChange?.({ ...config, ...partial });
+
+  // Resolve tool names for view mode
+  const [resolvedTools, setResolvedTools] = useState<Map<string, BindableTool>>(new Map());
+
+  useEffect(() => {
+    if (editing || config.toolRefs.length === 0) return;
+    let cancelled = false;
+    getAvailableFunctions({ status: "all" })
+      .then((result) => {
+        if (!cancelled && result.data) {
+          const map = new Map<string, BindableTool>();
+          for (const t of result.data) map.set(t.id, t);
+          setResolvedTools(map);
+        }
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [editing, config.toolRefs]);
 
   return (
     <Card>
@@ -51,19 +72,10 @@ export default function LlmConfigSection({
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="edit-toolRefs">Tool Refs</Label>
-              <Input
-                id="edit-toolRefs"
-                value={config.toolRefs.join(", ")}
-                onChange={(e) =>
-                  update({
-                    toolRefs: e.target.value
-                      .split(",")
-                      .map((s) => s.trim())
-                      .filter(Boolean),
-                  })
-                }
-                placeholder="逗号分隔的 GUID"
+              <Label>Tool Refs</Label>
+              <ToolRefsPicker
+                value={config.toolRefs}
+                onChange={(ids) => update({ toolRefs: ids })}
               />
             </div>
           </>
@@ -93,11 +105,19 @@ export default function LlmConfigSection({
               </Label>
               {config.toolRefs.length > 0 ? (
                 <div className="flex flex-wrap gap-1">
-                  {config.toolRefs.map((ref, i) => (
-                    <Badge key={i} variant="secondary" className="font-mono text-xs">
-                      {ref}
-                    </Badge>
-                  ))}
+                  {config.toolRefs.map((ref, i) => {
+                    const tool = resolvedTools.get(ref);
+                    return (
+                      <Badge key={i} variant="secondary" className="text-xs">
+                        {tool ? tool.name : ref}
+                        {tool?.toolType === "McpTool" && tool.parentName && (
+                          <span className="ml-1 text-muted-foreground">
+                            ({tool.parentName})
+                          </span>
+                        )}
+                      </Badge>
+                    );
+                  })}
                 </div>
               ) : (
                 <p className="text-sm text-muted-foreground">无</p>

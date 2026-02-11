@@ -66,6 +66,9 @@ public static class DependencyInjection
         services.AddScoped<IToolInvoker, McpToolInvoker>();
         services.AddScoped<IToolInvokerFactory, ToolInvokerFactory>();
 
+        // Tool-to-AIFunction conversion factory (for ChatClient tool binding)
+        services.AddScoped<IToolFunctionFactory, ToolFunctionFactory>();
+
         return services;
     }
 

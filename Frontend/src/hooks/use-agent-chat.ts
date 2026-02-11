@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef } from "react";
-import type { ChatMessage } from "@/types/chat";
+import type { ChatMessage, ToolCall } from "@/types/chat";
 
 interface UseAgentChatOptions {
   /** Agent registration ID */
@@ -138,6 +138,58 @@ export function useAgentChat({
                         ...last,
                         content: accumulatedContent,
                       };
+                    }
+                    return copy;
+                  });
+                  break;
+
+                case "TOOL_CALL_START": {
+                  const tc: ToolCall = {
+                    toolCallId: event.toolCallId,
+                    toolName: event.toolCallName,
+                    status: "calling",
+                  };
+                  setMessages((prev) => {
+                    const copy = [...prev];
+                    const last = copy[copy.length - 1];
+                    if (last && last.role === "assistant") {
+                      copy[copy.length - 1] = {
+                        ...last,
+                        toolCalls: [...(last.toolCalls ?? []), tc],
+                      };
+                    }
+                    return copy;
+                  });
+                  break;
+                }
+
+                case "TOOL_CALL_ARGS":
+                  setMessages((prev) => {
+                    const copy = [...prev];
+                    const last = copy[copy.length - 1];
+                    if (last && last.role === "assistant" && last.toolCalls) {
+                      const updatedCalls = last.toolCalls.map((tc) =>
+                        tc.toolCallId === event.toolCallId
+                          ? { ...tc, args: (tc.args ?? "") + (event.delta ?? "") }
+                          : tc,
+                      );
+                      copy[copy.length - 1] = { ...last, toolCalls: updatedCalls };
+                    }
+                    return copy;
+                  });
+                  break;
+
+                case "TOOL_CALL_END":
+                  setMessages((prev) => {
+                    const copy = [...prev];
+                    const last = copy[copy.length - 1];
+                    if (last && last.role === "assistant" && last.toolCalls) {
+                      const updatedCalls = last.toolCalls.map((tc) =>
+                        tc.toolCallId === event.toolCallId
+                          ? { ...tc, status: "completed" as const }
+                          : tc,
+                      );
+                      copy[copy.length - 1] = { ...last, toolCalls: updatedCalls };
                     }
                     return copy;
                   });

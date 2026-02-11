@@ -69,4 +69,19 @@ public class ToolRegistrationRepository : Repository<ToolRegistration>, IToolReg
 
         return (items, totalCount);
     }
+
+    /// <inheritdoc/>
+    public async Task<IEnumerable<ToolRegistration>> GetByIdsAsync(
+        IEnumerable<Guid> ids,
+        CancellationToken cancellationToken = default)
+    {
+        var idList = ids.ToList();
+        if (idList.Count == 0)
+            return Enumerable.Empty<ToolRegistration>();
+
+        return await _dbSet
+            .Where(t => idList.Contains(t.Id))
+            .Include(t => t.McpToolItems)
+            .ToListAsync(cancellationToken);
+    }
 }

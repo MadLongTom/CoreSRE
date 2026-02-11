@@ -15,6 +15,7 @@ import { AgentTypeBadge } from "@/components/agents/AgentTypeBadge";
 import { AgentStatusBadge } from "@/components/agents/AgentStatusBadge";
 import AgentCardSection from "@/components/agents/AgentCardSection";
 import LlmConfigSection from "@/components/agents/LlmConfigSection";
+import BoundToolsSection from "@/components/agents/BoundToolsSection";
 import { DeleteAgentDialog } from "@/components/agents/DeleteAgentDialog";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { getAgentById, updateAgent, ApiError } from "@/lib/api/agents";
@@ -425,6 +426,14 @@ export default function AgentDetailPage() {
           }}
         />
       )}
+
+      {/* Bound tools overview (view mode only) */}
+      {agent.agentType === "ChatClient" &&
+        !editing &&
+        agent.llmConfig &&
+        agent.llmConfig.toolRefs.length > 0 && (
+          <BoundToolsSection toolRefs={agent.llmConfig.toolRefs} />
+        )}
 
       {agent.agentType === "Workflow" && (
         <Card>
