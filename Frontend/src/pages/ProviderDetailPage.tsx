@@ -258,7 +258,7 @@ export default function ProviderDetailPage() {
       />
 
       <div className="flex-1 overflow-y-auto p-6">
-      <div className="max-w-3xl space-y-6">
+      <div className="space-y-6">
 
       {/* Save errors */}
       {saveErrors.length > 0 && (
@@ -271,6 +271,9 @@ export default function ProviderDetailPage() {
         </div>
       )}
 
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* Left Column */}
+      <div className="space-y-6">
       {/* Basic Info */}
       <Card>
         <CardHeader>
@@ -279,29 +282,31 @@ export default function ProviderDetailPage() {
         <CardContent className="space-y-4">
           {editing ? (
             <>
-              <div className="space-y-2">
-                <Label htmlFor="edit-name">名称 *</Label>
-                <Input
-                  id="edit-name"
-                  value={editName}
-                  onChange={(e) => {
-                    setEditName(e.target.value);
-                    markDirty();
-                  }}
-                  maxLength={200}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit-baseUrl">Base URL *</Label>
-                <Input
-                  id="edit-baseUrl"
-                  value={editBaseUrl}
-                  onChange={(e) => {
-                    setEditBaseUrl(e.target.value);
-                    markDirty();
-                  }}
-                  type="url"
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-name">名称 *</Label>
+                  <Input
+                    id="edit-name"
+                    value={editName}
+                    onChange={(e) => {
+                      setEditName(e.target.value);
+                      markDirty();
+                    }}
+                    maxLength={200}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-baseUrl">Base URL *</Label>
+                  <Input
+                    id="edit-baseUrl"
+                    value={editBaseUrl}
+                    onChange={(e) => {
+                      setEditBaseUrl(e.target.value);
+                      markDirty();
+                    }}
+                    type="url"
+                  />
+                </div>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="edit-apiKey">
@@ -364,6 +369,26 @@ export default function ProviderDetailPage() {
         </CardContent>
       </Card>
 
+      {/* Edit actions */}
+      {editing && (
+        <div className="flex justify-end gap-3">
+          <Button
+            variant="outline"
+            onClick={cancelEditing}
+            disabled={saving}
+          >
+            取消
+          </Button>
+          <Button onClick={handleSave} disabled={saving}>
+            {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            保存
+          </Button>
+        </div>
+      )}
+      </div>
+
+      {/* Right Column: Models */}
+      <div className="space-y-6">
       {/* Discovered Models */}
       {!editing && (
         <Card>
@@ -416,23 +441,8 @@ export default function ProviderDetailPage() {
           </CardContent>
         </Card>
       )}
-
-      {/* Edit actions */}
-      {editing && (
-        <div className="flex justify-end gap-3">
-          <Button
-            variant="outline"
-            onClick={cancelEditing}
-            disabled={saving}
-          >
-            取消
-          </Button>
-          <Button onClick={handleSave} disabled={saving}>
-            {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            保存
-          </Button>
-        </div>
-      )}
+      </div>
+      </div>
 
       {/* Delete dialog */}
       {provider && (

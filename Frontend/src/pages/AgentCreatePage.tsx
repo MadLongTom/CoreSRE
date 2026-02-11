@@ -235,7 +235,7 @@ export default function AgentCreatePage() {
       />
 
       <div className="flex-1 overflow-y-auto p-6">
-      <div className="max-w-3xl space-y-6">
+      <div className="space-y-6">
       {/* Step 1: Type selection */}
       {step === 1 && (
         <div className="grid gap-4 md:grid-cols-3">
@@ -268,24 +268,27 @@ export default function AgentCreatePage() {
             </div>
           )}
 
+          {/* Common fields + type-specific */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Common fields */}
           <Card>
-            <CardHeader>
-              <CardTitle>基本信息</CardTitle>
-              <CardDescription>
-                Agent 类型：{selectedType}
-              </CardDescription>
-            </CardHeader>
+            <CardHeader>\n              <CardTitle>基本信息</CardTitle>\n            </CardHeader>
             <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">名称 *</Label>
-                <Input
-                  id="name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Agent 名称"
-                  maxLength={200}
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="name">名称 *</Label>
+                  <Input
+                    id="name"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Agent 名称"
+                    maxLength={200}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-muted-foreground text-xs">类型</Label>
+                  <p className="text-sm font-medium pt-1">{selectedType}</p>
+                </div>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="description">描述</Label>
@@ -294,7 +297,7 @@ export default function AgentCreatePage() {
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder="可选描述"
-                  rows={3}
+                  rows={2}
                 />
               </div>
             </CardContent>
@@ -599,6 +602,7 @@ export default function AgentCreatePage() {
               </CardContent>
             </Card>
           )}
+          </div>
 
           {/* Submit */}
           <div className="flex justify-end gap-3">

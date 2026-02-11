@@ -14,7 +14,7 @@ import {
 } from "@/lib/api/chat";
 import type { AgentSummary } from "@/types/agent";
 import type { ConversationSummary } from "@/types/chat";
-import { Loader2, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 /**

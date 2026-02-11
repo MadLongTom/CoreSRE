@@ -83,7 +83,7 @@ export default function ProviderCreatePage() {
       />
 
       <div className="flex-1 overflow-y-auto p-6">
-      <div className="max-w-2xl space-y-6">
+      <div className="max-w-xl space-y-6">
       {/* Error display */}
       {errors.length > 0 && (
         <div className="rounded-md border border-destructive/50 bg-destructive/10 p-4">
@@ -101,25 +101,27 @@ export default function ProviderCreatePage() {
           <CardTitle>Provider 信息</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="provider-name">名称 *</Label>
-            <Input
-              id="provider-name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. OpenAI, Azure OpenAI, Ollama"
-              maxLength={200}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="provider-baseUrl">Base URL *</Label>
-            <Input
-              id="provider-baseUrl"
-              value={baseUrl}
-              onChange={(e) => setBaseUrl(e.target.value)}
-              placeholder="https://api.openai.com/v1"
-              type="url"
-            />
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="provider-name">名称 *</Label>
+              <Input
+                id="provider-name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="e.g. OpenAI, Azure OpenAI, Ollama"
+                maxLength={200}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="provider-baseUrl">Base URL *</Label>
+              <Input
+                id="provider-baseUrl"
+                value={baseUrl}
+                onChange={(e) => setBaseUrl(e.target.value)}
+                placeholder="https://api.openai.com/v1"
+                type="url"
+              />
+            </div>
           </div>
           <div className="space-y-2">
             <Label htmlFor="provider-apiKey">API Key *</Label>

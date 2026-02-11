@@ -203,6 +203,109 @@ namespace CoreSRE.Infrastructure.Migrations
                     b.ToTable("llm_providers", (string)null);
                 });
 
+            modelBuilder.Entity("CoreSRE.Domain.Entities.McpToolItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("text")
+                        .HasColumnName("description");
+
+                    b.Property<JsonElement?>("InputSchema")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("input_schema");
+
+                    b.Property<JsonElement?>("OutputSchema")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("output_schema");
+
+                    b.Property<string>("ToolName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("tool_name");
+
+                    b.Property<Guid>("ToolRegistrationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tool_registration_id");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ToolRegistrationId");
+
+                    b.HasIndex("ToolRegistrationId", "ToolName")
+                        .IsUnique();
+
+                    b.ToTable("mcp_tool_items", (string)null);
+                });
+
+            modelBuilder.Entity("CoreSRE.Domain.Entities.ToolRegistration", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("text")
+                        .HasColumnName("description");
+
+                    b.Property<string>("DiscoveryError")
+                        .HasColumnType("text")
+                        .HasColumnName("discovery_error");
+
+                    b.Property<string>("ImportSource")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("import_source");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("name");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.Property<string>("ToolType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("tool_type");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.HasIndex("ToolType");
+
+                    b.ToTable("tool_registrations", (string)null);
+                });
+
             modelBuilder.Entity("CoreSRE.Domain.Entities.AgentRegistration", b =>
                 {
                     b.OwnsOne("CoreSRE.Domain.ValueObjects.AgentCardVO", "AgentCard", b1 =>
@@ -350,6 +453,155 @@ namespace CoreSRE.Infrastructure.Migrations
                         .HasForeignKey("AgentId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("CoreSRE.Domain.Entities.McpToolItem", b =>
+                {
+                    b.HasOne("CoreSRE.Domain.Entities.ToolRegistration", "ToolRegistration")
+                        .WithMany("McpToolItems")
+                        .HasForeignKey("ToolRegistrationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.OwnsOne("CoreSRE.Domain.ValueObjects.ToolAnnotationsVO", "Annotations", b1 =>
+                        {
+                            b1.Property<Guid>("McpToolItemId");
+
+                            b1.Property<bool>("Destructive");
+
+                            b1.Property<bool>("Idempotent");
+
+                            b1.Property<bool>("OpenWorldHint");
+
+                            b1.Property<bool>("ReadOnly");
+
+                            b1.HasKey("McpToolItemId");
+
+                            b1.ToTable("mcp_tool_items");
+
+                            b1
+                                .ToJson("annotations")
+                                .HasColumnType("jsonb");
+
+                            b1.WithOwner()
+                                .HasForeignKey("McpToolItemId");
+                        });
+
+                    b.Navigation("Annotations");
+
+                    b.Navigation("ToolRegistration");
+                });
+
+            modelBuilder.Entity("CoreSRE.Domain.Entities.ToolRegistration", b =>
+                {
+                    b.OwnsOne("CoreSRE.Domain.ValueObjects.AuthConfigVO", "AuthConfig", b1 =>
+                        {
+                            b1.Property<Guid>("ToolRegistrationId");
+
+                            b1.Property<string>("ApiKeyHeaderName");
+
+                            b1.Property<string>("AuthType")
+                                .IsRequired();
+
+                            b1.Property<string>("ClientId");
+
+                            b1.Property<string>("EncryptedClientSecret");
+
+                            b1.Property<string>("EncryptedCredential");
+
+                            b1.Property<string>("TokenEndpoint");
+
+                            b1.HasKey("ToolRegistrationId");
+
+                            b1.ToTable("tool_registrations");
+
+                            b1
+                                .ToJson("auth_config")
+                                .HasColumnType("jsonb");
+
+                            b1.WithOwner()
+                                .HasForeignKey("ToolRegistrationId");
+                        });
+
+                    b.OwnsOne("CoreSRE.Domain.ValueObjects.ConnectionConfigVO", "ConnectionConfig", b1 =>
+                        {
+                            b1.Property<Guid>("ToolRegistrationId");
+
+                            b1.Property<string>("Endpoint")
+                                .IsRequired();
+
+                            b1.Property<string>("HttpMethod")
+                                .IsRequired();
+
+                            b1.Property<string>("TransportType")
+                                .IsRequired();
+
+                            b1.HasKey("ToolRegistrationId");
+
+                            b1.ToTable("tool_registrations");
+
+                            b1
+                                .ToJson("connection_config")
+                                .HasColumnType("jsonb");
+
+                            b1.WithOwner()
+                                .HasForeignKey("ToolRegistrationId");
+                        });
+
+                    b.OwnsOne("CoreSRE.Domain.ValueObjects.ToolSchemaVO", "ToolSchema", b1 =>
+                        {
+                            b1.Property<Guid>("ToolRegistrationId");
+
+                            b1.Property<string>("InputSchema");
+
+                            b1.Property<string>("OutputSchema");
+
+                            b1.HasKey("ToolRegistrationId");
+
+                            b1.ToTable("tool_registrations");
+
+                            b1
+                                .ToJson("tool_schema")
+                                .HasColumnType("jsonb");
+
+                            b1.WithOwner()
+                                .HasForeignKey("ToolRegistrationId");
+
+                            b1.OwnsOne("CoreSRE.Domain.ValueObjects.ToolAnnotationsVO", "Annotations", b2 =>
+                                {
+                                    b2.Property<Guid>("ToolSchemaVOToolRegistrationId");
+
+                                    b2.Property<bool>("Destructive");
+
+                                    b2.Property<bool>("Idempotent");
+
+                                    b2.Property<bool>("OpenWorldHint");
+
+                                    b2.Property<bool>("ReadOnly");
+
+                                    b2.HasKey("ToolSchemaVOToolRegistrationId");
+
+                                    b2.ToTable("tool_registrations");
+
+                                    b2.WithOwner()
+                                        .HasForeignKey("ToolSchemaVOToolRegistrationId");
+                                });
+
+                            b1.Navigation("Annotations");
+                        });
+
+                    b.Navigation("AuthConfig")
+                        .IsRequired();
+
+                    b.Navigation("ConnectionConfig")
+                        .IsRequired();
+
+                    b.Navigation("ToolSchema");
+                });
+
+            modelBuilder.Entity("CoreSRE.Domain.Entities.ToolRegistration", b =>
+                {
+                    b.Navigation("McpToolItems");
                 });
 #pragma warning restore 612, 618
         }

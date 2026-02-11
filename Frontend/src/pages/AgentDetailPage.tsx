@@ -249,7 +249,7 @@ export default function AgentDetailPage() {
       />
 
       <div className="flex-1 overflow-y-auto p-6">
-      <div className="max-w-3xl space-y-6">
+      <div className="space-y-6">
 
       {/* Save errors */}
       {saveErrors.length > 0 && (
@@ -262,6 +262,9 @@ export default function AgentDetailPage() {
         </div>
       )}
 
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* Left Column */}
+      <div className="space-y-6">
       {/* Basic info */}
       <Card>
         <CardHeader>
@@ -343,7 +346,10 @@ export default function AgentDetailPage() {
           )}
         </CardContent>
       </Card>
+      </div>
 
+      {/* Right Column: Type-specific */}
+      <div className="space-y-6">
       {/* Type-specific sections */}
       {agent.agentType === "A2A" && (
         <>
@@ -443,6 +449,8 @@ export default function AgentDetailPage() {
           </CardContent>
         </Card>
       )}
+      </div>
+      </div>
 
       {/* Edit actions */}
       {editing && (

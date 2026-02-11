@@ -15,6 +15,8 @@ public class AppDbContext : DbContext, IUnitOfWork
     public DbSet<AgentSessionRecord> AgentSessions => Set<AgentSessionRecord>();
     public DbSet<LlmProvider> LlmProviders => Set<LlmProvider>();
     public DbSet<Conversation> Conversations => Set<Conversation>();
+    public DbSet<ToolRegistration> ToolRegistrations => Set<ToolRegistration>();
+    public DbSet<McpToolItem> McpToolItems => Set<McpToolItem>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

@@ -23,11 +23,12 @@ public class Result<T>
         Message = message
     };
 
-    public static Result<T> Fail(string message, List<string>? errors = null) => new()
+    public static Result<T> Fail(string message, List<string>? errors = null, int? errorCode = null) => new()
     {
         Success = false,
         Message = message,
-        Errors = errors
+        Errors = errors,
+        ErrorCode = errorCode
     };
 
     /// <summary>资源未找到（404 语义）</summary>

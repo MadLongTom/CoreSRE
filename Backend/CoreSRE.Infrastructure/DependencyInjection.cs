@@ -8,6 +8,7 @@ using Microsoft.Agents.AI.Hosting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.AspNetCore.DataProtection;
 
 namespace CoreSRE.Infrastructure;
 
@@ -45,6 +46,25 @@ public static class DependencyInjection
         // A2A AgentCard resolver + named HttpClient
         services.AddHttpClient("A2ACardResolver");
         services.AddScoped<IAgentCardResolver, A2ACardResolverService>();
+
+        // Tool Gateway services
+        services.AddDataProtection();
+        services.AddScoped<IToolRegistrationRepository, ToolRegistrationRepository>();
+        services.AddScoped<IMcpToolItemRepository, McpToolItemRepository>();
+        services.AddScoped<ICredentialEncryptionService, CredentialEncryptionService>();
+        services.AddScoped<IMcpToolDiscoveryService, McpToolDiscoveryService>();
+        services.AddScoped<IOpenApiParserService, OpenApiParserService>();
+
+        // MCP Discovery background service + channel
+        var mcpDiscoveryChannel = System.Threading.Channels.Channel.CreateUnbounded<Guid>();
+        services.AddSingleton(mcpDiscoveryChannel);
+        services.AddHostedService<McpDiscoveryBackgroundService>();
+
+        // Tool Invoker services + factory + named HttpClient
+        services.AddHttpClient("ToolInvoker");
+        services.AddScoped<IToolInvoker, RestApiToolInvoker>();
+        services.AddScoped<IToolInvoker, McpToolInvoker>();
+        services.AddScoped<IToolInvokerFactory, ToolInvokerFactory>();
 
         return services;
     }

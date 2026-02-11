@@ -60,7 +60,7 @@ export default function AgentSearchPage() {
 
       <div className="flex-1 overflow-y-auto p-6 space-y-6">
       {/* Search input */}
-      <div className="relative max-w-xl">
+      <div className="relative max-w-2xl">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input
           className="pl-9"
@@ -107,7 +107,7 @@ export default function AgentSearchPage() {
               </p>
             </div>
           ) : (
-            <div className="grid gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {result.results.map((item) => (
                 <Link
                   key={item.id}

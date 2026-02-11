@@ -1,5 +1,5 @@
 import { NavLink } from "react-router";
-import { List, Search, Bot, Server, MessageSquare } from "lucide-react";
+import { List, Search, Bot, Server, MessageSquare, Wrench } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Separator } from "@/components/ui/separator";
 
@@ -8,6 +8,7 @@ const navItems = [
   { to: "/agents", label: "Agent 列表", icon: List, end: true },
   { to: "/agents/search", label: "Agent 搜索", icon: Search },
   { to: "/providers", label: "Provider 管理", icon: Server },
+  { to: "/tools", label: "工具管理", icon: Wrench },
 ];
 
 export function Sidebar() {

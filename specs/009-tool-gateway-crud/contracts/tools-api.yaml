@@ -1,0 +1,615 @@
+openapi: 3.0.3
+info:
+  title: Tool Gateway API
+  description: |
+    工具统一接入网关 API — 工具注册 (REST/MCP)、OpenAPI 导入、统一调用代理。
+    属于 CoreSRE 平台 SPEC-009。
+  version: 1.0.0
+
+servers:
+  - url: /api
+
+paths:
+  /tools:
+    post:
+      operationId: createToolRegistration
+      summary: 注册工具
+      description: |
+        注册一个新的工具。根据 toolType 区分 RestApi 和 McpServer 两种类型。
+        - RestApi: 初始状态 Active
+        - McpServer: 初始状态 Inactive，后台异步发起 MCP 握手和工具发现
+      tags: [Tool Registration]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateToolRegistrationRequest'
+            examples:
+              restApi:
+                summary: 注册 REST API 工具
+                value:
+                  name: "weather-api"
+                  description: "天气查询 API"
+                  toolType: "RestApi"
+                  connectionConfig:
+                    endpoint: "https://api.weather.com/v1/forecast"
+                    transportType: "Rest"
+                  authConfig:
+                    authType: "ApiKey"
+                    credential: "sk-abc123"
+                    apiKeyHeaderName: "X-Api-Key"
+              mcpServer:
+                summary: 注册 MCP Server 工具源
+                value:
+                  name: "code-analysis-mcp"
+                  description: "代码分析 MCP Server"
+                  toolType: "McpServer"
+                  connectionConfig:
+                    endpoint: "https://mcp.example.com/sse"
+                    transportType: "StreamableHttp"
+                  authConfig:
+                    authType: "Bearer"
+                    credential: "eyJhbGciOiJSUzI1NiIs..."
+      responses:
+        '201':
+          description: 注册成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ToolRegistrationDto'
+        '400':
+          description: 请求验证失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationProblemDetails'
+        '409':
+          description: 名称冲突
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+    get:
+      operationId: listToolRegistrations
+      summary: 查询工具列表
+      description: |
+        查询所有已注册工具列表。支持按类型、状态过滤，支持关键词搜索（名称/描述）。
+        返回分页结果，按 createdAt 降序排列。
+      tags: [Tool Registration]
+      parameters:
+        - name: toolType
+          in: query
+          description: 按工具类型过滤
+          schema:
+            $ref: '#/components/schemas/ToolType'
+        - name: status
+          in: query
+          description: 按状态过滤
+          schema:
+            $ref: '#/components/schemas/ToolStatus'
+        - name: search
+          in: query
+          description: 关键词搜索（匹配名称或描述）
+          schema:
+            type: string
+        - name: page
+          in: query
+          description: 页码（从 1 开始）
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: pageSize
+          in: query
+          description: 每页数量
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedResult_ToolRegistrationDto'
+
+  /tools/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: 工具注册 ID (UUID)
+        schema:
+          type: string
+          format: uuid
+
+    get:
+      operationId: getToolRegistration
+      summary: 获取工具详情
+      description: 获取指定工具的详细信息。不返回明文凭据。
+      tags: [Tool Registration]
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ToolRegistrationDto'
+        '404':
+          description: 工具不存在
+
+    put:
+      operationId: updateToolRegistration
+      summary: 更新工具
+      description: |
+        更新工具属性。toolType 不可变更。
+        如果更新 McpServer 的连接配置，后台将重新发起 MCP 握手。
+      tags: [Tool Registration]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateToolRegistrationRequest'
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ToolRegistrationDto'
+        '400':
+          description: 请求验证失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationProblemDetails'
+        '404':
+          description: 工具不存在
+        '409':
+          description: 名称冲突
+
+    delete:
+      operationId: deleteToolRegistration
+      summary: 删除工具
+      description: 删除工具注册。关联的 McpToolItem 将级联删除。
+      tags: [Tool Registration]
+      responses:
+        '204':
+          description: 删除成功
+        '404':
+          description: 工具不存在
+
+  /tools/{id}/mcp-tools:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: 工具注册 ID (UUID)，必须是 McpServer 类型
+        schema:
+          type: string
+          format: uuid
+
+    get:
+      operationId: listMcpToolItems
+      summary: 查询 MCP 子工具列表
+      description: |
+        查询 MCP Server 工具源下的所有已发现的子工具（McpToolItem）。
+        仅适用于 toolType=McpServer 的工具注册。
+      tags: [MCP Tools]
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/McpToolItemDto'
+        '400':
+          description: 该工具不是 McpServer 类型
+        '404':
+          description: 工具不存在
+
+  /tools/import-openapi:
+    post:
+      operationId: importOpenApiTools
+      summary: 通过 OpenAPI 文档导入工具
+      description: |
+        上传 OpenAPI 文档（JSON 或 YAML），系统将解析并批量注册为 RestApi 类型工具。
+        每个操作（operationId）注册为一个独立工具。
+        文件大小限制 10MB。
+      tags: [OpenAPI Import]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ImportOpenApiRequest'
+      responses:
+        '200':
+          description: 导入成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportOpenApiResultDto'
+        '400':
+          description: 文档解析失败或格式不合法
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+  /tools/{id}/invoke:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: 工具注册 ID (UUID)
+        schema:
+          type: string
+          format: uuid
+
+    post:
+      operationId: invokeToolRegistration
+      summary: 统一工具调用
+      description: |
+        通过统一接口调用已注册的工具。系统根据 toolType 路由至对应的调用器：
+        - RestApi: 通过 HTTP 调用目标端点
+        - McpServer: 通过 MCP 协议调用指定的 MCP Tool
+        
+        认证信息由系统自动注入，调用方无需关心。
+        McpServer 调用需额外提供 mcpToolName 指向具体的 McpToolItem。
+      tags: [Tool Invocation]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvokeToolRequest'
+            examples:
+              restApi:
+                summary: 调用 REST API 工具
+                value:
+                  parameters:
+                    city: "Beijing"
+                    unit: "celsius"
+              mcpServer:
+                summary: 调用 MCP Server 工具
+                value:
+                  mcpToolName: "analyze-code"
+                  parameters:
+                    language: "csharp"
+                    code: "public class Foo { }"
+      responses:
+        '200':
+          description: 调用成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ToolInvocationResultDto'
+        '400':
+          description: 请求验证失败（缺少 mcpToolName 等）
+        '404':
+          description: 工具不存在或 MCP Tool 未找到
+        '502':
+          description: 上游工具调用失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ToolInvocationResultDto'
+
+components:
+  schemas:
+    # ───── Request DTOs ─────
+
+    CreateToolRegistrationRequest:
+      type: object
+      required: [name, toolType, connectionConfig, authConfig]
+      properties:
+        name:
+          type: string
+          maxLength: 200
+          description: 工具名称（全局唯一）
+        description:
+          type: string
+          description: 工具描述
+        toolType:
+          $ref: '#/components/schemas/ToolType'
+        connectionConfig:
+          $ref: '#/components/schemas/ConnectionConfigRequest'
+        authConfig:
+          $ref: '#/components/schemas/AuthConfigRequest'
+
+    UpdateToolRegistrationRequest:
+      type: object
+      required: [name, connectionConfig, authConfig]
+      properties:
+        name:
+          type: string
+          maxLength: 200
+        description:
+          type: string
+        connectionConfig:
+          $ref: '#/components/schemas/ConnectionConfigRequest'
+        authConfig:
+          $ref: '#/components/schemas/AuthConfigRequest'
+
+    ConnectionConfigRequest:
+      type: object
+      required: [endpoint, transportType]
+      properties:
+        endpoint:
+          type: string
+          maxLength: 2048
+          description: 工具端点 URL
+        transportType:
+          $ref: '#/components/schemas/TransportType'
+
+    AuthConfigRequest:
+      type: object
+      required: [authType]
+      properties:
+        authType:
+          $ref: '#/components/schemas/AuthType'
+        credential:
+          type: string
+          description: 明文凭据（API Key、Bearer Token）
+        apiKeyHeaderName:
+          type: string
+          description: '自定义 API Key 头名称（默认: X-Api-Key）'
+        tokenEndpoint:
+          type: string
+          description: OAuth2 Token 端点 URL
+        clientId:
+          type: string
+          description: OAuth2 Client ID
+        clientSecret:
+          type: string
+          description: OAuth2 Client Secret（明文）
+
+    ImportOpenApiRequest:
+      type: object
+      required: [file]
+      properties:
+        file:
+          type: string
+          format: binary
+          description: OpenAPI 文档文件 (JSON/YAML), 最大 10MB
+        baseUrl:
+          type: string
+          description: API 基础 URL（覆盖文档中的 servers[0].url）
+        authConfig:
+          $ref: '#/components/schemas/AuthConfigRequest'
+
+    InvokeToolRequest:
+      type: object
+      properties:
+        mcpToolName:
+          type: string
+          description: MCP Tool 名称（仅 McpServer 类型必填）
+        parameters:
+          type: object
+          additionalProperties: true
+          description: 调用参数（键值对）
+        httpMethod:
+          type: string
+          enum: [GET, POST, PUT, DELETE, PATCH]
+          default: POST
+          description: HTTP 方法（仅 RestApi 类型可选）
+
+    # ───── Response DTOs ─────
+
+    ToolRegistrationDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        toolType:
+          $ref: '#/components/schemas/ToolType'
+        status:
+          $ref: '#/components/schemas/ToolStatus'
+        connectionConfig:
+          $ref: '#/components/schemas/ConnectionConfigDto'
+        authConfig:
+          $ref: '#/components/schemas/AuthConfigDto'
+        toolSchema:
+          $ref: '#/components/schemas/ToolSchemaDto'
+        discoveryError:
+          type: string
+        importSource:
+          type: string
+        mcpToolCount:
+          type: integer
+          description: MCP 子工具数量（仅 McpServer 类型有值）
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    ConnectionConfigDto:
+      type: object
+      properties:
+        endpoint:
+          type: string
+        transportType:
+          $ref: '#/components/schemas/TransportType'
+
+    AuthConfigDto:
+      type: object
+      properties:
+        authType:
+          $ref: '#/components/schemas/AuthType'
+        hasCredential:
+          type: boolean
+          description: 是否已配置凭据（不返回明文）
+        apiKeyHeaderName:
+          type: string
+        tokenEndpoint:
+          type: string
+        clientId:
+          type: string
+
+    ToolSchemaDto:
+      type: object
+      properties:
+        inputSchema:
+          type: object
+          description: 输入参数 JSON Schema
+        outputSchema:
+          type: object
+          description: 输出结果 JSON Schema
+        annotations:
+          $ref: '#/components/schemas/ToolAnnotationsDto'
+
+    ToolAnnotationsDto:
+      type: object
+      properties:
+        readOnly:
+          type: boolean
+        destructive:
+          type: boolean
+        idempotent:
+          type: boolean
+        openWorldHint:
+          type: boolean
+
+    McpToolItemDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        toolRegistrationId:
+          type: string
+          format: uuid
+        toolName:
+          type: string
+        description:
+          type: string
+        inputSchema:
+          type: object
+        outputSchema:
+          type: object
+        annotations:
+          $ref: '#/components/schemas/ToolAnnotationsDto'
+        createdAt:
+          type: string
+          format: date-time
+
+    ToolInvocationResultDto:
+      type: object
+      properties:
+        success:
+          type: boolean
+          description: 调用是否成功
+        data:
+          type: object
+          additionalProperties: true
+          description: 调用结果数据
+        error:
+          type: string
+          description: 错误信息（失败时）
+        durationMs:
+          type: integer
+          description: 调用耗时（毫秒）
+        toolRegistrationId:
+          type: string
+          format: uuid
+        invokedAt:
+          type: string
+          format: date-time
+
+    ImportOpenApiResultDto:
+      type: object
+      properties:
+        totalOperations:
+          type: integer
+          description: 文档中的总操作数
+        importedCount:
+          type: integer
+          description: 成功导入的工具数
+        skippedCount:
+          type: integer
+          description: 跳过的操作数（缺少 operationId 等）
+        tools:
+          type: array
+          items:
+            $ref: '#/components/schemas/ToolRegistrationDto'
+          description: 成功导入的工具列表
+        errors:
+          type: array
+          items:
+            type: string
+          description: 跳过的操作及原因
+
+    PagedResult_ToolRegistrationDto:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ToolRegistrationDto'
+        totalCount:
+          type: integer
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        totalPages:
+          type: integer
+
+    # ───── Shared / Error Schemas ─────
+
+    ProblemDetails:
+      type: object
+      properties:
+        type:
+          type: string
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+
+    ValidationProblemDetails:
+      allOf:
+        - $ref: '#/components/schemas/ProblemDetails'
+        - type: object
+          properties:
+            errors:
+              type: object
+              additionalProperties:
+                type: array
+                items:
+                  type: string
+
+    # ───── Enums ─────
+
+    ToolType:
+      type: string
+      enum: [RestApi, McpServer]
+
+    ToolStatus:
+      type: string
+      enum: [Active, Inactive, CircuitOpen]
+
+    AuthType:
+      type: string
+      enum: [None, ApiKey, Bearer, OAuth2]
+
+    TransportType:
+      type: string
+      enum: [Rest, StreamableHttp, Stdio]

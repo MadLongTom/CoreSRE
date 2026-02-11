@@ -7,6 +7,10 @@ import AgentSearchPage from "@/pages/AgentSearchPage";
 import ProviderListPage from "@/pages/ProviderListPage";
 import ProviderCreatePage from "@/pages/ProviderCreatePage";
 import ProviderDetailPage from "@/pages/ProviderDetailPage";
+import ToolListPage from "@/pages/ToolListPage";
+import ToolCreatePage from "@/pages/ToolCreatePage";
+import ToolDetailPage from "@/pages/ToolDetailPage";
+import OpenApiImportPage from "@/pages/OpenApiImportPage";
 import ChatPage from "@/pages/ChatPage";
 import NotFoundPage from "@/pages/NotFoundPage";
 
@@ -22,6 +26,10 @@ const router = createBrowserRouter([
       { path: "providers", element: <ProviderListPage /> },
       { path: "providers/new", element: <ProviderCreatePage /> },
       { path: "providers/:id", element: <ProviderDetailPage /> },
+      { path: "tools", element: <ToolListPage /> },
+      { path: "tools/new", element: <ToolCreatePage /> },
+      { path: "tools/import", element: <OpenApiImportPage /> },
+      { path: "tools/:id", element: <ToolDetailPage /> },
       { path: "chat", element: <ChatPage /> },
       { path: "*", element: <NotFoundPage /> },
     ],
