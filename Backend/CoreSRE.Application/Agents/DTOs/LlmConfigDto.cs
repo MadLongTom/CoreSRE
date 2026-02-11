@@ -10,4 +10,18 @@ public class LlmConfigDto
     public string ModelId { get; set; } = string.Empty;
     public string? Instructions { get; set; }
     public List<Guid> ToolRefs { get; set; } = [];
+
+    // ── ChatOptions 扩展配置 ──
+    public float? Temperature { get; set; }
+    public int? MaxOutputTokens { get; set; }
+    public float? TopP { get; set; }
+    public int? TopK { get; set; }
+    public float? FrequencyPenalty { get; set; }
+    public float? PresencePenalty { get; set; }
+    public long? Seed { get; set; }
+    public List<string>? StopSequences { get; set; }
+    public string? ResponseFormat { get; set; }
+    public string? ResponseFormatSchema { get; set; }
+    public string? ToolMode { get; set; }
+    public bool? AllowMultipleToolCalls { get; set; }
 }

@@ -107,6 +107,49 @@ public class AgentResolverService : IAgentResolver
             chatOptions.Tools = aiFunctions.Cast<AITool>().ToList();
         }
 
+        // ── 应用 ChatOptions 扩展配置 ──────────────────────────────────────
+        chatOptions.Temperature = agent.LlmConfig.Temperature;
+        chatOptions.MaxOutputTokens = agent.LlmConfig.MaxOutputTokens;
+        chatOptions.TopP = agent.LlmConfig.TopP;
+        chatOptions.TopK = agent.LlmConfig.TopK;
+        chatOptions.FrequencyPenalty = agent.LlmConfig.FrequencyPenalty;
+        chatOptions.PresencePenalty = agent.LlmConfig.PresencePenalty;
+        chatOptions.Seed = agent.LlmConfig.Seed;
+
+        if (agent.LlmConfig.StopSequences is { Count: > 0 })
+        {
+            chatOptions.StopSequences = agent.LlmConfig.StopSequences;
+        }
+
+        if (agent.LlmConfig.AllowMultipleToolCalls is not null)
+        {
+            chatOptions.AllowMultipleToolCalls = agent.LlmConfig.AllowMultipleToolCalls;
+        }
+
+        if (!string.IsNullOrWhiteSpace(agent.LlmConfig.ResponseFormat))
+        {
+            chatOptions.ResponseFormat = agent.LlmConfig.ResponseFormat switch
+            {
+                "Json" when !string.IsNullOrWhiteSpace(agent.LlmConfig.ResponseFormatSchema) =>
+                    ChatResponseFormat.ForJsonSchema(
+                        System.Text.Json.JsonDocument.Parse(agent.LlmConfig.ResponseFormatSchema).RootElement),
+                "Json" => ChatResponseFormat.Json,
+                "Text" => ChatResponseFormat.Text,
+                _ => null
+            };
+        }
+
+        if (!string.IsNullOrWhiteSpace(agent.LlmConfig.ToolMode))
+        {
+            chatOptions.ToolMode = agent.LlmConfig.ToolMode switch
+            {
+                "Auto" => ChatToolMode.Auto,
+                "Required" => ChatToolMode.RequireAny,
+                "None" => ChatToolMode.None,
+                _ => null
+            };
+        }
+
         options.ChatOptions = chatOptions;
 
         return chatClient.AsAIAgent(options);

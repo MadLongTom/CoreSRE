@@ -13,12 +13,13 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import ProviderModelSelect from "@/components/agents/ProviderModelSelect";
+import LlmConfigSection from "@/components/agents/LlmConfigSection";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { createAgent, resolveAgentCard, ApiError } from "@/lib/api/agents";
 import type {
   AgentType,
   CreateAgentRequest,
+  LlmConfig,
   AgentSkill,
   AgentInterface,
   SecurityScheme,
@@ -67,10 +68,10 @@ export default function AgentCreatePage() {
   }, []);
 
   // ChatClient fields
-  const [providerId, setProviderId] = useState<string | null>(null);
-  const [modelId, setModelId] = useState("");
-  const [instructions, setInstructions] = useState("");
-  const [toolRefs, setToolRefs] = useState("");
+  const [llmConfig, setLlmConfig] = useState<LlmConfig>({
+    modelId: "",
+    toolRefs: [],
+  });
 
   // Workflow fields
   const [workflowRef, setWorkflowRef] = useState("");
@@ -186,13 +187,9 @@ export default function AgentCreatePage() {
       };
     } else if (selectedType === "ChatClient") {
       request.llmConfig = {
-        providerId: providerId ?? undefined,
-        modelId: modelId.trim(),
-        instructions: instructions.trim() || undefined,
-        toolRefs: toolRefs
-          .split(",")
-          .map((r) => r.trim())
-          .filter(Boolean),
+        ...llmConfig,
+        modelId: llmConfig.modelId.trim(),
+        instructions: llmConfig.instructions?.trim() || undefined,
       };
     } else if (selectedType === "Workflow") {
       request.workflowRef = workflowRef.trim() || undefined;
@@ -549,38 +546,11 @@ export default function AgentCreatePage() {
 
           {/* ChatClient-specific fields */}
           {selectedType === "ChatClient" && (
-            <Card>
-              <CardHeader>
-                <CardTitle>LLM 配置</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <ProviderModelSelect
-                  providerId={providerId}
-                  modelId={modelId}
-                  onProviderChange={setProviderId}
-                  onModelChange={setModelId}
-                />
-                <div className="space-y-2">
-                  <Label htmlFor="instructions">Instructions</Label>
-                  <Textarea
-                    id="instructions"
-                    value={instructions}
-                    onChange={(e) => setInstructions(e.target.value)}
-                    placeholder="System prompt / instructions"
-                    rows={4}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="toolRefs">Tool Refs</Label>
-                  <Input
-                    id="toolRefs"
-                    value={toolRefs}
-                    onChange={(e) => setToolRefs(e.target.value)}
-                    placeholder="逗号分隔的 GUID（可选）"
-                  />
-                </div>
-              </CardContent>
-            </Card>
+            <LlmConfigSection
+              config={llmConfig}
+              editing
+              onChange={setLlmConfig}
+            />
           )}
 
           {/* Workflow-specific fields */}

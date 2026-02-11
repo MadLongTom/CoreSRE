@@ -33,14 +33,36 @@ public class AgentResolverServiceTests
         Guid? providerId = null,
         string modelId = "gpt-4",
         string? instructions = null,
-        List<Guid>? toolRefs = null)
+        List<Guid>? toolRefs = null,
+        float? temperature = null,
+        int? maxOutputTokens = null,
+        float? topP = null,
+        int? topK = null,
+        float? frequencyPenalty = null,
+        float? presencePenalty = null,
+        long? seed = null,
+        List<string>? stopSequences = null,
+        string? responseFormat = null,
+        string? toolMode = null,
+        bool? allowMultipleToolCalls = null)
     {
         var llmConfig = new LlmConfigVO
         {
             ProviderId = providerId ?? Guid.NewGuid(),
             ModelId = modelId,
             Instructions = instructions,
-            ToolRefs = toolRefs ?? []
+            ToolRefs = toolRefs ?? [],
+            Temperature = temperature,
+            MaxOutputTokens = maxOutputTokens,
+            TopP = topP,
+            TopK = topK,
+            FrequencyPenalty = frequencyPenalty,
+            PresencePenalty = presencePenalty,
+            Seed = seed,
+            StopSequences = stopSequences,
+            ResponseFormat = responseFormat,
+            ToolMode = toolMode,
+            AllowMultipleToolCalls = allowMultipleToolCalls,
         };
 
         var agent = AgentRegistration.CreateChatClient(name, "Test agent", llmConfig);

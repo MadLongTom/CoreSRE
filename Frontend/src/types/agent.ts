@@ -105,6 +105,20 @@ export interface LlmConfig {
   modelId: string;
   instructions?: string;
   toolRefs: string[];
+
+  // ChatOptions extended configuration
+  temperature?: number | null;
+  maxOutputTokens?: number | null;
+  topP?: number | null;
+  topK?: number | null;
+  frequencyPenalty?: number | null;
+  presencePenalty?: number | null;
+  seed?: number | null;
+  stopSequences?: string[] | null;
+  responseFormat?: string | null;
+  responseFormatSchema?: string | null;
+  toolMode?: string | null;
+  allowMultipleToolCalls?: boolean | null;
 }
 
 // ---------------------------------------------------------------------------
