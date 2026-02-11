@@ -18,6 +18,8 @@ Auto-generated from all feature plans. Last updated: 2026-02-09
 - PostgreSQL (via .NET Aspire + Npgsql), JSONB columns for value objects (008-a2a-card-resolve)
 - C# / .NET 10.0 + MediatR 12.4.1, FluentValidation 11.11.0, AutoMapper 13.0.1, EF Core 10.0.2, Npgsql 10.0.0, Microsoft.OpenApi (OpenAPI 文档解析), Microsoft.AspNetCore.DataProtection (凭据加密) (009-tool-gateway-crud)
 - PostgreSQL (Aspire-hosted, Npgsql), EF Core Code-First, JSONB columns for value objects (010-chatclient-tool-binding)
+- C# / .NET 10.0 + MediatR (CQRS), FluentValidation, EF Core 10.0, Microsoft.Agents.AI.Workflows 1.0.0-preview (runtime mapping, SPEC-021 scope) (011-workflow-crud)
+- PostgreSQL (via Npgsql.EntityFrameworkCore.PostgreSQL), JSONB for value objects (011-workflow-crud)
 
 - C# / .NET 10.0 (`net10.0`) (001-aspire-apphost-setup)
 
@@ -38,9 +40,9 @@ tests/
 C# / .NET 10.0 (`net10.0`): Follow standard conventions
 
 ## Recent Changes
+- 011-workflow-crud: Added C# / .NET 10.0 + MediatR (CQRS), FluentValidation, EF Core 10.0, Microsoft.Agents.AI.Workflows 1.0.0-preview (runtime mapping, SPEC-021 scope)
 - 010-chatclient-tool-binding: Added .NET 10.0 (backend), TypeScript 5.9 / React 19.2 (frontend)
 - 009-tool-gateway-crud: Added C# / .NET 10.0 + MediatR 12.4.1, FluentValidation 11.11.0, AutoMapper 13.0.1, EF Core 10.0.2, Npgsql 10.0.0, Microsoft.OpenApi (OpenAPI 文档解析), Microsoft.AspNetCore.DataProtection (凭据加密)
-- 008-a2a-card-resolve: Added Backend: C# 14 / .NET 10.0; Frontend: TypeScript 5.9 / React 19.2 + Backend: MediatR 12.4, FluentValidation 11.11, AutoMapper 13, EF Core 10, Microsoft.Agents.AI.* 1.0.0-preview; Frontend: Vite 7.3, react-router 7.13, shadcn/ui (radix-ui 1.4), react-hook-form 7.71, zod 4.3
 
 
 <!-- MANUAL ADDITIONS START -->
