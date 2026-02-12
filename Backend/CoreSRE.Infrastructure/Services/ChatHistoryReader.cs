@@ -2,6 +2,7 @@ using System.Text.Json;
 using CoreSRE.Application.Interfaces;
 using CoreSRE.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 
 namespace CoreSRE.Infrastructure.Services;
 
@@ -11,10 +12,12 @@ namespace CoreSRE.Infrastructure.Services;
 public class ChatHistoryReader : IChatHistoryReader
 {
     private readonly AppDbContext _context;
+    private readonly string _memoryTable;
 
-    public ChatHistoryReader(AppDbContext context)
+    public ChatHistoryReader(AppDbContext context, IConfiguration configuration)
     {
         _context = context;
+        _memoryTable = configuration["SemanticMemory:CollectionName"] ?? "coresre_memory";
     }
 
     public async Task<JsonElement?> GetSessionDataAsync(
@@ -46,5 +49,18 @@ public class ChatHistoryReader : IChatHistoryReader
             _context.AgentSessions.Remove(record);
             await _context.SaveChangesAsync(cancellationToken);
         }
+    }
+
+    public async Task DeleteMemoryAsync(
+        string agentId,
+        string conversationId,
+        CancellationToken cancellationToken = default)
+    {
+        // Delete vector memory records scoped to this agent + conversation (SessionId).
+        // Uses raw SQL because coresre_memory is managed by pgvector VectorStore,
+        // not by EF Core.
+        // Table name comes from config (safe), column values are parameterized.
+        var sql = $@"DELETE FROM ""{_memoryTable}"" WHERE ""AgentId"" = {{0}} AND ""SessionId"" = {{1}}";
+        await _context.Database.ExecuteSqlRawAsync(sql, [agentId, conversationId], cancellationToken);
     }
 }

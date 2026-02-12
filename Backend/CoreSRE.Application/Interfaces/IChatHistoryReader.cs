@@ -24,4 +24,12 @@ public interface IChatHistoryReader
     /// <param name="conversationId">对话 ID（AgentSessionRecord.ConversationId）</param>
     /// <param name="cancellationToken">取消令牌</param>
     Task DeleteSessionAsync(string agentId, string conversationId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 删除指定对话的语义记忆向量记录（coresre_memory 表中 SessionId 匹配的行）。
+    /// </summary>
+    /// <param name="agentId">Agent 注册 ID</param>
+    /// <param name="conversationId">对话 ID（即 memory scope 的 SessionId）</param>
+    /// <param name="cancellationToken">取消令牌</param>
+    Task DeleteMemoryAsync(string agentId, string conversationId, CancellationToken cancellationToken = default);
 }

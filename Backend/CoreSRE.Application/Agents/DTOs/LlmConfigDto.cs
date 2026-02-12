@@ -29,6 +29,11 @@ public class LlmConfigDto
     public bool? EnableChatHistory { get; set; }
     public int? MaxHistoryMessages { get; set; }
     public bool? EnableSemanticMemory { get; set; }
+    public Guid? EmbeddingProviderId { get; set; }
+    public string? EmbeddingProviderName { get; set; }
+    public string? EmbeddingModelId { get; set; }
+    public int? EmbeddingDimensions { get; set; }
     public string? MemorySearchMode { get; set; }
     public int? MemoryMaxResults { get; set; }
+    public double? MemoryMinRelevanceScore { get; set; }
 }

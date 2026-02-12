@@ -124,8 +124,13 @@ export interface LlmConfig {
   enableChatHistory?: boolean | null;
   maxHistoryMessages?: number | null;
   enableSemanticMemory?: boolean | null;
+  embeddingProviderId?: string | null;
+  embeddingProviderName?: string | null;
+  embeddingModelId?: string | null;
+  embeddingDimensions?: number | null;
   memorySearchMode?: string | null;
   memoryMaxResults?: number | null;
+  memoryMinRelevanceScore?: number | null;
 }
 
 // ---------------------------------------------------------------------------

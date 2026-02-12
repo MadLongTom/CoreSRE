@@ -121,8 +121,12 @@ export default function LlmConfigSection({
     config.enableChatHistory != null ||
     config.maxHistoryMessages != null ||
     config.enableSemanticMemory != null ||
+    config.embeddingProviderId != null ||
+    config.embeddingModelId != null ||
+    config.embeddingDimensions != null ||
     config.memorySearchMode != null ||
-    config.memoryMaxResults != null;
+    config.memoryMaxResults != null ||
+    config.memoryMinRelevanceScore != null;
 
   return (
     <Card>
@@ -132,29 +136,33 @@ export default function LlmConfigSection({
       <CardContent className="space-y-4">
         {editing ? (
           <>
-            <ProviderModelSelect
-              providerId={config.providerId ?? null}
-              modelId={config.modelId}
-              onProviderChange={(pid) =>
-                update({ providerId: pid ?? undefined, modelId: "" })
-              }
-              onModelChange={(mid) => update({ modelId: mid })}
-            />
-            <div className="space-y-2">
-              <Label htmlFor="edit-instructions">Instructions</Label>
-              <Textarea
-                id="edit-instructions"
-                value={config.instructions ?? ""}
-                onChange={(e) => update({ instructions: e.target.value })}
-                rows={4}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Tool Refs</Label>
-              <ToolRefsPicker
-                value={config.toolRefs}
-                onChange={(ids) => update({ toolRefs: ids })}
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2 sm:col-span-2">
+                <ProviderModelSelect
+                  providerId={config.providerId ?? null}
+                  modelId={config.modelId}
+                  onProviderChange={(pid) =>
+                    update({ providerId: pid ?? undefined, modelId: "" })
+                  }
+                  onModelChange={(mid) => update({ modelId: mid })}
+                />
+              </div>
+              <div className="space-y-2 sm:col-span-2">
+                <Label htmlFor="edit-instructions">Instructions</Label>
+                <Textarea
+                  id="edit-instructions"
+                  value={config.instructions ?? ""}
+                  onChange={(e) => update({ instructions: e.target.value })}
+                  rows={4}
+                />
+              </div>
+              <div className="space-y-2 sm:col-span-2">
+                <Label>Tool Refs</Label>
+                <ToolRefsPicker
+                  value={config.toolRefs}
+                  onChange={(ids) => update({ toolRefs: ids })}
+                />
+              </div>
             </div>
 
             {/* Advanced ChatOptions */}
@@ -264,7 +272,7 @@ export default function LlmConfigSection({
                       }
                     />
                   </div>
-                  <div className="space-y-2">
+                  <div className="space-y-2 col-span-2">
                     <Label htmlFor="edit-responseFormat">Response Format</Label>
                     <Select
                       value={config.responseFormat ?? ""}
@@ -362,31 +370,33 @@ export default function LlmConfigSection({
                 {hasHistoryMemoryValues && <Badge variant="secondary" className="ml-2 text-xs">已配置</Badge>}
               </CollapsibleTrigger>
               <CollapsibleContent className="mt-3 space-y-4 rounded-md border p-4">
-                <div className="flex items-center gap-2">
-                  <Switch
-                    id="edit-enableChatHistory"
-                    checked={config.enableChatHistory ?? true}
-                    onCheckedChange={(checked) =>
-                      update({ enableChatHistory: checked ? null : false })
-                    }
-                  />
-                  <Label htmlFor="edit-enableChatHistory">启用对话历史</Label>
-                </div>
-                {(config.enableChatHistory ?? true) && (
-                  <div className="space-y-2">
-                    <Label htmlFor="edit-maxHistoryMessages">最大历史消息数</Label>
-                    <Input
-                      id="edit-maxHistoryMessages"
-                      type="number"
-                      min="1"
-                      placeholder="默认 (50)"
-                      value={config.maxHistoryMessages ?? ""}
-                      onChange={(e) =>
-                        update({ maxHistoryMessages: e.target.value ? parseInt(e.target.value) : null })
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      id="edit-enableChatHistory"
+                      checked={config.enableChatHistory ?? true}
+                      onCheckedChange={(checked) =>
+                        update({ enableChatHistory: checked ? null : false })
                       }
                     />
+                    <Label htmlFor="edit-enableChatHistory">启用对话历史</Label>
                   </div>
-                )}
+                  {(config.enableChatHistory ?? true) && (
+                    <div className="space-y-2">
+                      <Label htmlFor="edit-maxHistoryMessages">最大历史消息数</Label>
+                      <Input
+                        id="edit-maxHistoryMessages"
+                        type="number"
+                        min="1"
+                        placeholder="默认 (50)"
+                        value={config.maxHistoryMessages ?? ""}
+                        onChange={(e) =>
+                          update({ maxHistoryMessages: e.target.value ? parseInt(e.target.value) : null })
+                        }
+                      />
+                    </div>
+                  )}
+                </div>
                 <div className="flex items-center gap-2">
                   <Switch
                     id="edit-enableSemanticMemory"
@@ -399,33 +409,77 @@ export default function LlmConfigSection({
                 </div>
                 {config.enableSemanticMemory && (
                   <>
-                    <div className="space-y-2">
-                      <Label htmlFor="edit-memorySearchMode">记忆检索模式</Label>
-                      <Select
-                        value={config.memorySearchMode ?? "BeforeAIInvoke"}
-                        onValueChange={(v) => update({ memorySearchMode: v || null })}
-                      >
-                        <SelectTrigger id="edit-memorySearchMode">
-                          <SelectValue placeholder="BeforeAIInvoke" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="BeforeAIInvoke">BeforeAIInvoke</SelectItem>
-                          <SelectItem value="OnDemandFunctionCalling">OnDemandFunctionCalling</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="edit-memoryMaxResults">最大检索结果数</Label>
-                      <Input
-                        id="edit-memoryMaxResults"
-                        type="number"
-                        min="1"
-                        placeholder="默认 (5)"
-                        value={config.memoryMaxResults ?? ""}
-                        onChange={(e) =>
-                          update({ memoryMaxResults: e.target.value ? parseInt(e.target.value) : null })
+                    <div className="rounded-md border p-3 space-y-3 bg-muted/30">
+                      <Label className="text-xs font-medium text-muted-foreground">Embedding 模型配置</Label>
+                      <ProviderModelSelect
+                        providerId={config.embeddingProviderId ?? config.providerId ?? null}
+                        modelId={config.embeddingModelId ?? ""}
+                        onProviderChange={(pid) =>
+                          update({ embeddingProviderId: pid ?? null, embeddingModelId: "" })
                         }
+                        onModelChange={(mid) => update({ embeddingModelId: mid })}
                       />
+                      <div className="space-y-2">
+                        <Label htmlFor="edit-embeddingDimensions">向量维度</Label>
+                        <Input
+                          id="edit-embeddingDimensions"
+                          type="number"
+                          min="1"
+                          placeholder="默认 (1536)"
+                          value={config.embeddingDimensions ?? ""}
+                          onChange={(e) =>
+                            update({ embeddingDimensions: e.target.value ? parseInt(e.target.value) : null })
+                          }
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="edit-memorySearchMode">记忆检索模式</Label>
+                        <Select
+                          value={config.memorySearchMode ?? "BeforeAIInvoke"}
+                          onValueChange={(v) => update({ memorySearchMode: v || null })}
+                        >
+                          <SelectTrigger id="edit-memorySearchMode">
+                            <SelectValue placeholder="BeforeAIInvoke" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="BeforeAIInvoke">BeforeAIInvoke</SelectItem>
+                            <SelectItem value="OnDemandFunctionCalling">OnDemandFunctionCalling</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="edit-memoryMaxResults">最大检索结果数</Label>
+                        <Input
+                          id="edit-memoryMaxResults"
+                          type="number"
+                          min="1"
+                          placeholder="默认 (5)"
+                          value={config.memoryMaxResults ?? ""}
+                          onChange={(e) =>
+                            update({ memoryMaxResults: e.target.value ? parseInt(e.target.value) : null })
+                          }
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="edit-memoryMinRelevanceScore">最低相关性分数</Label>
+                        <Input
+                          id="edit-memoryMinRelevanceScore"
+                          type="number"
+                          min="0"
+                          max="1"
+                          step="0.05"
+                          placeholder="默认 (0 = 不过滤)"
+                          value={config.memoryMinRelevanceScore ?? ""}
+                          onChange={(e) =>
+                            update({ memoryMinRelevanceScore: e.target.value ? parseFloat(e.target.value) : null })
+                          }
+                        />
+                        <p className="text-muted-foreground text-xs">
+                          0~1，越高越严格。低于此分数的记忆不会注入上下文。
+                        </p>
+                      </div>
                     </div>
                   </>
                 )}
@@ -434,28 +488,29 @@ export default function LlmConfigSection({
           </>
         ) : (
           <>
-            {config.providerName && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
+              {config.providerName && (
+                <div className="space-y-1">
+                  <Label className="text-muted-foreground text-xs">Provider</Label>
+                  <p className="text-sm font-medium">{config.providerName}</p>
+                </div>
+              )}
               <div className="space-y-1">
-                <Label className="text-muted-foreground text-xs">Provider</Label>
-                <p className="text-sm font-medium">{config.providerName}</p>
+                <Label className="text-muted-foreground text-xs">Model ID</Label>
+                <p className="text-sm font-medium">{config.modelId || "—"}</p>
               </div>
-            )}
-            <div className="space-y-1">
-              <Label className="text-muted-foreground text-xs">Model ID</Label>
-              <p className="text-sm font-medium">{config.modelId || "—"}</p>
-            </div>
-            <div className="space-y-1">
-              <Label className="text-muted-foreground text-xs">
-                Instructions
-              </Label>
-              <p className="text-sm whitespace-pre-wrap">
-                {config.instructions || "—"}
-              </p>
-            </div>
-            <div className="space-y-1">
-              <Label className="text-muted-foreground text-xs">
-                Tool Refs
-              </Label>
+              <div className="space-y-1 sm:col-span-2">
+                <Label className="text-muted-foreground text-xs">
+                  Instructions
+                </Label>
+                <p className="text-sm whitespace-pre-wrap">
+                  {config.instructions || "—"}
+                </p>
+              </div>
+              <div className="space-y-1 sm:col-span-2">
+                <Label className="text-muted-foreground text-xs">
+                  Tool Refs
+                </Label>
               {config.toolRefs.length > 0 ? (
                 <div className="flex flex-wrap gap-1">
                   {config.toolRefs.map((ref, i) => {
@@ -475,6 +530,7 @@ export default function LlmConfigSection({
               ) : (
                 <p className="text-sm text-muted-foreground">无</p>
               )}
+              </div>
             </div>
 
             {/* Advanced ChatOptions — view mode */}
@@ -593,6 +649,24 @@ export default function LlmConfigSection({
                         <p className="text-sm">{config.enableSemanticMemory ? "启用" : "禁用"}</p>
                       </div>
                     )}
+                    {config.enableSemanticMemory && config.embeddingProviderName && (
+                      <div className="space-y-0.5">
+                        <Label className="text-muted-foreground text-xs">Embedding Provider</Label>
+                        <p className="text-sm">{config.embeddingProviderName}</p>
+                      </div>
+                    )}
+                    {config.enableSemanticMemory && config.embeddingModelId && (
+                      <div className="space-y-0.5">
+                        <Label className="text-muted-foreground text-xs">Embedding Model</Label>
+                        <p className="text-sm">{config.embeddingModelId}</p>
+                      </div>
+                    )}
+                    {config.enableSemanticMemory && config.embeddingDimensions != null && (
+                      <div className="space-y-0.5">
+                        <Label className="text-muted-foreground text-xs">向量维度</Label>
+                        <p className="text-sm">{config.embeddingDimensions}</p>
+                      </div>
+                    )}
                     {config.memorySearchMode != null && (
                       <div className="space-y-0.5">
                         <Label className="text-muted-foreground text-xs">检索模式</Label>
@@ -603,6 +677,12 @@ export default function LlmConfigSection({
                       <div className="space-y-0.5">
                         <Label className="text-muted-foreground text-xs">最大检索结果数</Label>
                         <p className="text-sm">{config.memoryMaxResults}</p>
+                      </div>
+                    )}
+                    {config.memoryMinRelevanceScore != null && (
+                      <div className="space-y-0.5">
+                        <Label className="text-muted-foreground text-xs">最低相关性分数</Label>
+                        <p className="text-sm">{config.memoryMinRelevanceScore}</p>
                       </div>
                     )}
                   </div>

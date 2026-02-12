@@ -67,9 +67,21 @@ public sealed record LlmConfigVO
     /// <summary>启用跨会话语义记忆检索。null 视为 false。</summary>
     public bool? EnableSemanticMemory { get; init; }
 
+    /// <summary>Embedding Provider ID — 用于语义记忆的向量化模型所在 Provider。null 时沿用 ProviderId。</summary>
+    public Guid? EmbeddingProviderId { get; init; }
+
+    /// <summary>Embedding 模型标识符 — Provider 中的 embedding model ID。</summary>
+    public string? EmbeddingModelId { get; init; }
+
+    /// <summary>Embedding 向量维度。null 使用默认值（1536）。</summary>
+    public int? EmbeddingDimensions { get; init; }
+
     /// <summary>语义记忆搜索模式："BeforeAIInvoke" 或 "OnDemandFunctionCalling"。</summary>
     public string? MemorySearchMode { get; init; }
 
     /// <summary>每次查询返回的最大记忆片段数。null 使用 SDK 默认值（3）。</summary>
     public int? MemoryMaxResults { get; init; }
+
+    /// <summary>语义记忆最低相关性分数阈值（0~1，越高越严格）。低于此分数的记忆不注入。null 或 0 表示不过滤。</summary>
+    public double? MemoryMinRelevanceScore { get; init; }
 }

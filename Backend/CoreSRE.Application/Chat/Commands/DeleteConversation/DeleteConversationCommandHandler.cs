@@ -37,6 +37,10 @@ public class DeleteConversationCommandHandler : IRequestHandler<DeleteConversati
         await _chatHistoryReader.DeleteSessionAsync(
             agentId, conversation.Id.ToString(), cancellationToken);
 
+        // 删除关联的语义记忆向量记录
+        await _chatHistoryReader.DeleteMemoryAsync(
+            agentId, conversation.Id.ToString(), cancellationToken);
+
         // 删除 Conversation 实体
         await _conversationRepository.DeleteAsync(conversation.Id, cancellationToken);
 

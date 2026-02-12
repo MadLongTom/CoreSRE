@@ -9,7 +9,6 @@ using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.VectorData;
 using Moq;
 using System.Text.Json;
 using Xunit;
@@ -23,8 +22,8 @@ public class AgentResolverServiceTests
     private readonly Mock<IHttpClientFactory> _httpClientFactoryMock = new();
     private readonly Mock<IToolFunctionFactory> _toolFunctionFactoryMock = new();
     private readonly Mock<IConfiguration> _configurationMock = new();
-    private readonly Mock<IServiceProvider> _serviceProviderMock = new();
     private readonly Mock<ILogger<AgentResolverService>> _loggerMock = new();
+    private readonly Mock<ILoggerFactory> _loggerFactoryMock = new();
 
     private AgentResolverService CreateService()
     {
@@ -39,8 +38,8 @@ public class AgentResolverServiceTests
             _httpClientFactoryMock.Object,
             _toolFunctionFactoryMock.Object,
             _configurationMock.Object,
-            _serviceProviderMock.Object,
-            _loggerMock.Object);
+            _loggerMock.Object,
+            _loggerFactoryMock.Object);
     }
 
     private static IConfigurationSection CreateConfigSection(string? value)
@@ -84,6 +83,9 @@ public class AgentResolverServiceTests
         bool? enableChatHistory = null,
         int? maxHistoryMessages = null,
         bool? enableSemanticMemory = null,
+        Guid? embeddingProviderId = null,
+        string? embeddingModelId = null,
+        int? embeddingDimensions = null,
         string? memorySearchMode = null,
         int? memoryMaxResults = null)
     {
@@ -107,6 +109,9 @@ public class AgentResolverServiceTests
             EnableChatHistory = enableChatHistory,
             MaxHistoryMessages = maxHistoryMessages,
             EnableSemanticMemory = enableSemanticMemory,
+            EmbeddingProviderId = embeddingProviderId,
+            EmbeddingModelId = embeddingModelId,
+            EmbeddingDimensions = embeddingDimensions,
             MemorySearchMode = memorySearchMode,
             MemoryMaxResults = memoryMaxResults,
         };
@@ -402,9 +407,9 @@ public class AgentResolverServiceTests
     // ═══════════════════════════════════════════════════════════════════
 
     [Fact]
-    public async Task ResolveChatClientAgent_EnableSemanticMemoryTrue_ConfiguresAIContextProviderFactory()
+    public async Task ResolveChatClientAgent_EnableSemanticMemoryTrue_NoEmbeddingConfig_SkipsMemory()
     {
-        // Arrange
+        // Arrange — semantic memory enabled but no embedding provider/model configured
         var agentId = Guid.NewGuid();
         var providerId = Guid.NewGuid();
         var agent = CreateChatClientAgent(agentId, providerId: providerId,
@@ -412,31 +417,16 @@ public class AgentResolverServiceTests
         var provider = CreateProvider(providerId);
         SetupRepoMocks(agentId, agent, providerId, provider);
 
-        // VectorStore must be available for semantic memory
-        var vectorStoreMock = new Mock<VectorStore>();
-        _serviceProviderMock
-            .Setup(sp => sp.GetService(typeof(VectorStore)))
-            .Returns(vectorStoreMock.Object);
-
-        // SemanticMemory configuration section
-        _configurationMock
-            .Setup(c => c.GetSection("SemanticMemory"))
-            .Returns(CreateConfigSectionWithChildren(new Dictionary<string, string?>
-            {
-                { "CollectionName", "test_memory" },
-                { "EmbeddingDimensions", "1536" }
-            }));
-
         var service = CreateService();
 
         // Act
         var result = await service.ResolveAsync(agentId, "conv-1");
 
-        // Assert
+        // Assert — no AIContextProviderFactory because EmbeddingModelId not configured
         var options = result.Agent.GetService<ChatClientAgentOptions>();
         options.Should().NotBeNull();
-        options!.AIContextProviderFactory.Should().NotBeNull(
-            "when EnableSemanticMemory is true, the AIContextProviderFactory delegate must be configured");
+        options!.AIContextProviderFactory.Should().BeNull(
+            "when EnableSemanticMemory is true but EmbeddingModelId is not configured, memory should be skipped");
     }
 
     [Fact]

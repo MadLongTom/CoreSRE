@@ -1,8 +1,16 @@
+import { useState } from "react";
 import { cn } from "@/lib/utils";
 import type { ChatMessage } from "@/types/chat";
-import { Bot, User } from "lucide-react";
+import { Bot, User, Brain } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { ToolCallCard } from "@/components/chat/ToolCallCard";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 
 interface MessageBubbleProps {
   message: ChatMessage;
@@ -10,12 +18,13 @@ interface MessageBubbleProps {
 
 /**
  * 单条消息气泡 — 根据角色显示不同样式。
- * user: 右对齐蓝色背景
+ * user: 右对齐蓝色背景，底部可显示“已使用记忆”提示
  * assistant: 左对齐灰色背景，可包含工具调用卡片
  */
 export function MessageBubble({ message }: MessageBubbleProps) {
   const isUser = message.role === "user";
   const hasToolCalls = !isUser && message.toolCalls && message.toolCalls.length > 0;
+  const hasMemory = isUser && !!message.memoryContext;
 
   return (
     <div
@@ -88,7 +97,42 @@ export function MessageBubble({ message }: MessageBubbleProps) {
             )}
           </div>
         )}
+
+        {/* Memory context hint — below user bubble */}
+        {hasMemory && <MemoryHint memoryContext={message.memoryContext!} />}
       </div>
     </div>
+  );
+}
+
+/**
+ * 记忆提示组件 — 显示在用户消息下方，点击弹窗查看完整记忆内容。
+ */
+function MemoryHint({ memoryContext }: { memoryContext: string }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <button
+          type="button"
+          className="flex items-center gap-1 text-xs text-violet-500 hover:text-violet-600 dark:text-violet-400 dark:hover:text-violet-300 transition-colors mt-0.5 ml-auto"
+        >
+          <Brain className="h-3 w-3" />
+          <span>已使用记忆</span>
+        </button>
+      </DialogTrigger>
+      <DialogContent className="max-w-xl max-h-[70vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Brain className="h-4 w-4 text-violet-500" />
+            语义记忆上下文
+          </DialogTitle>
+        </DialogHeader>
+        <div className="text-sm text-muted-foreground whitespace-pre-wrap leading-relaxed border rounded-md p-3 bg-muted/30">
+          {memoryContext}
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }

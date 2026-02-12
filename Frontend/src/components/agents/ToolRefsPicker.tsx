@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Check, ChevronsUpDown, Search, X } from "lucide-react";
+import { Check, ChevronsUpDown, Search, Server, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -76,10 +76,19 @@ export default function ToolRefsPicker({ value, onChange }: ToolRefsPickerProps)
     () => filtered.filter((t) => t.toolType === "RestApi"),
     [filtered],
   );
-  const mcpTools = useMemo(
-    () => filtered.filter((t) => t.toolType === "McpTool"),
-    [filtered],
-  );
+
+  // Group MCP tools by server name (parentName)
+  const mcpServerGroups = useMemo(() => {
+    const mcpTools = filtered.filter((t) => t.toolType === "McpTool");
+    const groups = new Map<string, BindableTool[]>();
+    for (const t of mcpTools) {
+      const server = t.parentName ?? "UnknownServer";
+      const list = groups.get(server) ?? [];
+      list.push(t);
+      groups.set(server, list);
+    }
+    return groups;
+  }, [filtered]);
 
   const toggle = useCallback(
     (id: string) => {
@@ -97,6 +106,24 @@ export default function ToolRefsPicker({ value, onChange }: ToolRefsPickerProps)
       onChange(value.filter((v) => v !== id));
     },
     [value, onChange],
+  );
+
+  /** Toggle all tools of a given MCP server at once */
+  const toggleServer = useCallback(
+    (serverTools: BindableTool[]) => {
+      const ids = serverTools.map((t) => t.id);
+      const allSelected = ids.every((id) => selectedSet.has(id));
+      if (allSelected) {
+        // Deselect all from this server
+        const removeSet = new Set(ids);
+        onChange(value.filter((v) => !removeSet.has(v)));
+      } else {
+        // Select all from this server (add missing ones)
+        const toAdd = ids.filter((id) => !selectedSet.has(id));
+        onChange([...value, ...toAdd]);
+      }
+    },
+    [value, selectedSet, onChange],
   );
 
   return (
@@ -159,19 +186,50 @@ export default function ToolRefsPicker({ value, onChange }: ToolRefsPickerProps)
                     ))}
                   </div>
                 )}
-                {mcpTools.length > 0 && (
+                {mcpServerGroups.size > 0 && (
                   <div>
                     <p className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">
                       MCP Tool
                     </p>
-                    {mcpTools.map((t) => (
-                      <ToolOption
-                        key={t.id}
-                        tool={t}
-                        selected={selectedSet.has(t.id)}
-                        onToggle={toggle}
-                      />
-                    ))}
+                    {[...mcpServerGroups.entries()].map(([serverName, serverTools]) => {
+                      const allSelected = serverTools.every((t) => selectedSet.has(t.id));
+                      const someSelected = !allSelected && serverTools.some((t) => selectedSet.has(t.id));
+                      return (
+                        <div key={serverName}>
+                          {/* Server group header with select-all toggle */}
+                          <button
+                            type="button"
+                            className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent/60 cursor-pointer"
+                            onClick={() => toggleServer(serverTools)}
+                          >
+                            <div className="flex h-4 w-4 items-center justify-center">
+                              {allSelected ? (
+                                <Check className="h-4 w-4 text-primary" />
+                              ) : someSelected ? (
+                                <div className="h-2.5 w-2.5 rounded-sm bg-primary/50" />
+                              ) : null}
+                            </div>
+                            <Server className="h-3.5 w-3.5 text-muted-foreground" />
+                            <span className="font-medium text-muted-foreground">{serverName}</span>
+                            <Badge variant="outline" className="text-[10px] px-1 py-0 ml-auto">
+                              {serverTools.length} 个工具
+                            </Badge>
+                          </button>
+                          {/* Individual tools under this server */}
+                          <div className="pl-4">
+                            {serverTools.map((t) => (
+                              <ToolOption
+                                key={t.id}
+                                tool={t}
+                                selected={selectedSet.has(t.id)}
+                                onToggle={toggle}
+                                showParent={false}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </>
@@ -221,10 +279,12 @@ function ToolOption({
   tool,
   selected,
   onToggle,
+  showParent = true,
 }: {
   tool: BindableTool;
   selected: boolean;
   onToggle: (id: string) => void;
+  showParent?: boolean;
 }) {
   return (
     <button
@@ -237,7 +297,7 @@ function ToolOption({
       </div>
       <div className="flex-1 text-left truncate">
         <span className="font-medium">{tool.name}</span>
-        {tool.parentName && (
+        {showParent && tool.parentName && (
           <span className="ml-1 text-xs text-muted-foreground">
             ({tool.parentName})
           </span>

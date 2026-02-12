@@ -159,6 +159,9 @@ public sealed class PostgresChatHistoryProvider : ChatHistoryProvider, IList<Cha
             AuthorName = msg.AuthorName,
             MessageId = msg.MessageId,
             CreatedAt = msg.CreatedAt,
+            Source = msg.AdditionalProperties?.TryGetValue("source", out var src) == true
+                ? src?.ToString()
+                : null,
             Contents = msg.Contents.Select(ContentToDto).ToList(),
         };
     }
@@ -175,6 +178,13 @@ public sealed class PostgresChatHistoryProvider : ChatHistoryProvider, IList<Cha
             MessageId = dto.MessageId,
             CreatedAt = dto.CreatedAt,
         };
+
+        if (!string.IsNullOrEmpty(dto.Source))
+        {
+            msg.AdditionalProperties ??= new AdditionalPropertiesDictionary();
+            msg.AdditionalProperties["source"] = dto.Source;
+        }
+
         return msg;
     }
 
@@ -264,6 +274,10 @@ public sealed class PostgresChatHistoryProvider : ChatHistoryProvider, IList<Cha
 
         [JsonPropertyName("createdAt")]
         public DateTimeOffset? CreatedAt { get; set; }
+
+        /// <summary>Message origin: null = normal, "memory" = injected by semantic memory.</summary>
+        [JsonPropertyName("source")]
+        public string? Source { get; set; }
 
         [JsonPropertyName("contents")]
         public List<ContentDto>? Contents { get; set; }

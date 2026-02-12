@@ -62,9 +62,11 @@ export interface ToolCall {
 /** Maps to backend ChatMessageDto — NOT a DB entity, extracted from SessionData JSONB */
 export interface ChatMessage {
   index: number;
-  role: "user" | "assistant";
+  role: "user" | "assistant" | "tool";
   content: string;
   toolCalls?: ToolCall[];  // present on assistant messages with tool usage
+  /** Semantic memory context injected for this user turn (system role, not shown directly) */
+  memoryContext?: string | null;
 }
 
 // ---------------------------------------------------------------------------

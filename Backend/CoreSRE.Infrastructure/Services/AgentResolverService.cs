@@ -4,9 +4,8 @@ using CoreSRE.Domain.Interfaces;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.VectorData;
+using Microsoft.SemanticKernel.Connectors.PgVector;
 using OpenAI;
 using System.ClientModel;
 using CoreSRE.Infrastructure.Persistence.Sessions;
@@ -28,9 +27,9 @@ public class AgentResolverService : IAgentResolver
     private readonly ILlmProviderRepository _providerRepo;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IToolFunctionFactory _toolFunctionFactory;
-    private readonly IServiceProvider _serviceProvider;
     private readonly IConfiguration _configuration;
     private readonly ILogger<AgentResolverService> _logger;
+    private readonly ILoggerFactory _loggerFactory;
     private readonly int _defaultMaxMessages;
 
     public AgentResolverService(
@@ -39,16 +38,16 @@ public class AgentResolverService : IAgentResolver
         IHttpClientFactory httpClientFactory,
         IToolFunctionFactory toolFunctionFactory,
         IConfiguration configuration,
-        IServiceProvider serviceProvider,
-        ILogger<AgentResolverService> logger)
+        ILogger<AgentResolverService> logger,
+        ILoggerFactory loggerFactory)
     {
         _agentRepo = agentRepo;
         _providerRepo = providerRepo;
         _httpClientFactory = httpClientFactory;
         _toolFunctionFactory = toolFunctionFactory;
-        _serviceProvider = serviceProvider;
         _configuration = configuration;
         _logger = logger;
+        _loggerFactory = loggerFactory;
         _defaultMaxMessages = configuration.GetValue<int>("ChatHistory:DefaultMaxMessages", 50);
     }
 
@@ -63,13 +62,13 @@ public class AgentResolverService : IAgentResolver
 
         return agent.AgentType switch
         {
-            Domain.Enums.AgentType.ChatClient => await ResolveChatClientAgent(agent),
+            Domain.Enums.AgentType.ChatClient => await ResolveChatClientAgent(agent, conversationId),
             Domain.Enums.AgentType.A2A => ResolveA2AAgent(agent),
             _ => throw new NotSupportedException($"Agent type '{agent.AgentType}' is not supported for chat.")
         };
     }
 
-    private async Task<ResolvedAgent> ResolveChatClientAgent(Domain.Entities.AgentRegistration agent)
+    private async Task<ResolvedAgent> ResolveChatClientAgent(Domain.Entities.AgentRegistration agent, string conversationId)
     {
         if (agent.LlmConfig is null)
             throw new InvalidOperationException($"Agent '{agent.Name}' has no LLM configuration.");
@@ -202,15 +201,42 @@ public class AgentResolverService : IAgentResolver
         {
             try
             {
-                var vectorStore = _serviceProvider.GetService<VectorStore>();
+                // Resolve embedding provider: prefer EmbeddingProviderId, fallback to ProviderId
+                var embProviderId = agent.LlmConfig.EmbeddingProviderId ?? agent.LlmConfig.ProviderId;
+                var embModelId = agent.LlmConfig.EmbeddingModelId;
 
-                if (vectorStore is not null)
+                if (embProviderId is null || embProviderId == Guid.Empty || string.IsNullOrWhiteSpace(embModelId))
                 {
-                    var memorySection = _configuration.GetSection("SemanticMemory");
-                    var collectionName = memorySection["CollectionName"] ?? "coresre_memory";
-                    var vectorDimensions = memorySection.GetValue<int>("EmbeddingDimensions", 1536);
+                    _logger.LogWarning(
+                        "Semantic memory enabled for Agent '{AgentName}' but EmbeddingProviderId/EmbeddingModelId not configured. Skipping memory.",
+                        agent.Name);
+                }
+                else
+                {
+                    var embProvider = await _providerRepo.GetByIdAsync(embProviderId.Value)
+                        ?? throw new InvalidOperationException($"Embedding LlmProvider '{embProviderId}' not found.");
+
+                    // Build IEmbeddingGenerator from the provider's OpenAI-compatible endpoint
+                    var embClient = new OpenAIClient(
+                        new ApiKeyCredential(embProvider.ApiKey),
+                        new OpenAIClientOptions { Endpoint = new Uri(embProvider.BaseUrl) });
+
+                    var embeddingGenerator = embClient
+                        .GetEmbeddingClient(embModelId)
+                        .AsIEmbeddingGenerator();
+
+                    // Build pgvector VectorStore backed by the same PostgreSQL instance
+                    var connStr = _configuration.GetConnectionString("coresre")!;
+                    var vectorStore = new PostgresVectorStore(connStr, new PostgresVectorStoreOptions
+                    {
+                        EmbeddingGenerator = embeddingGenerator
+                    });
+
+                    var collectionName = _configuration["SemanticMemory:CollectionName"] ?? "coresre_memory";
+                    var vectorDimensions = agent.LlmConfig.EmbeddingDimensions ?? 1536;
                     var maxResults = agent.LlmConfig.MemoryMaxResults;
                     var searchMode = agent.LlmConfig.MemorySearchMode;
+                    var minRelevanceScore = agent.LlmConfig.MemoryMinRelevanceScore ?? 0.0;
 
                     var memoryOptions = new ChatHistoryMemoryProviderOptions
                     {
@@ -220,29 +246,54 @@ public class AgentResolverService : IAgentResolver
                             : ChatHistoryMemoryProviderOptions.SearchBehavior.BeforeAIInvoke
                     };
 
+                    // Capture loggerFactory for error visibility inside ChatHistoryMemoryProvider.
+                    // Without loggerFactory, any errors in InvokedCoreAsync/InvokingCoreAsync
+                    // are silently swallowed (catch block checks _logger?.IsEnabled which is null).
+                    var memLoggerFactory = _loggerFactory;
+
                     options.AIContextProviderFactory = (ctx, ct) =>
                     {
-                        var storageScope = new ChatHistoryMemoryProviderScope
+                        // When restoring a session from store, ctx.SerializedState contains
+                        // the previously serialized scope info.
+                        if (ctx.SerializedState.ValueKind == JsonValueKind.Object)
                         {
-                            ApplicationId = "CoreSRE",
-                            AgentId = agent.Id.ToString()
-                        };
+                            var memProvider = new FixedChatHistoryMemoryProvider(
+                                vectorStore,
+                                collectionName,
+                                vectorDimensions,
+                                ctx.SerializedState,
+                                ctx.JsonSerializerOptions,
+                                options: memoryOptions,
+                                loggerFactory: memLoggerFactory,
+                                minRelevanceScore: minRelevanceScore);
 
-                        var provider = new ChatHistoryMemoryProvider(
-                            vectorStore,
-                            collectionName,
-                            vectorDimensions,
-                            storageScope,
-                            options: memoryOptions);
+                            return ValueTask.FromResult<AIContextProvider>(memProvider);
+                        }
+                        else
+                        {
+                            var storageScope = new ChatHistoryMemoryProviderScope
+                            {
+                                ApplicationId = "CoreSRE",
+                                AgentId = agent.Id.ToString(),
+                                SessionId = conversationId
+                            };
 
-                        return ValueTask.FromResult<AIContextProvider>(provider);
+                            var memProvider = new FixedChatHistoryMemoryProvider(
+                                vectorStore,
+                                collectionName,
+                                vectorDimensions,
+                                storageScope,
+                                options: memoryOptions,
+                                loggerFactory: memLoggerFactory,
+                                minRelevanceScore: minRelevanceScore);
+
+                            return ValueTask.FromResult<AIContextProvider>(memProvider);
+                        }
                     };
-                }
-                else
-                {
-                    _logger.LogWarning(
-                        "Semantic memory enabled for Agent '{AgentName}' but VectorStore not registered. Skipping memory configuration.",
-                        agent.Name);
+
+                    _logger.LogInformation(
+                        "Semantic memory configured for Agent '{AgentName}' using embedding model '{EmbeddingModel}' from provider '{ProviderName}'.",
+                        agent.Name, embModelId, embProvider.Name);
                 }
             }
             catch (Exception ex)

@@ -263,17 +263,15 @@ export default function AgentDetailPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      {/* Left Column */}
-      <div className="space-y-6">
-      {/* Basic info */}
+      <div className="grid grid-cols-1 gap-6">
+      {/* Basic info — compact overview card */}
       <Card>
         <CardHeader>
           <CardTitle>基本信息</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           {editing ? (
-            <>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="detail-name">名称 *</Label>
                 <Input
@@ -287,6 +285,12 @@ export default function AgentDetailPage() {
                 />
               </div>
               <div className="space-y-2">
+                <Label className="text-muted-foreground text-xs">
+                  Agent 类型（不可修改）
+                </Label>
+                <p className="text-sm font-medium pt-1">{agent.agentType}</p>
+              </div>
+              <div className="space-y-2 sm:col-span-2">
                 <Label htmlFor="detail-desc">描述</Label>
                 <Textarea
                   id="detail-desc"
@@ -295,63 +299,40 @@ export default function AgentDetailPage() {
                     setEditDescription(e.target.value);
                     markDirty();
                   }}
-                  rows={3}
+                  rows={2}
                 />
               </div>
-              <div className="space-y-1">
-                <Label className="text-muted-foreground text-xs">
-                  Agent 类型（不可修改）
-                </Label>
-                <p className="text-sm font-medium">{agent.agentType}</p>
-              </div>
-            </>
+            </div>
           ) : (
-            <>
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div>
-                  <Label className="text-muted-foreground text-xs">ID</Label>
-                  <p className="font-mono">{agent.id}</p>
-                </div>
-                <div>
-                  <Label className="text-muted-foreground text-xs">
-                    类型
-                  </Label>
-                  <p>{agent.agentType}</p>
-                </div>
-                <div>
-                  <Label className="text-muted-foreground text-xs">
-                    创建时间
-                  </Label>
-                  <p>{new Date(agent.createdAt).toLocaleString()}</p>
-                </div>
-                <div>
-                  <Label className="text-muted-foreground text-xs">
-                    更新时间
-                  </Label>
-                  <p>
-                    {agent.updatedAt
-                      ? new Date(agent.updatedAt).toLocaleString()
-                      : "—"}
-                  </p>
-                </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+              <div>
+                <Label className="text-muted-foreground text-xs">ID</Label>
+                <p className="font-mono truncate" title={agent.id}>{agent.id}</p>
+              </div>
+              <div>
+                <Label className="text-muted-foreground text-xs">类型</Label>
+                <p>{agent.agentType}</p>
+              </div>
+              <div>
+                <Label className="text-muted-foreground text-xs">创建时间</Label>
+                <p>{new Date(agent.createdAt).toLocaleString()}</p>
+              </div>
+              <div>
+                <Label className="text-muted-foreground text-xs">更新时间</Label>
+                <p>{agent.updatedAt ? new Date(agent.updatedAt).toLocaleString() : "—"}</p>
               </div>
               {agent.description && (
-                <div>
-                  <Label className="text-muted-foreground text-xs">
-                    描述
-                  </Label>
+                <div className="col-span-2 sm:col-span-4">
+                  <Label className="text-muted-foreground text-xs">描述</Label>
                   <p className="text-sm">{agent.description}</p>
                 </div>
               )}
-            </>
+            </div>
           )}
         </CardContent>
       </Card>
-      </div>
 
-      {/* Right Column: Type-specific */}
-      <div className="space-y-6">
-      {/* Type-specific sections */}
+      {/* Type-specific sections — full width */}
       {agent.agentType === "A2A" && (
         <>
           <Card>
@@ -458,7 +439,6 @@ export default function AgentDetailPage() {
           </CardContent>
         </Card>
       )}
-      </div>
       </div>
 
       {/* Edit actions */}

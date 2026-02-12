@@ -7,14 +7,10 @@ using CoreSRE.Infrastructure.Persistence.Sessions;
 using CoreSRE.Infrastructure.Services;
 using Microsoft.Agents.AI.Hosting;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.VectorData;
-using Microsoft.SemanticKernel.Connectors.PgVector;
 using Microsoft.AspNetCore.DataProtection;
-using OpenAI;
 
 namespace CoreSRE.Infrastructure;
 
@@ -89,36 +85,9 @@ public static class DependencyInjection
             return new PostgresAgentSessionStore(contextFactory, logger);
         });
 
-        // Semantic Memory — VectorStore (pgvector) + IEmbeddingGenerator (optional)
-        var semanticMemory = configuration.GetSection("SemanticMemory");
-        var embeddingModel = semanticMemory["EmbeddingModel"];
-        if (!string.IsNullOrWhiteSpace(embeddingModel))
-        {
-            // pgvector VectorStore backed by the same PostgreSQL instance
-            services.AddSingleton<VectorStore>(sp =>
-            {
-                var connStr = configuration.GetConnectionString("coresre")!;
-                var embeddingGen = sp.GetRequiredService<IEmbeddingGenerator<string, Embedding<float>>>();
-                return new PostgresVectorStore(connStr, new PostgresVectorStoreOptions
-                {
-                    EmbeddingGenerator = embeddingGen
-                });
-            });
-
-            // IEmbeddingGenerator from OpenAI-compatible embedding endpoint
-            var embeddingEndpoint = semanticMemory["EmbeddingEndpoint"];
-            var embeddingApiKey = semanticMemory["EmbeddingApiKey"] ?? "unused";
-            services.AddSingleton<IEmbeddingGenerator<string, Embedding<float>>>(sp =>
-            {
-                var clientOptions = !string.IsNullOrWhiteSpace(embeddingEndpoint)
-                    ? new OpenAIClientOptions { Endpoint = new Uri(embeddingEndpoint) }
-                    : null;
-                var openAiClient = new OpenAIClient(
-                    new System.ClientModel.ApiKeyCredential(embeddingApiKey),
-                    clientOptions);
-                return openAiClient.GetEmbeddingClient(embeddingModel).AsIEmbeddingGenerator();
-            });
-        }
+        // Semantic Memory — VectorStore is created per-agent in AgentResolverService
+        // using the agent's configured EmbeddingProviderId + EmbeddingModelId.
+        // No static VectorStore/IEmbeddingGenerator registration needed here.
 
         // Workflow Execution Engine + background service + channel
         services.AddScoped<IWorkflowEngine, WorkflowEngine>();
