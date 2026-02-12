@@ -108,6 +108,9 @@ public static class DependencyInjection
         // using the agent's configured EmbeddingProviderId + EmbeddingModelId.
         // No static VectorStore/IEmbeddingGenerator registration needed here.
 
+        // Expression Engine — V8 (ClearScript) JavaScript 表达式求值器
+        services.AddScoped<IExpressionEvaluator, V8ExpressionEvaluator>();
+
         // Workflow Execution Engine + background service + channel
         services.AddScoped<IWorkflowEngine, WorkflowEngine>();
         services.AddScoped<IConditionEvaluator, ConditionEvaluator>();

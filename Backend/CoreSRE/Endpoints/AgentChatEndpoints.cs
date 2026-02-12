@@ -162,15 +162,38 @@ public static class AgentChatEndpoints
         logger?.LogInformation("[SessionDebug] Starting RunStreamingAsync — historyCountBefore={Count}", historyProvider?.Count ?? -1);
         await foreach (var update in aiAgent.RunStreamingAsync(newUserMessage, session, cancellationToken: cancellationToken))
         {
-            var text = update.Text;
-            if (!string.IsNullOrEmpty(text))
+            foreach (var content in update.Contents)
             {
-                await WriteSseEventAsync(context.Response, new
+                if (content is TextContent textContent && !string.IsNullOrEmpty(textContent.Text))
                 {
-                    type = "TEXT_MESSAGE_CONTENT",
-                    messageId,
-                    delta = text
-                }, cancellationToken);
+                    await WriteSseEventAsync(context.Response, new
+                    {
+                        type = "TEXT_MESSAGE_CONTENT",
+                        messageId,
+                        delta = textContent.Text
+                    }, cancellationToken);
+                }
+                else if (content is FunctionCallContent functionCall)
+                {
+                    var toolCallId = functionCall.CallId ?? Guid.NewGuid().ToString();
+                    await WriteToolCallStartAsync(context.Response, toolCallId, functionCall.Name ?? "unknown", messageId, cancellationToken);
+
+                    if (functionCall.Arguments is { Count: > 0 })
+                    {
+                        var argsJson = JsonSerializer.Serialize(functionCall.Arguments, s_jsonOptions);
+                        await WriteToolCallArgsAsync(context.Response, toolCallId, argsJson, cancellationToken);
+                    }
+                    else
+                    {
+                        await WriteToolCallArgsAsync(context.Response, toolCallId, "{}", cancellationToken);
+                    }
+                }
+                else if (content is FunctionResultContent functionResult)
+                {
+                    var toolCallId = functionResult.CallId ?? Guid.NewGuid().ToString();
+                    var resultStr = functionResult.Result?.ToString();
+                    await WriteToolCallEndAsync(context.Response, toolCallId, resultStr, cancellationToken);
+                }
             }
         }
 
@@ -287,7 +310,8 @@ public static class AgentChatEndpoints
                     {
                         // TOOL_CALL_END — tool execution completed
                         var toolCallId = functionResult.CallId ?? Guid.NewGuid().ToString();
-                        await WriteToolCallEndAsync(context.Response, toolCallId, cancellationToken);
+                        var resultStr = functionResult.Result?.ToString();
+                        await WriteToolCallEndAsync(context.Response, toolCallId, resultStr, cancellationToken);
                     }
                 }
             }
@@ -402,12 +426,13 @@ public static class AgentChatEndpoints
         }, cancellationToken);
     }
 
-    private static async Task WriteToolCallEndAsync(HttpResponse response, string toolCallId, CancellationToken cancellationToken)
+    private static async Task WriteToolCallEndAsync(HttpResponse response, string toolCallId, string? result, CancellationToken cancellationToken)
     {
         await WriteSseEventAsync(response, new
         {
             type = "TOOL_CALL_END",
-            toolCallId
+            toolCallId,
+            result
         }, cancellationToken);
     }
 

@@ -37,7 +37,7 @@ public class LlmConfigDto
     public int? MemoryMaxResults { get; set; }
     public double? MemoryMinRelevanceScore { get; set; }
 
-    // ── Sandbox 配置（BoxLite 微型 VM 硬件隔离）──
+    // ── Sandbox 配置（Kubernetes Pod 容器隔离）──
     public bool? EnableSandbox { get; set; }
     public string? SandboxType { get; set; }
     public string? SandboxImage { get; set; }

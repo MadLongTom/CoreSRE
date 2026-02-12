@@ -22,17 +22,27 @@ public class WorkflowEngineTests
     private readonly Mock<IToolRegistrationRepository> _toolRepoMock = new();
     private readonly Mock<IWorkflowExecutionRepository> _executionRepoMock = new();
     private readonly Mock<IConditionEvaluator> _conditionEvaluatorMock = new();
+    private readonly Mock<IExpressionEvaluator> _expressionEvaluatorMock = new();
     private readonly Mock<ILogger<WorkflowEngine>> _loggerMock = new();
     private readonly WorkflowEngine _engine;
 
     public WorkflowEngineTests()
     {
+        // 默认 Expression evaluator：EvaluateCondition 返回 false，Evaluate 直接透传
+        _expressionEvaluatorMock
+            .Setup(e => e.Evaluate(It.IsAny<string>(), It.IsAny<ExpressionContext>()))
+            .Returns((string template, ExpressionContext _) => template);
+        _expressionEvaluatorMock
+            .Setup(e => e.EvaluateCondition(It.IsAny<string>(), It.IsAny<ExpressionContext>()))
+            .Throws(new ExpressionEvaluationException("fallback", new Exception()));
+
         _engine = new WorkflowEngine(
             _agentResolverMock.Object,
             _toolInvokerFactoryMock.Object,
             _toolRepoMock.Object,
             _executionRepoMock.Object,
             _conditionEvaluatorMock.Object,
+            _expressionEvaluatorMock.Object,
             _loggerMock.Object);
     }
 

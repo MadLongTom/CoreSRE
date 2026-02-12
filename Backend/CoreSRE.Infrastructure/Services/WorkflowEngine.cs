@@ -21,6 +21,7 @@ public class WorkflowEngine : IWorkflowEngine
     private readonly IToolRegistrationRepository _toolRepo;
     private readonly IWorkflowExecutionRepository _executionRepo;
     private readonly IConditionEvaluator _conditionEvaluator;
+    private readonly IExpressionEvaluator _expressionEvaluator;
     private readonly ILogger<WorkflowEngine> _logger;
 
     /// <summary>节点执行超时（FR-022）</summary>
@@ -32,6 +33,7 @@ public class WorkflowEngine : IWorkflowEngine
         IToolRegistrationRepository toolRepo,
         IWorkflowExecutionRepository executionRepo,
         IConditionEvaluator conditionEvaluator,
+        IExpressionEvaluator expressionEvaluator,
         ILogger<WorkflowEngine> logger)
     {
         _agentResolver = agentResolver;
@@ -39,6 +41,7 @@ public class WorkflowEngine : IWorkflowEngine
         _toolRepo = toolRepo;
         _executionRepo = executionRepo;
         _conditionEvaluator = conditionEvaluator;
+        _expressionEvaluator = expressionEvaluator;
         _logger = logger;
     }
 
@@ -122,7 +125,8 @@ public class WorkflowEngine : IWorkflowEngine
 
                     try
                     {
-                        lastOutput = await ExecuteNodeAsync(execution, node, lastOutput, cts.Token);
+                        var exprCtx = BuildExpressionContext(execution, nodeOutputs, lastOutput);
+                        lastOutput = await ExecuteNodeAsync(execution, node, lastOutput, exprCtx, cts.Token);
                         nodeOutputs[node.NodeId] = lastOutput;
                         execution.CompleteNode(node.NodeId, lastOutput);
                         await _executionRepo.UpdateAsync(execution, cancellationToken);
@@ -205,23 +209,29 @@ public class WorkflowEngine : IWorkflowEngine
         WorkflowExecution execution,
         WorkflowNodeVO node,
         string? input,
+        ExpressionContext? exprContext,
         CancellationToken cancellationToken)
     {
+        // 如果有表达式上下文，解析节点 Config 中的 {{ }} 模板
+        var resolvedConfig = exprContext is not null ? ResolveNodeConfig(node, exprContext) : node.Config;
+
         return node.NodeType switch
         {
-            WorkflowNodeType.Agent => await ExecuteAgentNodeAsync(execution, node, input, cancellationToken),
-            WorkflowNodeType.Tool => await ExecuteToolNodeAsync(node, input, cancellationToken),
+            WorkflowNodeType.Agent => await ExecuteAgentNodeAsync(execution, node, input, resolvedConfig, cancellationToken),
+            WorkflowNodeType.Tool => await ExecuteToolNodeAsync(node, input, resolvedConfig, cancellationToken),
             _ => input // Condition, FanOut, FanIn — 顺序执行时直接透传（US2/US3 扩展）
         };
     }
 
     /// <summary>
     /// 执行 Agent 节点：通过 IAgentResolver 解析 AIAgent，发送消息并获取响应。
+    /// resolvedConfig 可包含经表达式引擎解析后的额外指令（如 system prompt 覆盖）。
     /// </summary>
     private async Task<string?> ExecuteAgentNodeAsync(
         WorkflowExecution execution,
         WorkflowNodeVO node,
         string? input,
+        string? resolvedConfig,
         CancellationToken cancellationToken)
     {
         if (!node.ReferenceId.HasValue)
@@ -240,11 +250,33 @@ public class WorkflowEngine : IWorkflowEngine
         // 构建消息列表
         var messages = new List<ChatMessage>();
         var chatOptions = resolved.Agent.GetService<ChatOptions>();
-        if (chatOptions?.Instructions is not null)
+
+        // 如果 resolvedConfig 包含 "systemPrompt"，使用表达式引擎解析后的值覆盖
+        string? systemPromptOverride = null;
+        string? userPromptOverride = null;
+        if (!string.IsNullOrWhiteSpace(resolvedConfig))
+        {
+            try
+            {
+                using var configDoc = JsonDocument.Parse(resolvedConfig);
+                if (configDoc.RootElement.TryGetProperty("systemPrompt", out var sp))
+                    systemPromptOverride = sp.GetString();
+                if (configDoc.RootElement.TryGetProperty("userPrompt", out var up))
+                    userPromptOverride = up.GetString();
+            }
+            catch (JsonException) { /* Config 不是有效 JSON，忽略 */ }
+        }
+
+        if (systemPromptOverride is not null)
+        {
+            messages.Add(new ChatMessage(ChatRole.System, systemPromptOverride));
+        }
+        else if (chatOptions?.Instructions is not null)
         {
             messages.Add(new ChatMessage(ChatRole.System, chatOptions.Instructions));
         }
-        messages.Add(new ChatMessage(ChatRole.User, input ?? "{}"));
+
+        messages.Add(new ChatMessage(ChatRole.User, userPromptOverride ?? input ?? "{}"));
 
         // 调用 Agent
         var response = await chatClient.GetResponseAsync(messages, chatOptions, cancellationToken);
@@ -256,10 +288,12 @@ public class WorkflowEngine : IWorkflowEngine
 
     /// <summary>
     /// 执行 Tool 节点：通过 IToolInvokerFactory 调用工具。
+    /// resolvedConfig 可包含经表达式引擎解析后的参数覆盖。
     /// </summary>
     private async Task<string?> ExecuteToolNodeAsync(
         WorkflowNodeVO node,
         string? input,
+        string? resolvedConfig,
         CancellationToken cancellationToken)
     {
         if (!node.ReferenceId.HasValue)
@@ -337,26 +371,36 @@ public class WorkflowEngine : IWorkflowEngine
             return true;
         }
 
-        // 评估每条条件边
+        // 评估每条条件边（优先使用 V8 表达式引擎，回退到 JsonPath 条件求值器）
         string? matchedTargetNodeId = null;
         var jsonInput = input ?? "{}";
+        var exprCtx = BuildExpressionContext(execution, nodeOutputs, jsonInput);
 
         foreach (var edge in conditionalEdges)
         {
             if (edge.Condition is null) continue;
 
-            if (!_conditionEvaluator.TryEvaluate(edge.Condition, jsonInput, out var matched))
+            bool matched;
+            try
             {
-                // 条件表达式解析失败 (FR-017)
-                var errorMsg = $"条件表达式解析失败: {edge.Condition}";
-                _logger.LogWarning("节点 {NodeId} {Error}", conditionNode.NodeId, errorMsg);
+                // 优先使用 V8 表达式引擎求值条件
+                matched = _expressionEvaluator.EvaluateCondition(edge.Condition, exprCtx);
+            }
+            catch (ExpressionEvaluationException)
+            {
+                // V8 求值失败，回退到旧的 JsonPath 条件求值器
+                if (!_conditionEvaluator.TryEvaluate(edge.Condition, jsonInput, out matched))
+                {
+                    var errorMsg = $"条件表达式解析失败: {edge.Condition}";
+                    _logger.LogWarning("节点 {NodeId} {Error}", conditionNode.NodeId, errorMsg);
 
-                execution.FailNode(conditionNode.NodeId, errorMsg);
-                await _executionRepo.UpdateAsync(execution, cancellationToken);
+                    execution.FailNode(conditionNode.NodeId, errorMsg);
+                    await _executionRepo.UpdateAsync(execution, cancellationToken);
 
-                execution.Fail($"节点 {conditionNode.NodeId} {errorMsg}");
-                await _executionRepo.UpdateAsync(execution, cancellationToken);
-                return false;
+                    execution.Fail($"节点 {conditionNode.NodeId} {errorMsg}");
+                    await _executionRepo.UpdateAsync(execution, cancellationToken);
+                    return false;
+                }
             }
 
             if (matched && matchedTargetNodeId is null)
@@ -440,7 +484,8 @@ public class WorkflowEngine : IWorkflowEngine
 
             try
             {
-                var output = await ExecuteNodeAsync(execution, parallelNode, fanOutInput, cts.Token);
+                var exprCtx = BuildExpressionContext(execution, nodeOutputs, fanOutInput);
+                var output = await ExecuteNodeAsync(execution, parallelNode, fanOutInput, exprCtx, cts.Token);
                 return (parallelNode.NodeId, Output: output, Error: (Exception?)null);
             }
             catch (OperationCanceledException) when (cts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
@@ -570,5 +615,49 @@ public class WorkflowEngine : IWorkflowEngine
             throw new InvalidOperationException("图中存在环，无法执行拓扑排序");
 
         return sorted;
+    }
+
+    /// <summary>
+    /// 根据当前执行状态构建表达式求值上下文。
+    /// </summary>
+    private static ExpressionContext BuildExpressionContext(
+        WorkflowExecution execution,
+        Dictionary<string, string?> nodeOutputs,
+        string? currentInput)
+    {
+        var outputs = new Dictionary<string, List<string?>>();
+        foreach (var (nodeId, output) in nodeOutputs)
+        {
+            outputs[nodeId] = [output];
+        }
+
+        return new ExpressionContext
+        {
+            NodeOutputs = outputs,
+            CurrentInput = currentInput,
+            ExecutionId = execution.Id,
+            WorkflowId = execution.WorkflowDefinitionId,
+        };
+    }
+
+    /// <summary>
+    /// 对节点 Config 中的 {{ expr }} 模板表达式求值。
+    /// Config 是一个 JSON 字符串，遍历其中所有字符串值并做表达式替换。
+    /// 返回解析后的 Config JSON 字符串。
+    /// </summary>
+    private string? ResolveNodeConfig(WorkflowNodeVO node, ExpressionContext context)
+    {
+        if (string.IsNullOrWhiteSpace(node.Config))
+            return node.Config;
+
+        try
+        {
+            return _expressionEvaluator.Evaluate(node.Config, context);
+        }
+        catch (ExpressionEvaluationException ex)
+        {
+            _logger.LogWarning(ex, "节点 {NodeId} Config 表达式解析失败", node.NodeId);
+            return node.Config; // 回退到原始值
+        }
     }
 }

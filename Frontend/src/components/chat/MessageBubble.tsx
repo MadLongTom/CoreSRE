@@ -48,13 +48,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
 
       {/* Content */}
       <div className="max-w-[75%] space-y-1">
-        {/* Tool call cards (before text content) */}
-        {hasToolCalls &&
-          message.toolCalls!.map((tc) => (
-            <ToolCallCard key={tc.toolCallId} toolCall={tc} />
-          ))}
-
-        {/* Text bubble — only render if there's text content */}
+        {/* Text bubble — render before tool calls */}
         {message.content && (
           <div
             className={cn(
@@ -102,6 +96,12 @@ export function MessageBubble({ message }: MessageBubbleProps) {
             )}
           </div>
         )}
+
+        {/* Tool call cards (after text content) */}
+        {hasToolCalls &&
+          message.toolCalls!.map((tc) => (
+            <ToolCallCard key={tc.toolCallId} toolCall={tc} />
+          ))}
 
         {/* Memory context hint — below user bubble */}
         {hasMemory && <MemoryHint memoryContext={message.memoryContext!} />}

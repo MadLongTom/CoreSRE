@@ -186,7 +186,7 @@ export function useAgentChat({
                     if (last && last.role === "assistant" && last.toolCalls) {
                       const updatedCalls = last.toolCalls.map((tc) =>
                         tc.toolCallId === event.toolCallId
-                          ? { ...tc, status: "completed" as const }
+                          ? { ...tc, status: "completed" as const, result: event.result ?? tc.result }
                           : tc,
                       );
                       copy[copy.length - 1] = { ...last, toolCalls: updatedCalls };
