@@ -120,6 +120,14 @@ export interface LlmConfig {
   toolMode?: string | null;
   allowMultipleToolCalls?: boolean | null;
 
+  // Sandbox configuration (Kubernetes Pod container isolation)
+  enableSandbox?: boolean | null;
+  sandboxType?: string | null;
+  sandboxImage?: string | null;
+  sandboxCpus?: number | null;
+  sandboxMemoryMib?: number | null;
+  sandboxK8sNamespace?: string | null;
+
   // History & Memory configuration
   enableChatHistory?: boolean | null;
   maxHistoryMessages?: number | null;

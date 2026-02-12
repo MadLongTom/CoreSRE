@@ -5,6 +5,8 @@ using CoreSRE.Domain.Interfaces;
 using CoreSRE.Infrastructure.Persistence;
 using CoreSRE.Infrastructure.Persistence.Sessions;
 using CoreSRE.Infrastructure.Services;
+using CoreSRE.Infrastructure.Services.Sandbox.Kubernetes;
+using k8s;
 using Microsoft.Agents.AI.Hosting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -76,6 +78,23 @@ public static class DependencyInjection
 
         // Tool-to-AIFunction conversion factory (for ChatClient tool binding)
         services.AddScoped<IToolFunctionFactory, ToolFunctionFactory>();
+
+        // Sandbox tools — Kubernetes Pod 容器隔离沙盒
+        // 使用 KubernetesClient 通过 K8s API 管理 Pod 生命周期
+        // 开发环境：Docker Desktop 内置 K8s（使用默认 kubeconfig）
+        services.AddSingleton<k8s.Kubernetes>(sp =>
+        {
+            var config = KubernetesClientConfiguration.BuildDefaultConfig();
+            // Docker Desktop 使用自签名证书，WebSocket exec 时 .NET 证书链验证会
+            // 触发 NullReferenceException (StorePal.LinkFromCertificateCollection)。
+            // 跳过 TLS 验证以兼容本地开发环境；生产环境应使用受信任证书。
+            config.SkipTlsVerify = true;
+            return new k8s.Kubernetes(config);
+        });
+        // SandboxPodPool: Singleton Pod 池 + IHostedService（启动清孤儿/关闭删 Pod）
+        services.AddSingleton<SandboxPodPool>();
+        services.AddHostedService(sp => sp.GetRequiredService<SandboxPodPool>());
+        services.AddScoped<ISandboxToolProvider, KubernetesSandboxToolProvider>();
 
         // Agent session store — PostgreSQL persistence for framework-managed chat history
         services.AddSingleton<AgentSessionStore>(sp =>

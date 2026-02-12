@@ -27,6 +27,7 @@ public class AgentResolverService : IAgentResolver
     private readonly ILlmProviderRepository _providerRepo;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IToolFunctionFactory _toolFunctionFactory;
+    private readonly ISandboxToolProvider _sandboxToolProvider;
     private readonly IConfiguration _configuration;
     private readonly ILogger<AgentResolverService> _logger;
     private readonly ILoggerFactory _loggerFactory;
@@ -37,6 +38,7 @@ public class AgentResolverService : IAgentResolver
         ILlmProviderRepository providerRepo,
         IHttpClientFactory httpClientFactory,
         IToolFunctionFactory toolFunctionFactory,
+        ISandboxToolProvider sandboxToolProvider,
         IConfiguration configuration,
         ILogger<AgentResolverService> logger,
         ILoggerFactory loggerFactory)
@@ -45,6 +47,7 @@ public class AgentResolverService : IAgentResolver
         _providerRepo = providerRepo;
         _httpClientFactory = httpClientFactory;
         _toolFunctionFactory = toolFunctionFactory;
+        _sandboxToolProvider = sandboxToolProvider;
         _configuration = configuration;
         _logger = logger;
         _loggerFactory = loggerFactory;
@@ -90,18 +93,30 @@ public class AgentResolverService : IAgentResolver
             .AsIChatClient();
 
         // 3.5 如果有 ToolRefs，解析为 AIFunction 并用 FunctionInvokingChatClient 包装
-        IReadOnlyList<AIFunction>? aiFunctions = null;
+        var allTools = new List<AIFunction>();
+
         if (agent.LlmConfig.ToolRefs is { Count: > 0 } toolRefs)
         {
-            aiFunctions = await _toolFunctionFactory.CreateFunctionsAsync(toolRefs);
+            var refFunctions = await _toolFunctionFactory.CreateFunctionsAsync(toolRefs);
+            allTools.AddRange(refFunctions);
+        }
 
-            if (aiFunctions.Count > 0)
-            {
-                chatClient = chatClient
-                    .AsBuilder()
-                    .UseFunctionInvocation()
-                    .Build();
-            }
+        // 3.6 如果启用沙盒，注入沙盒工具（命令行、文件读写、代码执行）
+        if (agent.LlmConfig.EnableSandbox == true)
+        {
+            var sandboxTools = _sandboxToolProvider.CreateSandboxTools(agent.Id, conversationId, agent.LlmConfig);
+            allTools.AddRange(sandboxTools);
+            _logger.LogInformation(
+                "Sandbox tools enabled for Agent '{AgentName}': {ToolCount} sandbox tools added",
+                agent.Name, sandboxTools.Count);
+        }
+
+        if (allTools.Count > 0)
+        {
+            chatClient = chatClient
+                .AsBuilder()
+                .UseFunctionInvocation()
+                .Build();
         }
 
         // 4. 创建 ChatClientAgent
@@ -119,10 +134,10 @@ public class AgentResolverService : IAgentResolver
             chatOptions.Instructions = agent.LlmConfig.Instructions;
         }
 
-        // 将 AIFunction 列表附加到 ChatOptions.Tools
-        if (aiFunctions is { Count: > 0 })
+        // 将所有 AIFunction（ToolRef + Sandbox）附加到 ChatOptions.Tools
+        if (allTools.Count > 0)
         {
-            chatOptions.Tools = aiFunctions.Cast<AITool>().ToList();
+            chatOptions.Tools = allTools.Cast<AITool>().ToList();
         }
 
         // ── 应用 ChatOptions 扩展配置 ──────────────────────────────────────

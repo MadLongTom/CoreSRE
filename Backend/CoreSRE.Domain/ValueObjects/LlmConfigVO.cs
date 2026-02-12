@@ -84,4 +84,34 @@ public sealed record LlmConfigVO
 
     /// <summary>语义记忆最低相关性分数阈值（0~1，越高越严格）。低于此分数的记忆不注入。null 或 0 表示不过滤。</summary>
     public double? MemoryMinRelevanceScore { get; init; }
+
+    // ── Sandbox 配置（Kubernetes Pod 容器隔离）────────────────────────
+
+    /// <summary>启用沙盒工具（命令行、文件读写、代码执行）。null 视为 false。</summary>
+    public bool? EnableSandbox { get; init; }
+
+    /// <summary>
+    /// 沙盒类型：SimpleBox / CodeBox / InteractiveBox / BrowserBox / ComputerBox。
+    /// null 时默认为 CodeBox。
+    /// </summary>
+    public string? SandboxType { get; init; }
+
+    /// <summary>
+    /// OCI 镜像名称。为空时根据 SandboxType 自动选择：
+    /// SimpleBox→alpine:latest, CodeBox/InteractiveBox→python:3.12-slim,
+    /// BrowserBox→mcr.microsoft.com/playwright:v1.52.0-jammy, ComputerBox→python:3.12-slim。
+    /// </summary>
+    public string? SandboxImage { get; init; }
+
+    /// <summary>容器分配的 CPU 核数。0 或 null = 默认 1 核。</summary>
+    public int? SandboxCpus { get; init; }
+
+    /// <summary>容器分配的内存（MiB）。0 或 null = 默认 512MiB。</summary>
+    public int? SandboxMemoryMib { get; init; }
+
+    /// <summary>
+    /// K8s 命名空间。为空时使用默认值 "coresre-sandbox"。
+    /// Docker Desktop 内置 K8s 默认使用 default 命名空间。
+    /// </summary>
+    public string? SandboxK8sNamespace { get; init; }
 }

@@ -36,4 +36,11 @@ public class LlmConfigDto
     public string? MemorySearchMode { get; set; }
     public int? MemoryMaxResults { get; set; }
     public double? MemoryMinRelevanceScore { get; set; }
+
+    // ── Sandbox 配置（BoxLite 微型 VM 硬件隔离）──
+    public bool? EnableSandbox { get; set; }
+    public string? SandboxType { get; set; }
+    public string? SandboxImage { get; set; }
+    public int? SandboxCpus { get; set; }
+    public int? SandboxMemoryMib { get; set; }
 }

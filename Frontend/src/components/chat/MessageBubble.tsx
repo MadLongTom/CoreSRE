@@ -3,6 +3,7 @@ import { cn } from "@/lib/utils";
 import type { ChatMessage } from "@/types/chat";
 import { Bot, User, Brain } from "lucide-react";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { ToolCallCard } from "@/components/chat/ToolCallCard";
 import {
   Dialog,
@@ -67,6 +68,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
               message.content
             ) : (
               <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
                 components={{
                   p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
                   ul: ({ children }) => <ul className="mb-2 list-disc pl-4 last:mb-0">{children}</ul>,
@@ -86,9 +88,12 @@ export function MessageBubble({ message }: MessageBubbleProps) {
                   h3: ({ children }) => <h3 className="text-sm font-bold mb-1">{children}</h3>,
                   a: ({ href, children }) => <a href={href} className="underline text-blue-600" target="_blank" rel="noopener noreferrer">{children}</a>,
                   blockquote: ({ children }) => <blockquote className="border-l-2 border-muted-foreground/30 pl-3 my-2 italic">{children}</blockquote>,
-                  table: ({ children }) => <div className="overflow-x-auto my-2"><table className="text-xs border-collapse">{children}</table></div>,
-                  th: ({ children }) => <th className="border border-border px-2 py-1 bg-muted font-semibold text-left">{children}</th>,
-                  td: ({ children }) => <td className="border border-border px-2 py-1">{children}</td>,
+                  table: ({ children }) => <div className="overflow-x-auto my-2"><table className="w-full text-xs border-collapse border border-border">{children}</table></div>,
+                  thead: ({ children }) => <thead className="bg-muted">{children}</thead>,
+                  tbody: ({ children }) => <tbody>{children}</tbody>,
+                  tr: ({ children }) => <tr className="border-b border-border">{children}</tr>,
+                  th: ({ children }) => <th className="border border-border px-3 py-1.5 bg-muted font-semibold text-left">{children}</th>,
+                  td: ({ children }) => <td className="border border-border px-3 py-1.5">{children}</td>,
                   hr: () => <hr className="my-2 border-border" />,
                 }}
               >

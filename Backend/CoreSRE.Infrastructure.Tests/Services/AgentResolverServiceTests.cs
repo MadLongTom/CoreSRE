@@ -21,6 +21,7 @@ public class AgentResolverServiceTests
     private readonly Mock<ILlmProviderRepository> _providerRepoMock = new();
     private readonly Mock<IHttpClientFactory> _httpClientFactoryMock = new();
     private readonly Mock<IToolFunctionFactory> _toolFunctionFactoryMock = new();
+    private readonly Mock<ISandboxToolProvider> _sandboxToolProviderMock = new();
     private readonly Mock<IConfiguration> _configurationMock = new();
     private readonly Mock<ILogger<AgentResolverService>> _loggerMock = new();
     private readonly Mock<ILoggerFactory> _loggerFactoryMock = new();
@@ -37,6 +38,7 @@ public class AgentResolverServiceTests
             _providerRepoMock.Object,
             _httpClientFactoryMock.Object,
             _toolFunctionFactoryMock.Object,
+            _sandboxToolProviderMock.Object,
             _configurationMock.Object,
             _loggerMock.Object,
             _loggerFactoryMock.Object);

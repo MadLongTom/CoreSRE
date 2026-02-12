@@ -23,7 +23,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { ChevronDown, ChevronRight, FileJson } from "lucide-react";
+import { ChevronDown, ChevronRight, FileJson, Terminal } from "lucide-react";
 import ProviderModelSelect from "@/components/agents/ProviderModelSelect";
 import ToolRefsPicker from "@/components/agents/ToolRefsPicker";
 import { getAvailableFunctions } from "@/lib/api/tools";
@@ -116,6 +116,9 @@ export default function LlmConfigSection({
     (config.toolMode != null && config.toolMode !== "") ||
     config.allowMultipleToolCalls != null;
 
+  // Check if sandbox is enabled
+  const hasSandboxValue = config.enableSandbox != null;
+
   // Check if any history/memory option has a non-default value
   const hasHistoryMemoryValues =
     config.enableChatHistory != null ||
@@ -162,6 +165,101 @@ export default function LlmConfigSection({
                   value={config.toolRefs}
                   onChange={(ids) => update({ toolRefs: ids })}
                 />
+              </div>
+              <div className="sm:col-span-2 flex items-center gap-3 rounded-md border p-3 bg-muted/30">
+                <Terminal className="h-5 w-5 text-muted-foreground shrink-0" />
+                <div className="flex-1 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      id="edit-enableSandbox"
+                      checked={config.enableSandbox ?? false}
+                      onCheckedChange={(checked) =>
+                        update({
+                          enableSandbox: checked ? true : null,
+                          sandboxType: checked ? (config.sandboxType ?? "CodeBox") : null,
+                          sandboxImage: checked ? config.sandboxImage : null,
+                          sandboxCpus: checked ? config.sandboxCpus : null,
+                          sandboxMemoryMib: checked ? config.sandboxMemoryMib : null,
+                          sandboxK8sNamespace: checked ? config.sandboxK8sNamespace : null,
+                        })
+                      }
+                    />
+                    <Label htmlFor="edit-enableSandbox" className="font-medium">启用沙盒环境（Kubernetes Pod）</Label>
+                  </div>
+                  {config.enableSandbox && (
+                    <div className="space-y-2 pl-1">
+                      <div className="flex items-center gap-2">
+                        <Label htmlFor="edit-sandboxType" className="text-xs text-muted-foreground whitespace-nowrap">沙盒类型</Label>
+                        <Select
+                          value={config.sandboxType ?? "CodeBox"}
+                          onValueChange={(v) => update({ sandboxType: v })}
+                        >
+                          <SelectTrigger id="edit-sandboxType" className="h-8 w-[200px] text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="SimpleBox">SimpleBox — 基础文件与命令行</SelectItem>
+                            <SelectItem value="CodeBox">CodeBox — 代码执行 + 包安装</SelectItem>
+                            <SelectItem value="InteractiveBox">InteractiveBox — 交互式终端</SelectItem>
+                            <SelectItem value="BrowserBox">BrowserBox — 浏览器自动化</SelectItem>
+                            <SelectItem value="ComputerBox">ComputerBox — 桌面自动化</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-1">
+                          <Label htmlFor="edit-sandboxImage" className="text-xs text-muted-foreground whitespace-nowrap">镜像</Label>
+                          <Input
+                            id="edit-sandboxImage"
+                            value={config.sandboxImage ?? ""}
+                            onChange={(e) => update({ sandboxImage: e.target.value || null })}
+                            placeholder="自动（根据沙盒类型）"
+                            className="h-8 w-[220px] text-xs"
+                          />
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Label htmlFor="edit-sandboxCpus" className="text-xs text-muted-foreground whitespace-nowrap">CPU</Label>
+                          <Input
+                            id="edit-sandboxCpus"
+                            type="number"
+                            min={0}
+                            value={config.sandboxCpus ?? ""}
+                            onChange={(e) => update({ sandboxCpus: e.target.value ? Number(e.target.value) : null })}
+                            placeholder="默认"
+                            className="h-8 w-[80px] text-xs"
+                          />
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Label htmlFor="edit-sandboxMemory" className="text-xs text-muted-foreground whitespace-nowrap">内存 MiB</Label>
+                          <Input
+                            id="edit-sandboxMemory"
+                            type="number"
+                            min={0}
+                            value={config.sandboxMemoryMib ?? ""}
+                            onChange={(e) => update({ sandboxMemoryMib: e.target.value ? Number(e.target.value) : null })}
+                            placeholder="默认"
+                            className="h-8 w-[80px] text-xs"
+                          />
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-1">
+                          <Label htmlFor="edit-sandboxK8sNamespace" className="text-xs text-muted-foreground whitespace-nowrap">K8s Namespace</Label>
+                          <Input
+                            id="edit-sandboxK8sNamespace"
+                            value={config.sandboxK8sNamespace ?? ""}
+                            onChange={(e) => update({ sandboxK8sNamespace: e.target.value || null })}
+                            placeholder="coresre-sandbox"
+                            className="h-8 w-[220px] text-xs"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    在 Kubernetes Pod 容器中提供资源隔离的命令行、文件读写和代码执行能力。每个对话拥有独立的 Pod。开发环境使用 Docker Desktop 内置 K8s。
+                  </p>
+                </div>
               </div>
             </div>
 
@@ -531,6 +629,19 @@ export default function LlmConfigSection({
                 <p className="text-sm text-muted-foreground">无</p>
               )}
               </div>
+              {hasSandboxValue && (
+                <div className="space-y-1 sm:col-span-2">
+                  <Label className="text-muted-foreground text-xs">沙盒环境（Kubernetes Pod）</Label>
+                  <div className="flex items-center gap-2">
+                    <Terminal className="h-4 w-4 text-muted-foreground" />
+                    <p className="text-sm">
+                      {config.enableSandbox
+                        ? `已启用 — ${config.sandboxType ?? "CodeBox"}${config.sandboxImage ? ` (${config.sandboxImage})` : ""}${config.sandboxCpus ? ` ${config.sandboxCpus}C` : ""}${config.sandboxMemoryMib ? ` ${config.sandboxMemoryMib}MiB` : ""}${config.sandboxK8sNamespace ? ` ns:${config.sandboxK8sNamespace}` : ""}`
+                        : "未启用"}
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Advanced ChatOptions — view mode */}
