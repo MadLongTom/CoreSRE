@@ -7,9 +7,14 @@ using CoreSRE.Infrastructure.Persistence.Sessions;
 using CoreSRE.Infrastructure.Services;
 using Microsoft.Agents.AI.Hosting;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.VectorData;
+using Microsoft.SemanticKernel.Connectors.PgVector;
 using Microsoft.AspNetCore.DataProtection;
+using OpenAI;
 
 namespace CoreSRE.Infrastructure;
 
@@ -23,10 +28,14 @@ public static class DependencyInjection
         services.AddDbContext<AppDbContext>(options =>
             options.UseNpgsql(configuration.GetConnectionString("coresre")));
 
-        // IDbContextFactory for services that need to create DbContext outside of scoped lifetime
-        // (e.g., singleton AgentSessionStore)
-        services.AddDbContextFactory<AppDbContext>(options =>
-            options.UseNpgsql(configuration.GetConnectionString("coresre")), ServiceLifetime.Scoped);
+        // Singleton IDbContextFactory for services outside scoped lifetime (e.g., AgentSessionStore).
+        // Cannot use AddDbContextFactory here because AddDbContext already registered
+        // DbContextOptions<AppDbContext> as Scoped, causing a lifetime conflict.
+        services.AddSingleton<IDbContextFactory<AppDbContext>>(sp =>
+        {
+            var connStr = configuration.GetConnectionString("coresre")!;
+            return new StandaloneDbContextFactory(connStr);
+        });
 
         services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
         services.AddScoped<IAgentRegistrationRepository, AgentRegistrationRepository>();
@@ -72,6 +81,45 @@ public static class DependencyInjection
         // Tool-to-AIFunction conversion factory (for ChatClient tool binding)
         services.AddScoped<IToolFunctionFactory, ToolFunctionFactory>();
 
+        // Agent session store — PostgreSQL persistence for framework-managed chat history
+        services.AddSingleton<AgentSessionStore>(sp =>
+        {
+            var contextFactory = sp.GetRequiredService<IDbContextFactory<AppDbContext>>();
+            var logger = sp.GetRequiredService<ILoggerFactory>().CreateLogger<PostgresAgentSessionStore>();
+            return new PostgresAgentSessionStore(contextFactory, logger);
+        });
+
+        // Semantic Memory — VectorStore (pgvector) + IEmbeddingGenerator (optional)
+        var semanticMemory = configuration.GetSection("SemanticMemory");
+        var embeddingModel = semanticMemory["EmbeddingModel"];
+        if (!string.IsNullOrWhiteSpace(embeddingModel))
+        {
+            // pgvector VectorStore backed by the same PostgreSQL instance
+            services.AddSingleton<VectorStore>(sp =>
+            {
+                var connStr = configuration.GetConnectionString("coresre")!;
+                var embeddingGen = sp.GetRequiredService<IEmbeddingGenerator<string, Embedding<float>>>();
+                return new PostgresVectorStore(connStr, new PostgresVectorStoreOptions
+                {
+                    EmbeddingGenerator = embeddingGen
+                });
+            });
+
+            // IEmbeddingGenerator from OpenAI-compatible embedding endpoint
+            var embeddingEndpoint = semanticMemory["EmbeddingEndpoint"];
+            var embeddingApiKey = semanticMemory["EmbeddingApiKey"] ?? "unused";
+            services.AddSingleton<IEmbeddingGenerator<string, Embedding<float>>>(sp =>
+            {
+                var clientOptions = !string.IsNullOrWhiteSpace(embeddingEndpoint)
+                    ? new OpenAIClientOptions { Endpoint = new Uri(embeddingEndpoint) }
+                    : null;
+                var openAiClient = new OpenAIClient(
+                    new System.ClientModel.ApiKeyCredential(embeddingApiKey),
+                    clientOptions);
+                return openAiClient.GetEmbeddingClient(embeddingModel).AsIEmbeddingGenerator();
+            });
+        }
+
         // Workflow Execution Engine + background service + channel
         services.AddScoped<IWorkflowEngine, WorkflowEngine>();
         services.AddScoped<IConditionEvaluator, ConditionEvaluator>();
@@ -80,20 +128,5 @@ public static class DependencyInjection
         services.AddHostedService<WorkflowExecutionBackgroundService>();
 
         return services;
-    }
-
-    /// <summary>
-    /// 创建 PostgresAgentSessionStore 工厂委托，用于 Agent Framework 的 WithSessionStore 注册。
-    /// <para>
-    /// 使用示例（在 Program.cs 中）:
-    /// <code>
-    /// agentBuilder.WithSessionStore(DependencyInjection.CreatePostgresSessionStore);
-    /// </code>
-    /// </para>
-    /// </summary>
-    public static AgentSessionStore CreatePostgresSessionStore(IServiceProvider serviceProvider, string agentName)
-    {
-        var contextFactory = serviceProvider.GetRequiredService<IDbContextFactory<AppDbContext>>();
-        return new PostgresAgentSessionStore(contextFactory);
     }
 }

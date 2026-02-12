@@ -1,0 +1,229 @@
+openapi: "3.1.0"
+info:
+  title: Agent LLM Config — Memory & History Fields
+  version: "1.0.0"
+  description: |
+    Extension to the existing LlmConfig schema for per-agent history
+    and memory configuration (Feature 014).
+
+components:
+  schemas:
+    LlmConfig:
+      type: object
+      description: |
+        Value object stored as JSONB on agent_registrations.llm_config.
+        Only new fields for 014 are shown; existing fields (providerId, modelId,
+        temperature, etc.) are unchanged.
+      properties:
+        # ── Existing fields (unchanged) ──
+        providerId:
+          type: string
+          format: uuid
+          nullable: true
+        modelId:
+          type: string
+        instructions:
+          type: string
+          nullable: true
+        toolRefs:
+          type: array
+          items:
+            type: string
+            format: uuid
+        temperature:
+          type: number
+          nullable: true
+        maxOutputTokens:
+          type: integer
+          nullable: true
+        topP:
+          type: number
+          nullable: true
+        topK:
+          type: integer
+          nullable: true
+        frequencyPenalty:
+          type: number
+          nullable: true
+        presencePenalty:
+          type: number
+          nullable: true
+        seed:
+          type: integer
+          format: int64
+          nullable: true
+        stopSequences:
+          type: array
+          nullable: true
+          items:
+            type: string
+        responseFormat:
+          type: string
+          nullable: true
+        responseFormatSchema:
+          type: string
+          nullable: true
+        toolMode:
+          type: string
+          nullable: true
+        allowMultipleToolCalls:
+          type: boolean
+          nullable: true
+
+        # ── NEW fields for 014 ──
+        enableChatHistory:
+          type: boolean
+          nullable: true
+          default: true
+          description: |
+            When true, the backend manages chat history server-side via
+            the framework's ChatHistoryProvider + PostgresAgentSessionStore.
+            When false, the frontend sends full message history (current behavior).
+        maxHistoryMessages:
+          type: integer
+          nullable: true
+          minimum: 1
+          description: |
+            Maximum number of messages to keep in the context window.
+            Older messages are truncated server-side before LLM invocation.
+            null = platform default (50). Only effective when enableChatHistory is true.
+        enableSemanticMemory:
+          type: boolean
+          nullable: true
+          default: false
+          description: |
+            When true, conversation content is embedded and stored in a
+            vector store for cross-session semantic retrieval.
+        memorySearchMode:
+          type: string
+          nullable: true
+          enum:
+            - BeforeAIInvoke
+            - OnDemandFunctionCalling
+          description: |
+            How semantic memories are injected into the LLM context.
+            BeforeAIInvoke: inject automatically before every LLM call.
+            OnDemandFunctionCalling: expose as a tool the LLM can call.
+            null = BeforeAIInvoke. Only effective when enableSemanticMemory is true.
+        memoryMaxResults:
+          type: integer
+          nullable: true
+          minimum: 1
+          description: |
+            Maximum number of memory snippets returned per semantic search.
+            null = SDK default (3). Only effective when enableSemanticMemory is true.
+
+      required:
+        - modelId
+        - toolRefs
+
+paths:
+  /api/agents/{id}:
+    get:
+      summary: Get agent registration (includes LlmConfig with memory fields)
+      description: |
+        Existing endpoint — response now includes the new memory/history fields
+        in the llmConfig object. No endpoint signature change.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Agent registration with full LlmConfig
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  name:
+                    type: string
+                  agentType:
+                    type: string
+                  llmConfig:
+                    $ref: "#/components/schemas/LlmConfig"
+
+    put:
+      summary: Update agent registration (includes memory config)
+      description: |
+        Existing endpoint — request body now accepts the new memory/history
+        fields in the llmConfig object. No endpoint signature change.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                description:
+                  type: string
+                llmConfig:
+                  $ref: "#/components/schemas/LlmConfig"
+      responses:
+        "200":
+          description: Updated agent registration
+
+  /api/chat/stream:
+    post:
+      summary: Stream chat with agent (now supports server-side history)
+      description: |
+        Existing SSE endpoint. Behavior changes based on agent's
+        enableChatHistory setting:
+        - true: backend loads stored history, uses only the new user message
+          from the request, saves updated session after response
+        - false: uses all frontend-provided messages (current behavior)
+        No change to request/response schema.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                threadId:
+                  type: string
+                  nullable: true
+                  description: Conversation ID (maps to session store key)
+                runId:
+                  type: string
+                  nullable: true
+                messages:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      role:
+                        type: string
+                      content:
+                        type: string
+                context:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      description:
+                        type: string
+                      value:
+                        type: string
+      responses:
+        "200":
+          description: SSE stream of AG-UI events (unchanged format)
+          content:
+            text/event-stream: {}

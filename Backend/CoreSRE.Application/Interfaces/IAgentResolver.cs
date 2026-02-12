@@ -1,6 +1,12 @@
+using CoreSRE.Domain.ValueObjects;
 using Microsoft.Agents.AI;
 
 namespace CoreSRE.Application.Interfaces;
+
+/// <summary>
+/// 解析结果 — 包含就绪的 AIAgent 实例和关联的 LlmConfig（可空，A2A Agent 无 LlmConfig）。
+/// </summary>
+public record ResolvedAgent(AIAgent Agent, LlmConfigVO? LlmConfig);
 
 /// <summary>
 /// 解析 AgentRegistration ID 为可运行的 AIAgent 实例。
@@ -15,6 +21,6 @@ public interface IAgentResolver
     /// <param name="agentRegistrationId">AgentRegistration 的主键 ID</param>
     /// <param name="conversationId">对话 ID，用于配置 ChatHistoryProvider 的 session key</param>
     /// <param name="cancellationToken">取消令牌</param>
-    /// <returns>就绪的 AIAgent 实例</returns>
-    Task<AIAgent> ResolveAsync(Guid agentRegistrationId, string conversationId, CancellationToken cancellationToken = default);
+    /// <returns>包含 AIAgent 和 LlmConfig 的解析结果</returns>
+    Task<ResolvedAgent> ResolveAsync(Guid agentRegistrationId, string conversationId, CancellationToken cancellationToken = default);
 }

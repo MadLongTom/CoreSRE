@@ -55,4 +55,21 @@ public sealed record LlmConfigVO
 
     /// <summary>是否允许单次响应包含多个工具调用</summary>
     public bool? AllowMultipleToolCalls { get; init; }
+
+    // ── History & Memory 配置 ────────────────────────────────────────────
+
+    /// <summary>启用服务端聊天历史管理（框架管理模式）。null 视为 true。</summary>
+    public bool? EnableChatHistory { get; init; }
+
+    /// <summary>上下文窗口保留的最大消息数。null 使用平台默认值（50）。</summary>
+    public int? MaxHistoryMessages { get; init; }
+
+    /// <summary>启用跨会话语义记忆检索。null 视为 false。</summary>
+    public bool? EnableSemanticMemory { get; init; }
+
+    /// <summary>语义记忆搜索模式："BeforeAIInvoke" 或 "OnDemandFunctionCalling"。</summary>
+    public string? MemorySearchMode { get; init; }
+
+    /// <summary>每次查询返回的最大记忆片段数。null 使用 SDK 默认值（3）。</summary>
+    public int? MemoryMaxResults { get; init; }
 }

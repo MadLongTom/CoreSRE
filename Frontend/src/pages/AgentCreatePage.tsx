@@ -269,7 +269,9 @@ export default function AgentCreatePage() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Common fields */}
           <Card>
-            <CardHeader>\n              <CardTitle>基本信息</CardTitle>\n            </CardHeader>
+            <CardHeader>
+              <CardTitle>基本信息</CardTitle>
+            </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">

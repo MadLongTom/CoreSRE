@@ -24,4 +24,11 @@ public class LlmConfigDto
     public string? ResponseFormatSchema { get; set; }
     public string? ToolMode { get; set; }
     public bool? AllowMultipleToolCalls { get; set; }
+
+    // ── History & Memory 配置 ──
+    public bool? EnableChatHistory { get; set; }
+    public int? MaxHistoryMessages { get; set; }
+    public bool? EnableSemanticMemory { get; set; }
+    public string? MemorySearchMode { get; set; }
+    public int? MemoryMaxResults { get; set; }
 }

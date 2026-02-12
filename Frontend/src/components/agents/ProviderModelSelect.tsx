@@ -90,7 +90,6 @@ export default function ProviderModelSelect({
   const handleProviderChange = (value: string) => {
     const pid = value === "__none__" ? null : value;
     onProviderChange(pid);
-    onModelChange(""); // Clear model when provider changes
   };
 
   const handleModelChange = (value: string) => {
@@ -118,10 +117,10 @@ export default function ProviderModelSelect({
             value={providerId ?? "__none__"}
             onValueChange={handleProviderChange}
           >
-            <SelectTrigger>
+            <SelectTrigger className="w-full">
               <SelectValue placeholder="选择 Provider" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent position="popper" className="max-h-60">
               <SelectItem value="__none__">不使用 Provider</SelectItem>
               {providers.map((p) => (
                 <SelectItem key={p.id} value={p.id}>
@@ -150,10 +149,10 @@ export default function ProviderModelSelect({
             </p>
           ) : (
             <Select value={modelId} onValueChange={handleModelChange}>
-              <SelectTrigger>
+              <SelectTrigger className="w-full">
                 <SelectValue placeholder="选择模型" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent position="popper" className="max-h-60">
                 {models.map((m) => (
                   <SelectItem key={m} value={m}>
                     {m}

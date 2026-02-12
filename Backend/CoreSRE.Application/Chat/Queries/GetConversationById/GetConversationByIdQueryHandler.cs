@@ -50,10 +50,10 @@ public class GetConversationByIdQueryHandler : IRequestHandler<GetConversationBy
         }
 
         // 从 AgentSessionRecord.SessionData 提取消息
-        // AgentSessionRecord 使用 (agentName, conversationId) 复合主键
-        var agentName = agent?.Name ?? conversation.AgentId.ToString();
+        // AgentSessionRecord 使用 (agentId, conversationId) 复合主键
+        var agentId = conversation.AgentId.ToString();
         var sessionData = await _chatHistoryReader.GetSessionDataAsync(
-            agentName, conversation.Id.ToString(), cancellationToken);
+            agentId, conversation.Id.ToString(), cancellationToken);
 
         if (sessionData.HasValue)
         {

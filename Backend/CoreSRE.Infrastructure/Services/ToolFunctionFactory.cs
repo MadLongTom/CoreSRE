@@ -37,14 +37,9 @@ public sealed class ToolFunctionFactory : IToolFunctionFactory
         if (toolRefs.Count == 0)
             return Array.Empty<AIFunction>();
 
-        // Query both repositories in parallel (R5: batch fetch)
-        var toolRegsTask = _toolRepo.GetByIdsAsync(toolRefs, cancellationToken);
-        var mcpItemsTask = _mcpRepo.GetByIdsAsync(toolRefs, cancellationToken);
-
-        await Task.WhenAll(toolRegsTask, mcpItemsTask);
-
-        var toolRegs = (await toolRegsTask).ToList();
-        var mcpItems = (await mcpItemsTask).ToList();
+        // Query both repositories sequentially (same scoped DbContext — cannot run in parallel)
+        var toolRegs = (await _toolRepo.GetByIdsAsync(toolRefs, cancellationToken)).ToList();
+        var mcpItems = (await _mcpRepo.GetByIdsAsync(toolRefs, cancellationToken)).ToList();
 
         var functions = new List<AIFunction>();
         var matchedIds = new HashSet<Guid>();

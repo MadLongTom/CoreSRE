@@ -3,6 +3,7 @@ using CoreSRE.Infrastructure.Persistence;
 using Microsoft.Agents.AI;
 using Microsoft.Agents.AI.Hosting;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace CoreSRE.Infrastructure.Persistence.Sessions;
 
@@ -14,11 +15,15 @@ namespace CoreSRE.Infrastructure.Persistence.Sessions;
 public class PostgresAgentSessionStore : AgentSessionStore
 {
     private readonly IDbContextFactory<AppDbContext> _contextFactory;
+    private readonly ILogger<PostgresAgentSessionStore> _logger;
 
-    public PostgresAgentSessionStore(IDbContextFactory<AppDbContext> contextFactory)
+    public PostgresAgentSessionStore(
+        IDbContextFactory<AppDbContext> contextFactory,
+        ILogger<PostgresAgentSessionStore> logger)
     {
         ArgumentNullException.ThrowIfNull(contextFactory, nameof(contextFactory));
         _contextFactory = contextFactory;
+        _logger = logger;
     }
 
     /// <summary>
@@ -31,18 +36,25 @@ public class PostgresAgentSessionStore : AgentSessionStore
         AgentSession session,
         CancellationToken cancellationToken = default)
     {
-        var sessionData = agent.SerializeSession(session);
-        var sessionDataJson = sessionData.GetRawText();
+        // Serialize session to JsonElement — Npgsql maps JsonElement directly to jsonb,
+        // avoiding GetRawText() string intermediary that loses JsonElement fidelity.
+        var sessionData = agent.SerializeSession(session, AgentAbstractionsJsonUtilities.DefaultOptions);
         var agentId = agent.Id;
         var sessionType = session.GetType().Name;
         var now = DateTime.UtcNow;
 
+        _logger.LogInformation(
+            "[SessionStore] SaveSessionAsync — agentId={AgentId}, conversationId={ConversationId}, sessionType={SessionType}, dataLength={DataLen}",
+            agentId, conversationId, sessionType, sessionData.GetRawText().Length);
+
         await using var context = await _contextFactory.CreateDbContextAsync(cancellationToken);
 
+        // Pass JsonElement directly — Npgsql natively maps System.Text.Json.JsonElement to PostgreSQL jsonb.
+        // This avoids the string→jsonb parse step that reorders keys (JSONB sorts keys alphabetically).
         await context.Database.ExecuteSqlAsync(
             $"""
             INSERT INTO agent_sessions (agent_id, conversation_id, session_data, session_type, created_at, updated_at)
-            VALUES ({agentId}, {conversationId}, {sessionDataJson}::jsonb, {sessionType}, {now}, {now})
+            VALUES ({agentId}, {conversationId}, {sessionData}, {sessionType}, {now}, {now})
             ON CONFLICT (agent_id, conversation_id)
             DO UPDATE SET
                 session_data = EXCLUDED.session_data,
@@ -61,6 +73,10 @@ public class PostgresAgentSessionStore : AgentSessionStore
         string conversationId,
         CancellationToken cancellationToken = default)
     {
+        _logger.LogInformation(
+            "[SessionStore] GetSessionAsync — agentId={AgentId}, conversationId={ConversationId}",
+            agent.Id, conversationId);
+
         await using var context = await _contextFactory.CreateDbContextAsync(cancellationToken);
 
         var record = await context.AgentSessions
@@ -71,9 +87,16 @@ public class PostgresAgentSessionStore : AgentSessionStore
 
         if (record is null)
         {
+            _logger.LogInformation("[SessionStore] No existing session found, creating new");
             return await agent.CreateSessionAsync(cancellationToken);
         }
 
-        return await agent.DeserializeSessionAsync(record.SessionData, cancellationToken: cancellationToken);
+        var rawText = record.SessionData.GetRawText();
+        _logger.LogInformation(
+            "[SessionStore] Found existing session — dataLength={DataLen}, updatedAt={UpdatedAt}, content={Content}",
+            rawText.Length, record.UpdatedAt,
+            rawText.Length > 500 ? rawText[..500] + "..." : rawText);
+
+        return await agent.DeserializeSessionAsync(record.SessionData, AgentAbstractionsJsonUtilities.DefaultOptions, cancellationToken: cancellationToken);
     }
 }

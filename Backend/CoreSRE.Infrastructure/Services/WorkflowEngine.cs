@@ -227,19 +227,19 @@ public class WorkflowEngine : IWorkflowEngine
         if (!node.ReferenceId.HasValue)
             throw new InvalidOperationException($"Agent 节点 {node.NodeId} 缺少 ReferenceId");
 
-        var agent = await _agentResolver.ResolveAsync(
+        var resolved = await _agentResolver.ResolveAsync(
             node.ReferenceId.Value,
             execution.Id.ToString(),
             cancellationToken);
 
         // 从 AIAgent 获取底层 IChatClient
-        var chatClient = agent.GetService<IChatClient>()
+        var chatClient = resolved.Agent.GetService<IChatClient>()
             ?? throw new InvalidOperationException(
                 $"Agent 节点 {node.NodeId} 不支持工作流执行（无 IChatClient 支持）");
 
         // 构建消息列表
         var messages = new List<ChatMessage>();
-        var chatOptions = agent.GetService<ChatOptions>();
+        var chatOptions = resolved.Agent.GetService<ChatOptions>();
         if (chatOptions?.Instructions is not null)
         {
             messages.Add(new ChatMessage(ChatRole.System, chatOptions.Instructions));

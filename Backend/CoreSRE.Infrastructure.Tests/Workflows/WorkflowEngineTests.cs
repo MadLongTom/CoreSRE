@@ -99,6 +99,11 @@ public class WorkflowEngineTests
         return mockChatClient.Object.AsAIAgent(new ChatClientAgentOptions { Name = "test-agent" });
     }
 
+    private static ResolvedAgent CreateResolvedAgent(Mock<IChatClient> mockChatClient)
+    {
+        return new ResolvedAgent(CreateMockAgent(mockChatClient), null);
+    }
+
     /// <summary>
     /// 设置 mock Agent 返回指定文本
     /// </summary>
@@ -113,7 +118,7 @@ public class WorkflowEngineTests
             .ReturnsAsync(new ChatResponse(
                 new ChatMessage(ChatRole.Assistant, responseText)));
 
-        var agent = CreateMockAgent(mockChatClient);
+        var agent = CreateResolvedAgent(mockChatClient);
 
         _agentResolverMock
             .Setup(r => r.ResolveAsync(referenceId, It.IsAny<string>(), It.IsAny<CancellationToken>()))
@@ -202,7 +207,7 @@ public class WorkflowEngineTests
                         new ChatMessage(ChatRole.Assistant, $"output-{nodeId}")));
                 });
 
-            var agent = CreateMockAgent(mockChatClient);
+            var agent = CreateResolvedAgent(mockChatClient);
 
             _agentResolverMock
                 .Setup(r => r.ResolveAsync(node.ReferenceId!.Value, It.IsAny<string>(), It.IsAny<CancellationToken>()))
@@ -244,7 +249,7 @@ public class WorkflowEngineTests
                         new ChatMessage(ChatRole.Assistant, $"{{\"result\":\"{nodeId}\"}}") ));
                 });
 
-            var agent = CreateMockAgent(mockChatClient);
+            var agent = CreateResolvedAgent(mockChatClient);
 
             _agentResolverMock
                 .Setup(r => r.ResolveAsync(node.ReferenceId!.Value, It.IsAny<string>(), It.IsAny<CancellationToken>()))
@@ -296,7 +301,7 @@ public class WorkflowEngineTests
                     });
             }
 
-            var agent = CreateMockAgent(mockChatClient);
+            var agent = CreateResolvedAgent(mockChatClient);
 
             _agentResolverMock
                 .Setup(r => r.ResolveAsync(node.ReferenceId!.Value, It.IsAny<string>(), It.IsAny<CancellationToken>()))
@@ -474,7 +479,7 @@ public class WorkflowEngineTests
                         new ChatMessage(ChatRole.Assistant, $"{{\"result\":\"{nodeId}\"}}")));
                 });
 
-            var agent = CreateMockAgent(mockChatClient);
+            var agent = CreateResolvedAgent(mockChatClient);
             _agentResolverMock
                 .Setup(r => r.ResolveAsync(node.ReferenceId!.Value, It.IsAny<string>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(agent);
@@ -527,7 +532,7 @@ public class WorkflowEngineTests
                         It.IsAny<CancellationToken>()))
                     .ThrowsAsync(new InvalidOperationException("Agent B failed"));
 
-                var failAgent = CreateMockAgent(failMock);
+                var failAgent = CreateResolvedAgent(failMock);
                 _agentResolverMock
                     .Setup(r => r.ResolveAsync(node.ReferenceId!.Value, It.IsAny<string>(), It.IsAny<CancellationToken>()))
                     .ReturnsAsync(failAgent);
@@ -571,7 +576,7 @@ public class WorkflowEngineTests
                     It.IsAny<CancellationToken>()))
                 .ThrowsAsync(new InvalidOperationException($"{node.NodeId} failed"));
 
-            var agent = CreateMockAgent(mockChatClient);
+            var agent = CreateResolvedAgent(mockChatClient);
             _agentResolverMock
                 .Setup(r => r.ResolveAsync(node.ReferenceId!.Value, It.IsAny<string>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(agent);

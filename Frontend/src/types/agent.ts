@@ -119,6 +119,13 @@ export interface LlmConfig {
   responseFormatSchema?: string | null;
   toolMode?: string | null;
   allowMultipleToolCalls?: boolean | null;
+
+  // History & Memory configuration
+  enableChatHistory?: boolean | null;
+  maxHistoryMessages?: number | null;
+  enableSemanticMemory?: boolean | null;
+  memorySearchMode?: string | null;
+  memoryMaxResults?: number | null;
 }
 
 // ---------------------------------------------------------------------------

@@ -79,6 +79,7 @@ export default function LlmConfigSection({
   // Resolve tool names for view mode
   const [resolvedTools, setResolvedTools] = useState<Map<string, BindableTool>>(new Map());
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [historyMemoryOpen, setHistoryMemoryOpen] = useState(false);
 
   // Schema validation (memoised to avoid re-parsing on every render)
   const schemaError = useMemo(
@@ -115,6 +116,14 @@ export default function LlmConfigSection({
     (config.toolMode != null && config.toolMode !== "") ||
     config.allowMultipleToolCalls != null;
 
+  // Check if any history/memory option has a non-default value
+  const hasHistoryMemoryValues =
+    config.enableChatHistory != null ||
+    config.maxHistoryMessages != null ||
+    config.enableSemanticMemory != null ||
+    config.memorySearchMode != null ||
+    config.memoryMaxResults != null;
+
   return (
     <Card>
       <CardHeader>
@@ -127,7 +136,7 @@ export default function LlmConfigSection({
               providerId={config.providerId ?? null}
               modelId={config.modelId}
               onProviderChange={(pid) =>
-                update({ providerId: pid ?? undefined })
+                update({ providerId: pid ?? undefined, modelId: "" })
               }
               onModelChange={(mid) => update({ modelId: mid })}
             />
@@ -344,6 +353,84 @@ export default function LlmConfigSection({
                 </div>
               </CollapsibleContent>
             </Collapsible>
+
+            {/* History & Memory Configuration */}
+            <Collapsible open={historyMemoryOpen} onOpenChange={setHistoryMemoryOpen}>
+              <CollapsibleTrigger className="flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
+                {historyMemoryOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                历史与记忆
+                {hasHistoryMemoryValues && <Badge variant="secondary" className="ml-2 text-xs">已配置</Badge>}
+              </CollapsibleTrigger>
+              <CollapsibleContent className="mt-3 space-y-4 rounded-md border p-4">
+                <div className="flex items-center gap-2">
+                  <Switch
+                    id="edit-enableChatHistory"
+                    checked={config.enableChatHistory ?? true}
+                    onCheckedChange={(checked) =>
+                      update({ enableChatHistory: checked ? null : false })
+                    }
+                  />
+                  <Label htmlFor="edit-enableChatHistory">启用对话历史</Label>
+                </div>
+                {(config.enableChatHistory ?? true) && (
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-maxHistoryMessages">最大历史消息数</Label>
+                    <Input
+                      id="edit-maxHistoryMessages"
+                      type="number"
+                      min="1"
+                      placeholder="默认 (50)"
+                      value={config.maxHistoryMessages ?? ""}
+                      onChange={(e) =>
+                        update({ maxHistoryMessages: e.target.value ? parseInt(e.target.value) : null })
+                      }
+                    />
+                  </div>
+                )}
+                <div className="flex items-center gap-2">
+                  <Switch
+                    id="edit-enableSemanticMemory"
+                    checked={config.enableSemanticMemory ?? false}
+                    onCheckedChange={(checked) =>
+                      update({ enableSemanticMemory: checked ? true : null })
+                    }
+                  />
+                  <Label htmlFor="edit-enableSemanticMemory">启用语义记忆</Label>
+                </div>
+                {config.enableSemanticMemory && (
+                  <>
+                    <div className="space-y-2">
+                      <Label htmlFor="edit-memorySearchMode">记忆检索模式</Label>
+                      <Select
+                        value={config.memorySearchMode ?? "BeforeAIInvoke"}
+                        onValueChange={(v) => update({ memorySearchMode: v || null })}
+                      >
+                        <SelectTrigger id="edit-memorySearchMode">
+                          <SelectValue placeholder="BeforeAIInvoke" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="BeforeAIInvoke">BeforeAIInvoke</SelectItem>
+                          <SelectItem value="OnDemandFunctionCalling">OnDemandFunctionCalling</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="edit-memoryMaxResults">最大检索结果数</Label>
+                      <Input
+                        id="edit-memoryMaxResults"
+                        type="number"
+                        min="1"
+                        placeholder="默认 (5)"
+                        value={config.memoryMaxResults ?? ""}
+                        onChange={(e) =>
+                          update({ memoryMaxResults: e.target.value ? parseInt(e.target.value) : null })
+                        }
+                      />
+                    </div>
+                  </>
+                )}
+              </CollapsibleContent>
+            </Collapsible>
           </>
         ) : (
           <>
@@ -475,6 +562,50 @@ export default function LlmConfigSection({
                       </div>
                     </div>
                   )}
+                </CollapsibleContent>
+              </Collapsible>
+            )}
+
+            {/* History & Memory — view mode */}
+            {hasHistoryMemoryValues && (
+              <Collapsible open={historyMemoryOpen} onOpenChange={setHistoryMemoryOpen}>
+                <CollapsibleTrigger className="flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
+                  {historyMemoryOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                  历史与记忆
+                </CollapsibleTrigger>
+                <CollapsibleContent className="mt-3 space-y-2 rounded-md border p-4">
+                  <div className="grid grid-cols-2 gap-x-6 gap-y-2">
+                    {config.enableChatHistory != null && (
+                      <div className="space-y-0.5">
+                        <Label className="text-muted-foreground text-xs">对话历史</Label>
+                        <p className="text-sm">{config.enableChatHistory ? "启用" : "禁用"}</p>
+                      </div>
+                    )}
+                    {config.maxHistoryMessages != null && (
+                      <div className="space-y-0.5">
+                        <Label className="text-muted-foreground text-xs">最大历史消息数</Label>
+                        <p className="text-sm">{config.maxHistoryMessages}</p>
+                      </div>
+                    )}
+                    {config.enableSemanticMemory != null && (
+                      <div className="space-y-0.5">
+                        <Label className="text-muted-foreground text-xs">语义记忆</Label>
+                        <p className="text-sm">{config.enableSemanticMemory ? "启用" : "禁用"}</p>
+                      </div>
+                    )}
+                    {config.memorySearchMode != null && (
+                      <div className="space-y-0.5">
+                        <Label className="text-muted-foreground text-xs">检索模式</Label>
+                        <p className="text-sm">{config.memorySearchMode}</p>
+                      </div>
+                    )}
+                    {config.memoryMaxResults != null && (
+                      <div className="space-y-0.5">
+                        <Label className="text-muted-foreground text-xs">最大检索结果数</Label>
+                        <p className="text-sm">{config.memoryMaxResults}</p>
+                      </div>
+                    )}
+                  </div>
                 </CollapsibleContent>
               </Collapsible>
             )}

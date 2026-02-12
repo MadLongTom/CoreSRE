@@ -3,8 +3,14 @@ using CoreSRE.Application.Interfaces;
 using CoreSRE.Domain.Interfaces;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.VectorData;
 using OpenAI;
 using System.ClientModel;
+using CoreSRE.Infrastructure.Persistence.Sessions;
+using System.Text.Json;
 
 namespace CoreSRE.Infrastructure.Services;
 
@@ -12,8 +18,9 @@ namespace CoreSRE.Infrastructure.Services;
 /// Agent 解析服务 — 从 AgentRegistration ID 构建就绪的 AIAgent。
 /// ChatClient 类型：AgentRegistration → LlmProvider → OpenAIClient → IChatClient → ChatClientAgent
 /// A2A 类型：AgentRegistration → Endpoint → A2AClient → A2AAgent
-/// AG-UI 协议是无状态的（每次请求携带完整消息历史），因此无需配置 ChatHistoryProvider。
-/// 对话历史持久化由 AgentSessionRecord + AG-UI 事件流自动处理。
+/// 当 EnableChatHistory=true 时，配置 ChatHistoryProviderFactory 实现框架管理的会话历史。
+/// 当 EnableSemanticMemory=true 时，配置 AIContextProviderFactory 实现跨会话语义记忆。
+/// 对话历史通过 AgentSessionStore + AIHostAgent 管道持久化到 PostgreSQL。
 /// </summary>
 public class AgentResolverService : IAgentResolver
 {
@@ -21,20 +28,31 @@ public class AgentResolverService : IAgentResolver
     private readonly ILlmProviderRepository _providerRepo;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IToolFunctionFactory _toolFunctionFactory;
+    private readonly IServiceProvider _serviceProvider;
+    private readonly IConfiguration _configuration;
+    private readonly ILogger<AgentResolverService> _logger;
+    private readonly int _defaultMaxMessages;
 
     public AgentResolverService(
         IAgentRegistrationRepository agentRepo,
         ILlmProviderRepository providerRepo,
         IHttpClientFactory httpClientFactory,
-        IToolFunctionFactory toolFunctionFactory)
+        IToolFunctionFactory toolFunctionFactory,
+        IConfiguration configuration,
+        IServiceProvider serviceProvider,
+        ILogger<AgentResolverService> logger)
     {
         _agentRepo = agentRepo;
         _providerRepo = providerRepo;
         _httpClientFactory = httpClientFactory;
         _toolFunctionFactory = toolFunctionFactory;
+        _serviceProvider = serviceProvider;
+        _configuration = configuration;
+        _logger = logger;
+        _defaultMaxMessages = configuration.GetValue<int>("ChatHistory:DefaultMaxMessages", 50);
     }
 
-    public async Task<AIAgent> ResolveAsync(
+    public async Task<ResolvedAgent> ResolveAsync(
         Guid agentRegistrationId,
         string conversationId,
         CancellationToken cancellationToken = default)
@@ -51,7 +69,7 @@ public class AgentResolverService : IAgentResolver
         };
     }
 
-    private async Task<AIAgent> ResolveChatClientAgent(Domain.Entities.AgentRegistration agent)
+    private async Task<ResolvedAgent> ResolveChatClientAgent(Domain.Entities.AgentRegistration agent)
     {
         if (agent.LlmConfig is null)
             throw new InvalidOperationException($"Agent '{agent.Name}' has no LLM configuration.");
@@ -87,9 +105,10 @@ public class AgentResolverService : IAgentResolver
             }
         }
 
-        // 4. 创建 ChatClientAgent（AG-UI 无状态模式 — 消息随请求体发送）
+        // 4. 创建 ChatClientAgent
         var options = new ChatClientAgentOptions
         {
+            Id = agent.Id.ToString(),
             Name = agent.Name,
             Description = agent.Description ?? string.Empty,
         };
@@ -152,10 +171,92 @@ public class AgentResolverService : IAgentResolver
 
         options.ChatOptions = chatOptions;
 
-        return chatClient.AsAIAgent(options);
+        // ── History & Memory 配置 ────────────────────────────────────────
+        var enableHistory = agent.LlmConfig.EnableChatHistory ?? true;
+        if (enableHistory)
+        {
+            var maxMessages = agent.LlmConfig.MaxHistoryMessages;
+            // Treat 0 or negative as null (platform default)
+            var effectiveMax = maxMessages is > 0 ? maxMessages.Value : _defaultMaxMessages;
+
+            options.ChatHistoryProviderFactory = (ctx, ct) =>
+            {
+                IChatReducer reducer = new MessageCountingChatReducer(effectiveMax);
+
+                // Use our JSONB-safe provider instead of InMemoryChatHistoryProvider.
+                // InMemoryChatHistoryProvider serializes with STJ $type discriminators;
+                // PostgreSQL JSONB reorders keys alphabetically, breaking $type positioning
+                // which must be first for STJ polymorphic deserialization.
+                // PostgresChatHistoryProvider uses explicit "kind" field — immune to key reordering.
+                ChatHistoryProvider provider = ctx.SerializedState.ValueKind == JsonValueKind.Object
+                    ? new PostgresChatHistoryProvider(reducer, ctx.SerializedState)
+                    : new PostgresChatHistoryProvider(reducer);
+
+                return ValueTask.FromResult(provider);
+            };
+        }
+
+        // ── Semantic Memory 配置 (AIContextProviderFactory) ──────────────
+        var enableMemory = agent.LlmConfig.EnableSemanticMemory ?? false;
+        if (enableMemory)
+        {
+            try
+            {
+                var vectorStore = _serviceProvider.GetService<VectorStore>();
+
+                if (vectorStore is not null)
+                {
+                    var memorySection = _configuration.GetSection("SemanticMemory");
+                    var collectionName = memorySection["CollectionName"] ?? "coresre_memory";
+                    var vectorDimensions = memorySection.GetValue<int>("EmbeddingDimensions", 1536);
+                    var maxResults = agent.LlmConfig.MemoryMaxResults;
+                    var searchMode = agent.LlmConfig.MemorySearchMode;
+
+                    var memoryOptions = new ChatHistoryMemoryProviderOptions
+                    {
+                        MaxResults = maxResults is > 0 ? maxResults.Value : null,
+                        SearchTime = searchMode?.Equals("OnDemandFunctionCalling", StringComparison.OrdinalIgnoreCase) == true
+                            ? ChatHistoryMemoryProviderOptions.SearchBehavior.OnDemandFunctionCalling
+                            : ChatHistoryMemoryProviderOptions.SearchBehavior.BeforeAIInvoke
+                    };
+
+                    options.AIContextProviderFactory = (ctx, ct) =>
+                    {
+                        var storageScope = new ChatHistoryMemoryProviderScope
+                        {
+                            ApplicationId = "CoreSRE",
+                            AgentId = agent.Id.ToString()
+                        };
+
+                        var provider = new ChatHistoryMemoryProvider(
+                            vectorStore,
+                            collectionName,
+                            vectorDimensions,
+                            storageScope,
+                            options: memoryOptions);
+
+                        return ValueTask.FromResult<AIContextProvider>(provider);
+                    };
+                }
+                else
+                {
+                    _logger.LogWarning(
+                        "Semantic memory enabled for Agent '{AgentName}' but VectorStore not registered. Skipping memory configuration.",
+                        agent.Name);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex,
+                    "Failed to configure semantic memory for Agent '{AgentName}'. Agent will operate without cross-session memory.",
+                    agent.Name);
+            }
+        }
+
+        return new ResolvedAgent(chatClient.AsAIAgent(options), agent.LlmConfig);
     }
 
-    private AIAgent ResolveA2AAgent(Domain.Entities.AgentRegistration agent)
+    private ResolvedAgent ResolveA2AAgent(Domain.Entities.AgentRegistration agent)
     {
         if (string.IsNullOrWhiteSpace(agent.Endpoint))
             throw new InvalidOperationException($"A2A Agent '{agent.Name}' has no endpoint configured.");
@@ -163,8 +264,8 @@ public class AgentResolverService : IAgentResolver
         var httpClient = _httpClientFactory.CreateClient("A2ACardResolver");
         var a2aClient = new A2AClient(new Uri(agent.Endpoint), httpClient);
 
-        return a2aClient.AsAIAgent(
-            name: agent.Name,
-            description: agent.Description);
+        return new ResolvedAgent(
+            a2aClient.AsAIAgent(name: agent.Name, description: agent.Description),
+            null);
     }
 }

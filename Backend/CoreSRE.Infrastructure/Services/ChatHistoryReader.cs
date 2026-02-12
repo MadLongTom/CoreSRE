@@ -18,27 +18,27 @@ public class ChatHistoryReader : IChatHistoryReader
     }
 
     public async Task<JsonElement?> GetSessionDataAsync(
-        string agentName,
+        string agentId,
         string conversationId,
         CancellationToken cancellationToken = default)
     {
         var record = await _context.AgentSessions
             .AsNoTracking()
             .FirstOrDefaultAsync(
-                s => s.AgentId == agentName && s.ConversationId == conversationId,
+                s => s.AgentId == agentId && s.ConversationId == conversationId,
                 cancellationToken);
 
         return record?.SessionData;
     }
 
     public async Task DeleteSessionAsync(
-        string agentName,
+        string agentId,
         string conversationId,
         CancellationToken cancellationToken = default)
     {
         var record = await _context.AgentSessions
             .FirstOrDefaultAsync(
-                s => s.AgentId == agentName && s.ConversationId == conversationId,
+                s => s.AgentId == agentId && s.ConversationId == conversationId,
                 cancellationToken);
 
         if (record is not null)

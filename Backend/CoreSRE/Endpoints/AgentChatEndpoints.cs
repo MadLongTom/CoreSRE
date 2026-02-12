@@ -1,8 +1,7 @@
 using CoreSRE.Application.Interfaces;
-using CoreSRE.Infrastructure.Persistence;
 using Microsoft.Agents.AI;
+using Microsoft.Agents.AI.Hosting;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.AI;
 using System.Text.Json;
 
@@ -33,7 +32,7 @@ public static class AgentChatEndpoints
         [FromBody] AgentChatInput input,
         HttpContext context,
         IAgentResolver agentResolver,
-        IDbContextFactory<AppDbContext> contextFactory,
+        AgentSessionStore sessionStore,
         CancellationToken cancellationToken)
     {
         // 从 AG-UI context 提取 agentId（前端通过 context 传递）
@@ -57,19 +56,29 @@ public static class AgentChatEndpoints
 
         try
         {
-            // 动态解析 Agent（ChatClient 或 A2A 类型均返回 AIAgent）
-            var aiAgent = await agentResolver.ResolveAsync(agentId, threadId, cancellationToken);
+            // 动态解析 Agent（ChatClient 或 A2A 类型均返回 ResolvedAgent）
+            var resolved = await agentResolver.ResolveAsync(agentId, threadId, cancellationToken);
+            var aiAgent = resolved.Agent;
             var chatClient = aiAgent.GetService<IChatClient>();
+            var enableHistory = resolved.LlmConfig?.EnableChatHistory ?? true;
 
             if (chatClient is not null)
             {
-                // ===== ChatClient Agent 路径 =====
-                await HandleChatClientStreamAsync(context, aiAgent, chatClient, input, threadId, runId, agentId, contextFactory, cancellationToken);
+                if (enableHistory)
+                {
+                    // ===== ChatClient Agent — 框架管理历史模式 =====
+                    await HandleChatClientWithHistoryAsync(context, aiAgent, input, threadId, runId, sessionStore, cancellationToken);
+                }
+                else
+                {
+                    // ===== ChatClient Agent — 无状态回退模式 =====
+                    await HandleChatClientStatelessAsync(context, aiAgent, chatClient, input, threadId, runId, cancellationToken);
+                }
             }
             else
             {
                 // ===== A2A Agent 路径（通过 AIAgent.RunStreamingAsync）=====
-                await HandleA2AStreamAsync(context, aiAgent, input, threadId, runId, agentId, contextFactory, cancellationToken);
+                await HandleA2AStreamAsync(context, aiAgent, input, threadId, runId, cancellationToken);
             }
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
@@ -86,16 +95,128 @@ public static class AgentChatEndpoints
         await context.Response.Body.FlushAsync(cancellationToken);
     }
 
-    /// <summary>ChatClient Agent 流式处理（通过 IChatClient）</summary>
-    private static async Task HandleChatClientStreamAsync(
+    /// <summary>ChatClient Agent — 框架管理历史模式（SessionStore 直接管理）</summary>
+    private static async Task HandleChatClientWithHistoryAsync(
+        HttpContext context,
+        AIAgent aiAgent,
+        AgentChatInput input,
+        string threadId,
+        string runId,
+        AgentSessionStore sessionStore,
+        CancellationToken cancellationToken)
+    {
+        var logger = context.RequestServices.GetService<ILoggerFactory>()?.CreateLogger("AgentChatEndpoints");
+
+        logger?.LogInformation(
+            "[SessionDebug] HandleChatClientWithHistoryAsync START — threadId={ThreadId}, input.ThreadId={InputThreadId}, agent.Id={AgentId}, agent.Name={AgentName}",
+            threadId, input.ThreadId, aiAgent.Id, aiAgent.Name);
+
+        // 1. Load or create session via sessionStore directly (not AIHostAgent)
+        //    AIHostAgent generates its own internal conversationId, ignoring our threadId.
+        //    Calling sessionStore directly ensures threadId == conversation_id in DB.
+        AgentSession? session = null;
+        bool sessionLoadedFromStore = false;
+        try
+        {
+            session = await sessionStore.GetSessionAsync(aiAgent, threadId, cancellationToken);
+            sessionLoadedFromStore = true;
+        }
+        catch (Exception ex)
+        {
+            logger?.LogWarning(ex, "[SessionDebug] Failed to load session for thread {ThreadId}, creating fresh session", threadId);
+            session = await aiAgent.CreateSessionAsync(cancellationToken);
+        }
+
+        // Log session state after load
+        var historyProvider = session?.GetService(typeof(ChatHistoryProvider)) as IReadOnlyList<ChatMessage>;
+        logger?.LogInformation(
+            "[SessionDebug] Session loaded — fromStore={FromStore}, sessionType={SessionType}, historyCount={HistoryCount}",
+            sessionLoadedFromStore, session?.GetType().Name, historyProvider?.Count ?? -1);
+
+        // 3. Extract only the new user message from frontend payload
+        //    (session store provides full history; frontend messages are redundant except for the latest)
+        var lastMessage = input.Messages?.LastOrDefault();
+        var newUserMessage = new ChatMessage(
+            ChatRole.User,
+            lastMessage?.Content ?? string.Empty);
+
+        // 4. Send SSE events: RUN_STARTED
+        await WriteSseEventAsync(context.Response, new
+        {
+            type = "RUN_STARTED",
+            threadId,
+            runId
+        }, cancellationToken);
+
+        var messageId = Guid.NewGuid().ToString();
+
+        // TEXT_MESSAGE_START
+        await WriteSseEventAsync(context.Response, new
+        {
+            type = "TEXT_MESSAGE_START",
+            messageId,
+            role = "assistant"
+        }, cancellationToken);
+
+        // 5. Stream via agent pipeline (ChatHistoryProvider auto-manages history)
+        logger?.LogInformation("[SessionDebug] Starting RunStreamingAsync — historyCountBefore={Count}", historyProvider?.Count ?? -1);
+        await foreach (var update in aiAgent.RunStreamingAsync(newUserMessage, session, cancellationToken: cancellationToken))
+        {
+            var text = update.Text;
+            if (!string.IsNullOrEmpty(text))
+            {
+                await WriteSseEventAsync(context.Response, new
+                {
+                    type = "TEXT_MESSAGE_CONTENT",
+                    messageId,
+                    delta = text
+                }, cancellationToken);
+            }
+        }
+
+        // Re-check history count after streaming
+        var historyAfter = session?.GetService(typeof(ChatHistoryProvider)) as IReadOnlyList<ChatMessage>;
+        logger?.LogInformation("[SessionDebug] RunStreamingAsync done — historyCountAfter={Count}", historyAfter?.Count ?? -1);
+
+        // TEXT_MESSAGE_END
+        await WriteSseEventAsync(context.Response, new
+        {
+            type = "TEXT_MESSAGE_END",
+            messageId
+        }, cancellationToken);
+
+        // RUN_FINISHED
+        await WriteSseEventAsync(context.Response, new
+        {
+            type = "RUN_FINISHED",
+            threadId,
+            runId
+        }, cancellationToken);
+
+        // 6. Persist session (best-effort — don't block chat on persistence failure)
+        try
+        {
+            var serializedPreview = aiAgent.SerializeSession(session);
+            logger?.LogInformation(
+                "[SessionDebug] About to save session — threadId={ThreadId}, agentId={AgentId}, serializedLength={Len}",
+                threadId, aiAgent.Id, serializedPreview.GetRawText().Length);
+            await sessionStore.SaveSessionAsync(aiAgent, threadId, session, cancellationToken);
+            logger?.LogInformation("[SessionDebug] Session saved successfully");
+        }
+        catch (Exception ex)
+        {
+            logger?.LogWarning(ex, "[SessionDebug] Failed to save session for thread {ThreadId}", threadId);
+        }
+    }
+
+    /// <summary>ChatClient Agent — 无状态模式（backward-compatible, EnableChatHistory=false）</summary>
+    private static async Task HandleChatClientStatelessAsync(
         HttpContext context,
         AIAgent aiAgent,
         IChatClient chatClient,
         AgentChatInput input,
         string threadId,
         string runId,
-        Guid agentId,
-        IDbContextFactory<AppDbContext> contextFactory,
         CancellationToken cancellationToken)
     {
             // 转换 AG-UI 消息为 ChatMessage
@@ -185,9 +306,6 @@ public static class AgentChatEndpoints
                 threadId,
                 runId
             }, cancellationToken);
-
-            // 持久化消息历史到 AgentSessionRecord.SessionData
-            await PersistChatHistoryAsync(context, aiAgent, input, responseBuilder.ToString(), threadId, agentId, contextFactory, cancellationToken);
     }
 
     /// <summary>A2A Agent 流式处理（通过 AIAgent.RunStreamingAsync）</summary>
@@ -197,8 +315,6 @@ public static class AgentChatEndpoints
         AgentChatInput input,
         string threadId,
         string runId,
-        Guid agentId,
-        IDbContextFactory<AppDbContext> contextFactory,
         CancellationToken cancellationToken)
     {
         // 转换 AG-UI 消息为 ChatMessage
@@ -255,66 +371,9 @@ public static class AgentChatEndpoints
             threadId,
             runId
         }, cancellationToken);
-
-        // 持久化
-        await PersistChatHistoryAsync(context, aiAgent, input, responseBuilder.ToString(), threadId, agentId, contextFactory, cancellationToken);
     }
 
-    /// <summary>持久化消息历史到 AgentSessionRecord.SessionData</summary>
-    private static async Task PersistChatHistoryAsync(
-        HttpContext context,
-        AIAgent aiAgent,
-        AgentChatInput input,
-        string assistantResponse,
-        string threadId,
-        Guid agentId,
-        IDbContextFactory<AppDbContext> contextFactory,
-        CancellationToken cancellationToken)
-    {
-            try
-            {
-                // 构建消息数组（不含 system 指令，只保存 user + assistant）
-                var persistMessages = new List<object>();
-                foreach (var m in input.Messages ?? [])
-                {
-                    persistMessages.Add(new { role = m.Role ?? "user", contents = new object[] { new { text = m.Content ?? "", type = "text" } } });
-                }
-                persistMessages.Add(new { role = "assistant", contents = new object[] { new { text = assistantResponse, type = "text" } } });
-
-                var sessionData = JsonSerializer.SerializeToElement(new
-                {
-                    chatHistoryProviderState = new { messages = persistMessages }
-                }, s_jsonOptions);
-
-                var agentName = aiAgent.GetService<ChatClientAgentOptions>()?.Name
-                    ?? aiAgent.Name
-                    ?? aiAgent.GetService<AIAgentMetadata>()?.ProviderName
-                    ?? agentId.ToString();
-
-                await using var db = await contextFactory.CreateDbContextAsync(cancellationToken);
-                var now = DateTime.UtcNow;
-                var sessionType = aiAgent.GetService<IChatClient>() is not null ? "ChatClientAgentSession" : "A2AAgentSession";
-                await db.Database.ExecuteSqlAsync(
-                    $"""
-                    INSERT INTO agent_sessions (agent_id, conversation_id, session_data, session_type, created_at, updated_at)
-                    VALUES ({agentName}, {threadId}, {sessionData.GetRawText()}::jsonb, {sessionType}, {now}, {now})
-                    ON CONFLICT (agent_id, conversation_id)
-                    DO UPDATE SET
-                        session_data = EXCLUDED.session_data,
-                        session_type = EXCLUDED.session_type,
-                        updated_at = EXCLUDED.updated_at
-                    """,
-                    cancellationToken);
-            }
-            catch (Exception persistEx)
-            {
-                // 消息持久化失败不影响用户体验，仅记录日志
-                var logger = context.RequestServices.GetService<ILoggerFactory>()?
-                    .CreateLogger("AgentChatEndpoints");
-                logger?.LogWarning(persistEx, "Failed to persist chat messages for thread {ThreadId}", threadId);
-            }
-    }
-
+    /// <summary>SSE 事件写入辅助方法</summary>
     private static async Task WriteSseEventAsync(HttpResponse response, object eventData, CancellationToken cancellationToken)
     {
         var json = JsonSerializer.Serialize(eventData, s_jsonOptions);
