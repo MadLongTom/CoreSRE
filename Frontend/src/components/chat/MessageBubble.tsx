@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import type { ChatMessage } from "@/types/chat";
-import { Bot, User, Brain } from "lucide-react";
+import { Bot, User, Brain, Sparkles } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { ToolCallCard } from "@/components/chat/ToolCallCard";
@@ -13,19 +13,42 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 
+/** Tool names that are internal skill-loading tools — hidden from normal ToolCallCard display */
+const SKILL_TOOL_NAMES = new Set(["read_skill", "read_skill_file"]);
+
 interface MessageBubbleProps {
   message: ChatMessage;
 }
 
 /**
  * 单条消息气泡 — 根据角色显示不同样式。
- * user: 右对齐蓝色背景，底部可显示“已使用记忆”提示
+ * user: 右对齐蓝色背景，底部可显示"已使用记忆"提示
  * assistant: 左对齐灰色背景，可包含工具调用卡片
+ * Skill 工具调用（read_skill / read_skill_file）不显示 ToolCallCard，
+ * 而是在消息下方显示紧凑的"已使用技能"标识。
  */
 export function MessageBubble({ message }: MessageBubbleProps) {
   const isUser = message.role === "user";
-  const hasToolCalls = !isUser && message.toolCalls && message.toolCalls.length > 0;
   const hasMemory = isUser && !!message.memoryContext;
+
+  // Separate skill tool calls from regular tool calls
+  const allToolCalls = (!isUser && message.toolCalls) || [];
+  const skillToolCalls = allToolCalls.filter((tc) => SKILL_TOOL_NAMES.has(tc.toolName));
+  const regularToolCalls = allToolCalls.filter((tc) => !SKILL_TOOL_NAMES.has(tc.toolName));
+
+  // Extract unique skill names from read_skill calls
+  const usedSkillNames = [...new Set(
+    skillToolCalls
+      .filter((tc) => tc.toolName === "read_skill" && tc.args)
+      .map((tc) => {
+        try { return (JSON.parse(tc.args!) as { skill_name?: string }).skill_name ?? null; }
+        catch { return null; }
+      })
+      .filter(Boolean) as string[],
+  )];
+
+  const hasRegularToolCalls = regularToolCalls.length > 0;
+  const hasSkillUsage = usedSkillNames.length > 0;
 
   return (
     <div
@@ -97,15 +120,38 @@ export function MessageBubble({ message }: MessageBubbleProps) {
           </div>
         )}
 
-        {/* Tool call cards (after text content) */}
-        {hasToolCalls &&
-          message.toolCalls!.map((tc) => (
+        {/* Tool call cards — only regular (non-skill) tools */}
+        {hasRegularToolCalls &&
+          regularToolCalls.map((tc) => (
             <ToolCallCard key={tc.toolCallId} toolCall={tc} />
           ))}
+
+        {/* Skill usage hint — compact badge below assistant message */}
+        {hasSkillUsage && <SkillUsageHint skillNames={usedSkillNames} />}
 
         {/* Memory context hint — below user bubble */}
         {hasMemory && <MemoryHint memoryContext={message.memoryContext!} />}
       </div>
+    </div>
+  );
+}
+
+/**
+ * 技能使用提示 — 显示在 Assistant 消息下方，列出本轮使用的 Skill 名称。
+ */
+function SkillUsageHint({ skillNames }: { skillNames: string[] }) {
+  return (
+    <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+      <Sparkles className="h-3 w-3 text-amber-500 shrink-0" />
+      <span className="text-xs text-muted-foreground">已使用技能：</span>
+      {skillNames.map((name) => (
+        <span
+          key={name}
+          className="inline-flex items-center rounded-full bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-400 ring-1 ring-inset ring-amber-500/20"
+        >
+          {name}
+        </span>
+      ))}
     </div>
   );
 }

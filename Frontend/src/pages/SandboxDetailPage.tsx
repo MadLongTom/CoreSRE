@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/card";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { ApiError } from "@/lib/api/agents";
+import { SandboxErrorAlert, type SandboxError } from "@/components/sandboxes/SandboxErrorAlert";
 import {
   getSandboxById,
   startSandbox,
@@ -35,7 +36,7 @@ export default function SandboxDetailPage() {
   const navigate = useNavigate();
   const [sandbox, setSandbox] = useState<SandboxInstance | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<SandboxError | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
 
   // Exec state
@@ -54,11 +55,11 @@ export default function SandboxDetailPage() {
       if (result.success && result.data) {
         setSandbox(result.data);
       } else {
-        setError(result.message ?? "加载沙箱详情失败");
+        setError({ message: result.message ?? "加载沙箱详情失败" });
       }
     } catch (err) {
       const apiErr = err as ApiError;
-      setError(apiErr.message ?? "加载沙箱详情失败");
+      setError({ message: apiErr.message ?? "加载沙箱详情失败", hints: apiErr.errors });
     } finally {
       setLoading(false);
     }
@@ -76,7 +77,7 @@ export default function SandboxDetailPage() {
       if (result.success && result.data) setSandbox(result.data);
     } catch (err) {
       const apiErr = err as ApiError;
-      setError(apiErr.message ?? "启动沙箱失败");
+      setError({ message: apiErr.message ?? "启动沙箱失败", hints: apiErr.errors });
     } finally {
       setActionLoading(false);
     }
@@ -90,7 +91,7 @@ export default function SandboxDetailPage() {
       if (result.success && result.data) setSandbox(result.data);
     } catch (err) {
       const apiErr = err as ApiError;
-      setError(apiErr.message ?? "停止沙箱失败");
+      setError({ message: apiErr.message ?? "停止沙箱失败", hints: apiErr.errors });
     } finally {
       setActionLoading(false);
     }
@@ -104,7 +105,7 @@ export default function SandboxDetailPage() {
       navigate("/sandboxes");
     } catch (err) {
       const apiErr = err as ApiError;
-      setError(apiErr.message ?? "删除沙箱失败");
+      setError({ message: apiErr.message ?? "删除沙箱失败", hints: apiErr.errors });
       setActionLoading(false);
     }
   }, [id, navigate]);
@@ -150,7 +151,7 @@ export default function SandboxDetailPage() {
   if (error && !sandbox) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-4">
-        <p className="text-destructive">{error}</p>
+        <SandboxErrorAlert error={error} className="max-w-lg" />
         <Button variant="outline" onClick={fetchSandbox}>重试</Button>
       </div>
     );
@@ -198,9 +199,7 @@ export default function SandboxDetailPage() {
       />
 
       <div className="flex-1 overflow-y-auto p-6 space-y-6">
-        {error && (
-          <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</div>
-        )}
+        {error && <SandboxErrorAlert error={error} />}
 
         {/* Info Cards */}
         <div className="grid gap-6 md:grid-cols-2">

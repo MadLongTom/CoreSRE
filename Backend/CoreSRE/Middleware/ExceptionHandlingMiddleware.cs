@@ -1,4 +1,5 @@
 using System.Text.Json;
+using CoreSRE.Application.Sandboxes;
 using FluentValidation;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
@@ -41,6 +42,12 @@ public class ExceptionHandlingMiddleware
         {
             _logger.LogWarning(ex, "Argument error for request {Path}", context.Request.Path);
             await WriteErrorResponse(context, 400, ex.Message);
+        }
+        catch (SandboxOperationException ex)
+        {
+            _logger.LogWarning(ex.InnerException, "Sandbox operation '{Operation}' failed for '{Sandbox}': {Message}",
+                ex.Operation, ex.SandboxName, ex.Message);
+            await WriteErrorResponse(context, 422, ex.Message, ex.Hints.ToList());
         }
         catch (Exception ex)
         {

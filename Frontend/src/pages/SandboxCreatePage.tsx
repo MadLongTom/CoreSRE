@@ -15,12 +15,13 @@ import {
 import { PageHeader } from "@/components/layout/PageHeader";
 import { ApiError } from "@/lib/api/agents";
 import { createSandbox } from "@/lib/api/sandboxes";
+import { SandboxErrorAlert, type SandboxError } from "@/components/sandboxes/SandboxErrorAlert";
 import type { CreateSandboxRequest } from "@/types/sandbox";
 
 export default function SandboxCreatePage() {
   const navigate = useNavigate();
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<SandboxError | null>(null);
 
   const [form, setForm] = useState<CreateSandboxRequest>({
     name: "",
@@ -42,7 +43,7 @@ export default function SandboxCreatePage() {
 
   const handleSubmit = useCallback(async () => {
     if (!form.name.trim()) {
-      setError("名称不能为空");
+      setError({ message: "名称不能为空" });
       return;
     }
     setSaving(true);
@@ -52,11 +53,14 @@ export default function SandboxCreatePage() {
       if (result.success && result.data) {
         navigate(`/sandboxes/${result.data.id}`);
       } else {
-        setError(result.message ?? "创建沙箱失败");
+        setError({ message: result.message ?? "创建沙箱失败" });
       }
     } catch (err) {
       const apiErr = err as ApiError;
-      setError(apiErr.message ?? "创建沙箱失败");
+      setError({
+        message: apiErr.message ?? "创建沙箱失败",
+        hints: apiErr.errors,
+      });
     } finally {
       setSaving(false);
     }
@@ -80,9 +84,7 @@ export default function SandboxCreatePage() {
       />
 
       <div className="flex-1 overflow-y-auto p-6 space-y-6 max-w-2xl">
-        {error && (
-          <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</div>
-        )}
+        {error && <SandboxErrorAlert error={error} />}
 
         <Card>
           <CardHeader>
