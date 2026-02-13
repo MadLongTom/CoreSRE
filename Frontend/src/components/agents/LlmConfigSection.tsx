@@ -274,6 +274,7 @@ export default function LlmConfigSection({
                 <SkillRefsPicker
                   value={config.skillRefs ?? []}
                   onChange={(ids) => update({ skillRefs: ids })}
+                  sandboxEnabled={config.enableSandbox ?? false}
                 />
               </div>
             </div>

@@ -43,4 +43,10 @@ public class LlmConfigDto
     public string? SandboxImage { get; set; }
     public int? SandboxCpus { get; set; }
     public int? SandboxMemoryMib { get; set; }
+    public string? SandboxK8sNamespace { get; set; }
+    public string? SandboxMode { get; set; }
+    public Guid? SandboxInstanceId { get; set; }
+
+    // ── Skills 配置 ──
+    public List<Guid> SkillRefs { get; set; } = [];
 }

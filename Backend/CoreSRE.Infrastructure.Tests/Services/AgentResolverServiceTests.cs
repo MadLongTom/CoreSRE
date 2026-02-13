@@ -39,6 +39,8 @@ public class AgentResolverServiceTests
             _httpClientFactoryMock.Object,
             _toolFunctionFactoryMock.Object,
             _sandboxToolProviderMock.Object,
+            new Mock<ISkillRegistrationRepository>().Object,
+            new Mock<IFileStorageService>().Object,
             _configurationMock.Object,
             _loggerMock.Object,
             _loggerFactoryMock.Object);
