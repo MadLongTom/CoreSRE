@@ -10,4 +10,6 @@ public record WorkflowEdgeDto
     public string TargetNodeId { get; init; } = string.Empty;
     public string EdgeType { get; init; } = string.Empty;
     public string? Condition { get; init; }
+    public int SourcePortIndex { get; init; } = 0;
+    public int TargetPortIndex { get; init; } = 0;
 }

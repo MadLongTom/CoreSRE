@@ -19,9 +19,10 @@ import { ToolNode } from "@/components/workflows/custom-nodes/ToolNode";
 import { ConditionNode } from "@/components/workflows/custom-nodes/ConditionNode";
 import { FanOutNode } from "@/components/workflows/custom-nodes/FanOutNode";
 import { FanInNode } from "@/components/workflows/custom-nodes/FanInNode";
+import { StartNode } from "@/components/workflows/custom-nodes/StartNode";
 import { NodePanel } from "@/components/workflows/NodePanel";
 import { NodePropertyPanel } from "@/components/workflows/NodePropertyPanel";
-import { toReactFlowNodes, toReactFlowEdges, fromReactFlowState } from "@/lib/dag-utils";
+import { toReactFlowNodes, toReactFlowEdges, fromReactFlowState, parsePortIndex, portHandleId } from "@/lib/dag-utils";
 import type {
   DagNodeData,
   DagEdgeData,
@@ -30,6 +31,7 @@ import type {
 } from "@/types/workflow";
 
 const nodeTypes: NodeTypes = {
+  Start: StartNode,
   Agent: AgentNode,
   Tool: ToolNode,
   Condition: ConditionNode,
@@ -91,13 +93,26 @@ export function DagEditor({ initialGraph, onChange, className }: DagEditorProps)
         return;
       }
 
+      const srcPortIndex = parsePortIndex(connection.sourceHandle);
+      const tgtPortIndex = parsePortIndex(connection.targetHandle);
+
+      // Auto-set Conditional edge type for edges from Condition nodes
+      const sourceNode = nodes.find((n) => n.id === connection.source);
+      const isFromCondition = sourceNode?.data?.nodeType === "Condition";
+
       const newEdge: Edge<DagEdgeData> = {
         id: generateEdgeId(),
         source: connection.source,
         target: connection.target,
         sourceHandle: connection.sourceHandle ?? undefined,
         targetHandle: connection.targetHandle ?? undefined,
-        data: { edgeType: "Normal", condition: null },
+        animated: isFromCondition,
+        data: {
+          edgeType: isFromCondition ? "Conditional" : "Normal",
+          condition: isFromCondition ? (srcPortIndex === 0 ? "$input.output.length > 0" : "true") : null,
+          sourcePortIndex: srcPortIndex,
+          targetPortIndex: tgtPortIndex,
+        },
       };
 
       setEdges((eds) => {
@@ -162,6 +177,9 @@ export function DagEditor({ initialGraph, onChange, className }: DagEditorProps)
         y: event.clientY - bounds.top - 40,
       };
 
+      const defaultOutputCount = nodeType === "Condition" ? 2 : 1;
+      const defaultInputCount = nodeType === "Start" ? 0 : 1;
+
       const newNode: Node<DagNodeData> = {
         id: generateNodeId(),
         type: nodeType,
@@ -171,6 +189,8 @@ export function DagEditor({ initialGraph, onChange, className }: DagEditorProps)
           referenceId: null,
           displayName: `New ${nodeType}`,
           config: {},
+          inputCount: defaultInputCount,
+          outputCount: defaultOutputCount,
         },
       };
 
@@ -233,6 +253,9 @@ export function DagEditor({ initialGraph, onChange, className }: DagEditorProps)
           return {
             ...e,
             data: newData,
+            // Keep sourceHandle/targetHandle in sync with port indices
+            sourceHandle: portHandleId("source", newData.sourcePortIndex),
+            targetHandle: portHandleId("target", newData.targetPortIndex),
             animated: newData.edgeType === "Conditional",
             label: newData.edgeType === "Conditional" && newData.condition
               ? newData.condition

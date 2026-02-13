@@ -97,6 +97,45 @@ public sealed record WorkflowGraphVO
         if (errors.Count > 0)
             return new DagValidationResult(errors, warnings);
 
+        // 7.5 端口索引校验
+        var nodeMapForPorts = Nodes.ToDictionary(n => n.NodeId);
+        foreach (var edge in Edges)
+        {
+            if (nodeMapForPorts.TryGetValue(edge.SourceNodeId, out var sourceNode))
+            {
+                if (edge.SourcePortIndex >= sourceNode.OutputCount)
+                {
+                    errors.Add($"边 '{edge.EdgeId}' 的源端口索引 {edge.SourcePortIndex} 超出节点 '{edge.SourceNodeId}' 的输出端口数 {sourceNode.OutputCount}");
+                }
+            }
+
+            if (nodeMapForPorts.TryGetValue(edge.TargetNodeId, out var targetNode))
+            {
+                if (edge.TargetPortIndex >= targetNode.InputCount)
+                {
+                    errors.Add($"边 '{edge.EdgeId}' 的目标端口索引 {edge.TargetPortIndex} 超出节点 '{edge.TargetNodeId}' 的输入端口数 {targetNode.InputCount}");
+                }
+            }
+        }
+
+        // 7.6 Condition 节点 OutputCount >= 2（仅当有边使用非零端口时）
+        foreach (var node in Nodes)
+        {
+            if (node.NodeType == WorkflowNodeType.Condition && node.OutputCount < 2)
+            {
+                // 检查是否有边引用了非零的 SourcePortIndex（即使用了多端口路由）
+                var usesMultiPort = Edges.Any(e =>
+                    e.SourceNodeId == node.NodeId && e.SourcePortIndex > 0);
+                if (usesMultiPort)
+                {
+                    errors.Add($"条件节点 '{node.NodeId}' 的输出端口数必须 >= 2，当前为 {node.OutputCount}");
+                }
+            }
+        }
+
+        if (errors.Count > 0)
+            return new DagValidationResult(errors, warnings);
+
         // 8. 孤立节点检测（没有任何入边或出边的节点，仅在节点数 > 1 时检测）
         if (Nodes.Count > 1)
         {

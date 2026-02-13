@@ -13,10 +13,12 @@ import { ToolNode } from "./custom-nodes/ToolNode";
 import { ConditionNode } from "./custom-nodes/ConditionNode";
 import { FanOutNode } from "./custom-nodes/FanOutNode";
 import { FanInNode } from "./custom-nodes/FanInNode";
+import { StartNode } from "./custom-nodes/StartNode";
 import { toReactFlowNodes, toReactFlowEdges, autoLayout } from "@/lib/dag-utils";
 import type { WorkflowNode, WorkflowEdge } from "@/types/workflow";
 
 const nodeTypes: NodeTypes = {
+  Start: StartNode,
   Agent: AgentNode,
   Tool: ToolNode,
   Condition: ConditionNode,
@@ -42,9 +44,7 @@ export function DagViewer({ nodes, edges, className, nodeColors }: DagViewerProp
       (n) => (n.position?.x ?? 0) === 0 && (n.position?.y ?? 0) === 0,
     );
     if (allAtOrigin && rfNodes.length > 0) {
-      const laid = autoLayout(rfNodes, rfEdges);
-      rfNodes = laid.nodes;
-      rfEdges = laid.edges;
+      rfNodes = autoLayout(rfNodes, rfEdges);
     }
 
     // Apply execution highlight colors

@@ -628,6 +628,13 @@ P1 (MVP 核心 — 增量全栈迭代)
       ├── SPEC-040: 全链路追踪
       └── SPEC-060: Dashboard 框架
 
+P1-Upgrade (工作流引擎升级 — MVP 可用) ← NEW
+  │   详见 [WORKFLOW-UPGRADE-SPEC-INDEX](WORKFLOW-UPGRADE-SPEC-INDEX.md)
+  ├── SPEC-080: 工作流引擎基础修复
+  ├── SPEC-081: 数据流模型与执行栈引擎 ★
+  ├── SPEC-082: 工作流实时推送 SignalR
+  └── SPEC-083: 表达式引擎与错误处理
+
 P2 (增强功能 — 第二轮迭代)
   ├── SPEC-002: Agent 健康检查
   ├── SPEC-014: 配额与熔断
@@ -636,7 +643,9 @@ P2 (增强功能 — 第二轮迭代)
   ├── SPEC-024: 执行暂停/取消/回溯
   ├── SPEC-025: 短时/长时工具编排
   ├── SPEC-041: Agent 状态面板
-  └── SPEC-070: 异构数据源接入
+  ├── SPEC-070: 异构数据源接入
+  ├── SPEC-084: 部分执行与数据追踪 ← NEW
+  └── SPEC-085: 前端升级与并发执行 ← NEW
 
 P3 (远期增强)
   └── SPEC-003: Agent 能力语义搜索

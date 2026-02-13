@@ -26,6 +26,10 @@ Auto-generated from all feature plans. Last updated: 2026-02-09
 - N/A (frontend only, all persistence via backend API) (013-workflow-frontend)
 - C# / .NET 10.0 (Backend), TypeScript (Frontend — Vite + React) + Microsoft.Agents.AI.Hosting 1.0.0-preview.260209.1, Microsoft.Extensions.AI 10.2.0, Entity Framework Core 10.0.2, Npgsql 10.0.0 (014-agent-memory-history)
 - PostgreSQL (via Aspire + Npgsql EF Core), pgvector extension (new for semantic memory) (014-agent-memory-history)
+- C# / .NET 10 (`net10.0`) + MediatR 12.4.1, AutoMapper 13.0.1, FluentValidation 11.11.0, Microsoft.Extensions.AI.Abstractions 10.2.0, Microsoft.Agents.AI.* 1.0.0-preview, EF Core 10.0.2 (015-workflow-engine-fix)
+- PostgreSQL via Npgsql.EntityFrameworkCore.PostgreSQL 10.0.0 (015-workflow-engine-fix)
+- C# / .NET 10 (net10.0) + Microsoft.Extensions.AI (MEAI), AutoMapper, System.Text.Json, EF Core 10 (016-workflow-dataflow-engine)
+- PostgreSQL with JSONB columns (graph_snapshot, node_executions) — no SQL migration needed; new fields use C# defaults that serialize transparently (016-workflow-dataflow-engine)
 
 - C# / .NET 10.0 (`net10.0`) (001-aspire-apphost-setup)
 
@@ -46,9 +50,9 @@ tests/
 C# / .NET 10.0 (`net10.0`): Follow standard conventions
 
 ## Recent Changes
+- 016-workflow-dataflow-engine: Added C# / .NET 10 (net10.0) + Microsoft.Extensions.AI (MEAI), AutoMapper, System.Text.Json, EF Core 10
+- 015-workflow-engine-fix: Added C# / .NET 10 (`net10.0`) + MediatR 12.4.1, AutoMapper 13.0.1, FluentValidation 11.11.0, Microsoft.Extensions.AI.Abstractions 10.2.0, Microsoft.Agents.AI.* 1.0.0-preview, EF Core 10.0.2
 - 014-agent-memory-history: Added C# / .NET 10.0 (Backend), TypeScript (Frontend — Vite + React) + Microsoft.Agents.AI.Hosting 1.0.0-preview.260209.1, Microsoft.Extensions.AI 10.2.0, Entity Framework Core 10.0.2, Npgsql 10.0.0
-- 013-workflow-frontend: Added TypeScript 5.9 / React 19.2 / Vite 7.3 + @xyflow/react (React Flow v12), @dagrejs/dagre, shadcn/ui, react-router 7.13, lucide-react, zod 4.3, react-hook-form 7.71
-- 012-workflow-execution-engine: Added C# / .NET 10.0 (net10.0) + Agent Framework (`Microsoft.Agents.AI.Workflows` 1.0.0-preview.260209.1), MediatR (CQRS), FluentValidation, AutoMapper, EF Core 10.0.2 + Npgsql (PostgreSQL)
 
 
 <!-- MANUAL ADDITIONS START -->

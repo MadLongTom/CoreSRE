@@ -21,4 +21,10 @@ public sealed record WorkflowEdgeVO
 
     /// <summary>条件表达式（仅 Conditional 类型必填）</summary>
     public string? Condition { get; init; }
+
+    /// <summary>源节点输出端口索引（默认 0）</summary>
+    public int SourcePortIndex { get; init; } = 0;
+
+    /// <summary>目标节点输入端口索引（默认 0）</summary>
+    public int TargetPortIndex { get; init; } = 0;
 }

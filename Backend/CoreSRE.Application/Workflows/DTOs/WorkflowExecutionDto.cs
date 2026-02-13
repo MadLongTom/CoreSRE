@@ -16,6 +16,7 @@ public record WorkflowExecutionDto
     public DateTime? StartedAt { get; init; }
     public DateTime? CompletedAt { get; init; }
     public string? TraceId { get; init; }
+    public WorkflowGraphDto? GraphSnapshot { get; init; }
     public List<NodeExecutionDto> NodeExecutions { get; init; } = [];
     public DateTime CreatedAt { get; init; }
 }

@@ -112,7 +112,7 @@ public class WorkflowExecutionTests
         var execution = WorkflowExecution.Create(Guid.NewGuid(), EmptyJsonInput(), CreateThreeNodeGraph());
         execution.Start();
 
-        execution.StartNode("agent-a");
+        execution.StartNode("agent-a", null);
 
         var node = execution.NodeExecutions.Single(n => n.NodeId == "agent-a");
         node.Status.Should().Be(NodeExecutionStatus.Running);
@@ -125,7 +125,7 @@ public class WorkflowExecutionTests
         var execution = WorkflowExecution.Create(Guid.NewGuid(), EmptyJsonInput(), CreateThreeNodeGraph());
         execution.Start();
 
-        var act = () => execution.StartNode("nonexistent");
+        var act = () => execution.StartNode("nonexistent", null);
 
         act.Should().Throw<InvalidOperationException>();
     }
@@ -137,7 +137,7 @@ public class WorkflowExecutionTests
     {
         var execution = WorkflowExecution.Create(Guid.NewGuid(), EmptyJsonInput(), CreateThreeNodeGraph());
         execution.Start();
-        execution.StartNode("agent-a");
+        execution.StartNode("agent-a", null);
 
         execution.CompleteNode("agent-a", "{\"result\": \"ok\"}");
 
@@ -165,7 +165,7 @@ public class WorkflowExecutionTests
     {
         var execution = WorkflowExecution.Create(Guid.NewGuid(), EmptyJsonInput(), CreateThreeNodeGraph());
         execution.Start();
-        execution.StartNode("agent-b");
+        execution.StartNode("agent-b", null);
 
         execution.FailNode("agent-b", "Agent不可用");
 

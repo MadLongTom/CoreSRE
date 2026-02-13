@@ -1,0 +1,222 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "WorkflowExecutionDto — GET /api/workflows/{id}/executions/{execId}",
+  "description": "Response schema for the workflow execution detail endpoint. Shows the AFTER state with GraphSnapshot and populated NodeExecution.Input fields.",
+  "type": "object",
+  "required": [
+    "id",
+    "workflowDefinitionId",
+    "status",
+    "input",
+    "nodeExecutions",
+    "createdAt"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique execution ID"
+    },
+    "workflowDefinitionId": {
+      "type": "string",
+      "format": "uuid",
+      "description": "ID of the workflow definition that was executed"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["Pending", "Running", "Completed", "Failed"],
+      "description": "Current execution status"
+    },
+    "input": {
+      "type": "object",
+      "description": "Workflow-level input data submitted with the execution request"
+    },
+    "output": {
+      "type": ["object", "null"],
+      "description": "Final output of the workflow execution"
+    },
+    "errorMessage": {
+      "type": ["string", "null"],
+      "description": "Error message if execution failed"
+    },
+    "startedAt": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "description": "When execution started"
+    },
+    "completedAt": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "description": "When execution completed or failed"
+    },
+    "traceId": {
+      "type": ["string", "null"],
+      "description": "Distributed trace ID for observability"
+    },
+    "graphSnapshot": {
+      "type": ["object", "null"],
+      "description": "Point-in-time snapshot of the workflow DAG at execution creation. NEW in this fix.",
+      "properties": {
+        "nodes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["nodeId", "nodeType", "displayName"],
+            "properties": {
+              "nodeId": {
+                "type": "string",
+                "description": "Unique node identifier within the graph"
+              },
+              "nodeType": {
+                "type": "string",
+                "enum": ["Agent", "Tool", "Condition", "FanOut", "FanIn"],
+                "description": "Type of the workflow node"
+              },
+              "referenceId": {
+                "type": ["string", "null"],
+                "format": "uuid",
+                "description": "Agent or Tool registration ID (null for control nodes)"
+              },
+              "displayName": {
+                "type": "string",
+                "description": "Human-readable node label"
+              },
+              "config": {
+                "type": ["string", "null"],
+                "description": "JSON configuration string for the node"
+              }
+            }
+          }
+        },
+        "edges": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["edgeId", "sourceNodeId", "targetNodeId", "edgeType"],
+            "properties": {
+              "edgeId": {
+                "type": "string",
+                "description": "Unique edge identifier"
+              },
+              "sourceNodeId": {
+                "type": "string",
+                "description": "Source node ID"
+              },
+              "targetNodeId": {
+                "type": "string",
+                "description": "Target node ID"
+              },
+              "edgeType": {
+                "type": "string",
+                "enum": ["Normal", "Conditional"],
+                "description": "Type of edge"
+              },
+              "condition": {
+                "type": ["string", "null"],
+                "description": "Condition expression for conditional edges"
+              }
+            }
+          }
+        }
+      }
+    },
+    "nodeExecutions": {
+      "type": "array",
+      "description": "Execution records for each node in the workflow",
+      "items": {
+        "type": "object",
+        "required": ["nodeId", "status"],
+        "properties": {
+          "nodeId": {
+            "type": "string",
+            "description": "Node identifier matching a node in graphSnapshot.nodes"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["Pending", "Running", "Completed", "Failed", "Skipped"],
+            "description": "Node execution status"
+          },
+          "input": {
+            "type": ["string", "null"],
+            "description": "JSON string of the input data this node received. NOW POPULATED (was always null before this fix)."
+          },
+          "output": {
+            "type": ["string", "null"],
+            "description": "JSON string of the output data this node produced"
+          },
+          "errorMessage": {
+            "type": ["string", "null"],
+            "description": "Error message if node failed"
+          },
+          "startedAt": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          },
+          "completedAt": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          }
+        }
+      }
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the execution record was created"
+    }
+  },
+  "examples": [
+    {
+      "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "workflowDefinitionId": "11111111-2222-3333-4444-555555555555",
+      "status": "Completed",
+      "input": { "prompt": "Analyze this data" },
+      "output": { "output": "Final analysis result from agent-3" },
+      "errorMessage": null,
+      "startedAt": "2026-02-12T10:00:00Z",
+      "completedAt": "2026-02-12T10:00:05Z",
+      "traceId": null,
+      "graphSnapshot": {
+        "nodes": [
+          { "nodeId": "agent-1", "nodeType": "Agent", "referenceId": "aaaa-bbbb", "displayName": "Analyzer", "config": null },
+          { "nodeId": "agent-2", "nodeType": "Agent", "referenceId": "cccc-dddd", "displayName": "Summarizer", "config": null },
+          { "nodeId": "agent-3", "nodeType": "Agent", "referenceId": "eeee-ffff", "displayName": "Formatter", "config": null }
+        ],
+        "edges": [
+          { "edgeId": "e1", "sourceNodeId": "agent-1", "targetNodeId": "agent-2", "edgeType": "Normal", "condition": null },
+          { "edgeId": "e2", "sourceNodeId": "agent-2", "targetNodeId": "agent-3", "edgeType": "Normal", "condition": null }
+        ]
+      },
+      "nodeExecutions": [
+        {
+          "nodeId": "agent-1",
+          "status": "Completed",
+          "input": "{\"prompt\":\"Analyze this data\"}",
+          "output": "Analysis result from agent-1",
+          "errorMessage": null,
+          "startedAt": "2026-02-12T10:00:00Z",
+          "completedAt": "2026-02-12T10:00:02Z"
+        },
+        {
+          "nodeId": "agent-2",
+          "status": "Completed",
+          "input": "Analysis result from agent-1",
+          "output": "Summary from agent-2",
+          "errorMessage": null,
+          "startedAt": "2026-02-12T10:00:02Z",
+          "completedAt": "2026-02-12T10:00:03Z"
+        },
+        {
+          "nodeId": "agent-3",
+          "status": "Completed",
+          "input": "Summary from agent-2",
+          "output": "Final analysis result from agent-3",
+          "errorMessage": null,
+          "startedAt": "2026-02-12T10:00:03Z",
+          "completedAt": "2026-02-12T10:00:05Z"
+        }
+      ],
+      "createdAt": "2026-02-12T09:59:59Z"
+    }
+  ]
+}

@@ -133,12 +133,23 @@ public static class AgentChatEndpoints
             "[SessionDebug] Session loaded — fromStore={FromStore}, sessionType={SessionType}, historyCount={HistoryCount}",
             sessionLoadedFromStore, session?.GetType().Name, historyProvider?.Count ?? -1);
 
-        // 3. Extract only the new user message from frontend payload
-        //    (session store provides full history; frontend messages are redundant except for the latest)
+        // 3. Build full message list = session history + new user message.
+        //    WORKAROUND: Microsoft.Agents.AI 1.0.0-preview.260209.1 has a bug where
+        //    RunCoreStreamingAsync passes inputMessagesForProviders (which excludes session history)
+        //    to chatClient.GetStreamingResponseAsync instead of inputMessagesForChatClient.
+        //    By passing the full history as input messages ourselves, inputMessagesForProviders
+        //    will contain all messages that need to reach the LLM.
         var lastMessage = input.Messages?.LastOrDefault();
         var newUserMessage = new ChatMessage(
             ChatRole.User,
             lastMessage?.Content ?? string.Empty);
+
+        var allMessages = new List<ChatMessage>();
+        if (historyProvider is { Count: > 0 })
+        {
+            allMessages.AddRange(historyProvider);
+        }
+        allMessages.Add(newUserMessage);
 
         // 4. Send SSE events: RUN_STARTED
         await WriteSseEventAsync(context.Response, new
@@ -158,9 +169,11 @@ public static class AgentChatEndpoints
             role = "assistant"
         }, cancellationToken);
 
-        // 5. Stream via agent pipeline (ChatHistoryProvider auto-manages history)
-        logger?.LogInformation("[SessionDebug] Starting RunStreamingAsync — historyCountBefore={Count}", historyProvider?.Count ?? -1);
-        await foreach (var update in aiAgent.RunStreamingAsync(newUserMessage, session, cancellationToken: cancellationToken))
+        // 5. Stream via agent pipeline
+        //    Pass the full message list (history + new) directly — see WORKAROUND note above.
+        logger?.LogInformation("[SessionDebug] Starting RunStreamingAsync — historyCount={HistoryCount}, totalMessages={TotalMessages}",
+            historyProvider?.Count ?? 0, allMessages.Count);
+        await foreach (var update in aiAgent.RunStreamingAsync(allMessages, session, cancellationToken: cancellationToken))
         {
             foreach (var content in update.Contents)
             {

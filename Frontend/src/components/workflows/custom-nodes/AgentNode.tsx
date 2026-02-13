@@ -1,7 +1,8 @@
 import { memo } from "react";
-import { Handle, Position, type NodeProps } from "@xyflow/react";
+import { Position, type NodeProps } from "@xyflow/react";
 import { Bot } from "lucide-react";
 import type { DagNodeData } from "@/types/workflow";
+import { PortHandles } from "./PortHandles";
 
 function AgentNodeComponent({ data, selected }: NodeProps) {
   const nodeData = data as DagNodeData;
@@ -11,7 +12,7 @@ function AgentNodeComponent({ data, selected }: NodeProps) {
         selected ? "border-blue-600 shadow-md" : "border-blue-400"
       }`}
     >
-      <Handle type="target" position={Position.Top} className="!bg-blue-500" />
+      <PortHandles type="target" count={nodeData.inputCount} color="blue-500" position={Position.Top} />
       <div className="flex items-center gap-2">
         <Bot className="h-4 w-4 text-blue-600 shrink-0" />
         <div className="min-w-0">
@@ -25,7 +26,7 @@ function AgentNodeComponent({ data, selected }: NodeProps) {
           )}
         </div>
       </div>
-      <Handle type="source" position={Position.Bottom} className="!bg-blue-500" />
+      <PortHandles type="source" count={nodeData.outputCount} color="blue-500" position={Position.Bottom} />
     </div>
   );
 }

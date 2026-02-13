@@ -21,4 +21,10 @@ public sealed record WorkflowNodeVO
 
     /// <summary>配置参数（JSON 格式字符串，可选）</summary>
     public string? Config { get; init; }
+
+    /// <summary>输入端口数量（默认 1，用于多输入等待）</summary>
+    public int InputCount { get; init; } = 1;
+
+    /// <summary>输出端口数量（默认 1，用于多输出路由）</summary>
+    public int OutputCount { get; init; } = 1;
 }

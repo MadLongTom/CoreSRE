@@ -16,7 +16,7 @@ export type { ApiResult };
 export type WorkflowStatus = "Draft" | "Published";
 
 /** Maps to backend WorkflowNodeType enum */
-export type WorkflowNodeType = "Agent" | "Tool" | "Condition" | "FanOut" | "FanIn";
+export type WorkflowNodeType = "Start" | "Agent" | "Tool" | "Condition" | "FanOut" | "FanIn";
 
 /** Maps to backend WorkflowEdgeType enum */
 export type WorkflowEdgeType = "Normal" | "Conditional";
@@ -32,6 +32,7 @@ export const WORKFLOW_STATUSES: WorkflowStatus[] = ["Draft", "Published"];
 
 /** All valid node types for iteration */
 export const WORKFLOW_NODE_TYPES: WorkflowNodeType[] = [
+  "Start",
   "Agent",
   "Tool",
   "Condition",
@@ -93,6 +94,10 @@ export interface WorkflowNode {
   referenceId: string | null;
   displayName: string;
   config: string | null;
+  /** 输入端口数（默认 1） */
+  inputCount?: number;
+  /** 输出端口数（默认 1） */
+  outputCount?: number;
 }
 
 /** Maps to backend WorkflowEdgeVO */
@@ -102,6 +107,10 @@ export interface WorkflowEdge {
   targetNodeId: string;
   edgeType: WorkflowEdgeType;
   condition: string | null;
+  /** 源端口索引（默认 0） */
+  sourcePortIndex?: number;
+  /** 目标端口索引（默认 0） */
+  targetPortIndex?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -173,10 +182,18 @@ export interface DagNodeData {
   referenceId: string | null;
   displayName: string;
   config: Record<string, unknown>;
+  /** 输入端口数（默认 1） */
+  inputCount: number;
+  /** 输出端口数（默认 1） */
+  outputCount: number;
 }
 
 /** Data payload for React Flow edges */
 export interface DagEdgeData {
   edgeType: WorkflowEdgeType;
   condition: string | null;
+  /** 源端口索引（默认 0） */
+  sourcePortIndex: number;
+  /** 目标端口索引（默认 0） */
+  targetPortIndex: number;
 }

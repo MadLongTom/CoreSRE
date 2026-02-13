@@ -43,7 +43,7 @@ public class GetWorkflowExecutionsQueryHandlerTests
         }
         if (status == ExecutionStatus.Completed)
         {
-            execution.StartNode("n1");
+            execution.StartNode("n1", null);
             execution.CompleteNode("n1", "{}");
             execution.Complete(JsonDocument.Parse("{}").RootElement);
         }

@@ -1,4 +1,4 @@
-import { Bot, Wrench, GitBranch, Split, Merge } from "lucide-react";
+import { Play, Bot, Wrench, GitBranch, Split, Merge } from "lucide-react";
 import type { WorkflowNodeType } from "@/types/workflow";
 
 const nodeTypeConfig: {
@@ -7,6 +7,7 @@ const nodeTypeConfig: {
   icon: typeof Bot;
   color: string;
 }[] = [
+  { type: "Start", label: "Start", icon: Play, color: "text-green-600 border-green-300 bg-green-50" },
   { type: "Agent", label: "Agent", icon: Bot, color: "text-blue-600 border-blue-300 bg-blue-50" },
   { type: "Tool", label: "Tool", icon: Wrench, color: "text-orange-600 border-orange-300 bg-orange-50" },
   { type: "Condition", label: "Condition", icon: GitBranch, color: "text-purple-600 border-purple-300 bg-purple-50" },

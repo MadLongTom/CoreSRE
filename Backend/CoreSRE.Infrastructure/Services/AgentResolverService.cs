@@ -63,12 +63,34 @@ public class AgentResolverService : IAgentResolver
         var agent = await _agentRepo.GetByIdAsync(agentRegistrationId, cancellationToken)
             ?? throw new InvalidOperationException($"AgentRegistration '{agentRegistrationId}' not found.");
 
+        // Mock Agent Mode — 如果启用，直接返回 MockChatClient，跳过真实 LLM 解析
+        var mockModeSection = _configuration.GetSection("Workflow:MockAgentMode");
+        var mockMode = string.Equals(mockModeSection?.Value, "true", StringComparison.OrdinalIgnoreCase);
+        if (mockMode && agent.AgentType == Domain.Enums.AgentType.ChatClient)
+        {
+            _logger.LogInformation("Mock agent mode enabled — returning MockChatClient for agent '{AgentName}'", agent.Name);
+            return CreateMockResolvedAgent(agent.Name, agent.LlmConfig);
+        }
+
         return agent.AgentType switch
         {
             Domain.Enums.AgentType.ChatClient => await ResolveChatClientAgent(agent, conversationId),
             Domain.Enums.AgentType.A2A => ResolveA2AAgent(agent),
             _ => throw new NotSupportedException($"Agent type '{agent.AgentType}' is not supported for chat.")
         };
+    }
+
+    /// <summary>
+    /// 创建 MockChatClient 包装的 ResolvedAgent。
+    /// </summary>
+    private ResolvedAgent CreateMockResolvedAgent(string agentName, Domain.ValueObjects.LlmConfigVO? llmConfig)
+    {
+        IChatClient mockClient = new MockChatClient(agentName);
+        var options = new ChatClientAgentOptions
+        {
+            Name = agentName,
+        };
+        return new ResolvedAgent(mockClient.AsAIAgent(options), llmConfig);
     }
 
     private async Task<ResolvedAgent> ResolveChatClientAgent(Domain.Entities.AgentRegistration agent, string conversationId)
@@ -80,8 +102,14 @@ public class AgentResolverService : IAgentResolver
         if (agent.LlmConfig.ProviderId is null || agent.LlmConfig.ProviderId == Guid.Empty)
             throw new InvalidOperationException($"Agent '{agent.Name}' has no LLM provider configured.");
 
-        var provider = await _providerRepo.GetByIdAsync(agent.LlmConfig.ProviderId.Value)
-            ?? throw new InvalidOperationException($"LlmProvider '{agent.LlmConfig.ProviderId}' not found.");
+        var provider = await _providerRepo.GetByIdAsync(agent.LlmConfig.ProviderId.Value);
+        if (provider is null)
+        {
+            _logger.LogWarning(
+                "LlmProvider '{ProviderId}' not found for agent '{AgentName}' — falling back to MockChatClient",
+                agent.LlmConfig.ProviderId, agent.Name);
+            return CreateMockResolvedAgent(agent.Name, agent.LlmConfig);
+        }
 
         // 3. 构建 OpenAIClient → IChatClient
         var openAiClient = new OpenAIClient(

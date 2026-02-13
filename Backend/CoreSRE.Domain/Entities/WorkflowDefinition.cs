@@ -76,6 +76,17 @@ public class WorkflowDefinition : BaseEntity
     }
 
     /// <summary>
+    /// 取消发布工作流定义（Published → Draft）。
+    /// </summary>
+    /// <exception cref="InvalidOperationException">当状态非 Published 时</exception>
+    public void Unpublish()
+    {
+        if (Status != WorkflowStatus.Published)
+            throw new InvalidOperationException("只有已发布的工作流才可取消发布。");
+        Status = WorkflowStatus.Draft;
+    }
+
+    /// <summary>
     /// 检查工作流是否可删除（必须为 Draft）。
     /// </summary>
     /// <exception cref="InvalidOperationException">当状态非 Draft 时</exception>

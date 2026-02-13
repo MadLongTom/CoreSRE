@@ -54,10 +54,35 @@ public class UpdateWorkflowCommandHandler : IRequestHandler<UpdateWorkflowComman
         if (refError is not null)
             return Result<WorkflowDefinitionDto>.Fail(refError);
 
-        // 5. Update entity (includes Draft status guard)
+        // 5. Update entity + optional status transition
         try
         {
-            workflow.Update(request.Name, request.Description, graph);
+            // Determine if we're unpublishing
+            var isUnpublishing = !string.IsNullOrEmpty(request.Status)
+                && Enum.TryParse<WorkflowStatus>(request.Status, ignoreCase: true, out var targetStatus)
+                && targetStatus == WorkflowStatus.Draft
+                && workflow.Status == WorkflowStatus.Published;
+
+            // Published workflows can only be unpublished, not edited
+            if (workflow.Status == WorkflowStatus.Published && !isUnpublishing)
+                return Result<WorkflowDefinitionDto>.Fail("工作流已发布，无法修改。请先取消发布。");
+
+            // If unpublishing, revert to Draft first, then apply updates
+            if (isUnpublishing)
+                workflow.Unpublish();
+
+            // Apply graph/metadata updates (only when Draft)
+            if (workflow.Status == WorkflowStatus.Draft)
+                workflow.Update(request.Name, request.Description, graph);
+
+            // Publish if requested
+            if (!string.IsNullOrEmpty(request.Status)
+                && Enum.TryParse<WorkflowStatus>(request.Status, ignoreCase: true, out var pubStatus)
+                && pubStatus == WorkflowStatus.Published
+                && workflow.Status == WorkflowStatus.Draft)
+            {
+                workflow.Publish();
+            }
         }
         catch (InvalidOperationException ex)
         {

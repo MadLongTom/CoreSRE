@@ -1,7 +1,8 @@
 import { memo } from "react";
-import { Handle, Position, type NodeProps } from "@xyflow/react";
+import { Position, type NodeProps } from "@xyflow/react";
 import { Split } from "lucide-react";
 import type { DagNodeData } from "@/types/workflow";
+import { PortHandles } from "./PortHandles";
 
 function FanOutNodeComponent({ data, selected }: NodeProps) {
   const nodeData = data as DagNodeData;
@@ -11,7 +12,7 @@ function FanOutNodeComponent({ data, selected }: NodeProps) {
         selected ? "border-teal-600 shadow-md" : "border-teal-400"
       }`}
     >
-      <Handle type="target" position={Position.Top} className="!bg-teal-500" />
+      <PortHandles type="target" count={nodeData.inputCount} color="teal-500" position={Position.Top} />
       <div className="flex items-center gap-2">
         <Split className="h-4 w-4 text-teal-600 shrink-0" />
         <div className="min-w-0">
@@ -21,7 +22,7 @@ function FanOutNodeComponent({ data, selected }: NodeProps) {
           <div className="text-xs text-teal-500">Fan Out</div>
         </div>
       </div>
-      <Handle type="source" position={Position.Bottom} className="!bg-teal-500" />
+      <PortHandles type="source" count={nodeData.outputCount} color="teal-500" position={Position.Bottom} />
     </div>
   );
 }

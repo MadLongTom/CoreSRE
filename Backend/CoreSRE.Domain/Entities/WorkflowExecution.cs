@@ -75,14 +75,15 @@ public class WorkflowExecution : BaseEntity
     }
 
     /// <summary>
-    /// 标记节点开始执行。
+    /// 标记节点开始执行，并记录节点输入数据。
     /// </summary>
-    public void StartNode(string nodeId)
+    public void StartNode(string nodeId, string? input)
     {
         var node = FindNode(nodeId);
         UpdateNode(nodeId, node with
         {
             Status = NodeExecutionStatus.Running,
+            Input = input,
             StartedAt = DateTime.UtcNow
         });
     }

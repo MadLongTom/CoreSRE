@@ -10,4 +10,6 @@ public record WorkflowNodeDto
     public Guid? ReferenceId { get; init; }
     public string DisplayName { get; init; } = string.Empty;
     public string? Config { get; init; }
+    public int InputCount { get; init; } = 1;
+    public int OutputCount { get; init; } = 1;
 }
