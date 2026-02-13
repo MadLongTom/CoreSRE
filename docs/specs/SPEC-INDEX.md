@@ -628,12 +628,20 @@ P1 (MVP 核心 — 增量全栈迭代)
       ├── SPEC-040: 全链路追踪
       └── SPEC-060: Dashboard 框架
 
-P1-Upgrade (工作流引擎升级 — MVP 可用) ← NEW
+P1-Upgrade (工作流引擎升级 — MVP 可用)
   │   详见 [WORKFLOW-UPGRADE-SPEC-INDEX](WORKFLOW-UPGRADE-SPEC-INDEX.md)
   ├── SPEC-080: 工作流引擎基础修复
   ├── SPEC-081: 数据流模型与执行栈引擎 ★
   ├── SPEC-082: 工作流实时推送 SignalR
   └── SPEC-083: 表达式引擎与错误处理
+
+P1-Skills (Agent Skills & 持久化沙箱 — MVP 可用) ← NEW
+  │   详见 [SKILLS-SANDBOX-SPEC-INDEX](SKILLS-SANDBOX-SPEC-INDEX.md)
+  ├── SPEC-090: MinIO 文件存储服务
+  ├── SPEC-091: 持久化沙箱管理
+  ├── SPEC-092: Agent Skills 管理与渐进式注入 ★
+  ├── SPEC-093: 沙箱管理前端与 Web Terminal
+  └── SPEC-094: Skills 管理前端与 Agent 绑定 UI
 
 P2 (增强功能 — 第二轮迭代)
   ├── SPEC-002: Agent 健康检查

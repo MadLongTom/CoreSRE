@@ -1,5 +1,6 @@
 using A2A;
 using CoreSRE.Application.Interfaces;
+using CoreSRE.Application.Skills;
 using CoreSRE.Domain.Interfaces;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
@@ -28,6 +29,8 @@ public class AgentResolverService : IAgentResolver
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IToolFunctionFactory _toolFunctionFactory;
     private readonly ISandboxToolProvider _sandboxToolProvider;
+    private readonly ISkillRegistrationRepository _skillRepo;
+    private readonly IFileStorageService _fileStorage;
     private readonly IConfiguration _configuration;
     private readonly ILogger<AgentResolverService> _logger;
     private readonly ILoggerFactory _loggerFactory;
@@ -39,6 +42,8 @@ public class AgentResolverService : IAgentResolver
         IHttpClientFactory httpClientFactory,
         IToolFunctionFactory toolFunctionFactory,
         ISandboxToolProvider sandboxToolProvider,
+        ISkillRegistrationRepository skillRepo,
+        IFileStorageService fileStorage,
         IConfiguration configuration,
         ILogger<AgentResolverService> logger,
         ILoggerFactory loggerFactory)
@@ -48,6 +53,8 @@ public class AgentResolverService : IAgentResolver
         _httpClientFactory = httpClientFactory;
         _toolFunctionFactory = toolFunctionFactory;
         _sandboxToolProvider = sandboxToolProvider;
+        _skillRepo = skillRepo;
+        _fileStorage = fileStorage;
         _configuration = configuration;
         _logger = logger;
         _loggerFactory = loggerFactory;
@@ -139,6 +146,36 @@ public class AgentResolverService : IAgentResolver
                 agent.Name, sandboxTools.Count);
         }
 
+        // 3.7 如果绑定了 SkillRefs，注入渐进式披露工具（read_skill / read_skill_file）
+        string? skillSummary = null;
+        var configuredSkillRefs = agent.LlmConfig.SkillRefs;
+        if (configuredSkillRefs is not null && configuredSkillRefs.Count > 0)
+        {
+            var skills = (await _skillRepo.GetActiveByIdsAsync(configuredSkillRefs)).ToList();
+            if (skills.Count > 0)
+            {
+                // Build name → entity map for tool lookups
+                var skillMap = skills.ToDictionary(s => s.Name, s => s, StringComparer.OrdinalIgnoreCase);
+
+                // Inject read_skill tool (always)
+                allTools.Add(new ReadSkillAIFunction(skillMap));
+
+                // Inject read_skill_file tool only when at least one skill has files
+                var hasFileSkills = skills.Any(s => s.HasFiles);
+                if (hasFileSkills)
+                {
+                    allTools.Add(new ReadSkillFileAIFunction(skillMap, _fileStorage));
+                }
+
+                // Build skill summary for SystemPrompt injection
+                skillSummary = SkillPromptBuilder.BuildSkillSummary(skills);
+                var toolsSuffix = hasFileSkills ? " + read_skill_file" : "";
+                _logger.LogInformation(
+                    "Skills injected for Agent '{AgentName}': {SkillCount} skills, tools: read_skill{HasFilesTool}",
+                    agent.Name, skills.Count, toolsSuffix);
+            }
+        }
+
         if (allTools.Count > 0)
         {
             chatClient = chatClient
@@ -160,6 +197,12 @@ public class AgentResolverService : IAgentResolver
         if (!string.IsNullOrWhiteSpace(agent.LlmConfig.Instructions))
         {
             chatOptions.Instructions = agent.LlmConfig.Instructions;
+        }
+
+        // Append skill summary to the end of Instructions (progressive disclosure)
+        if (!string.IsNullOrWhiteSpace(skillSummary))
+        {
+            chatOptions.Instructions = (chatOptions.Instructions ?? string.Empty) + skillSummary;
         }
 
         // 将所有 AIFunction（ToolRef + Sandbox）附加到 ChatOptions.Tools

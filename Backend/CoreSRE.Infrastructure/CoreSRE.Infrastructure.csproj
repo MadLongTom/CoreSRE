@@ -36,6 +36,7 @@
     </PackageReference>
     <PackageReference Include="Microsoft.AspNetCore.DataProtection" Version="10.0.0" />
     <PackageReference Include="KubernetesClient" Version="15.0.1" />
+    <PackageReference Include="Minio" Version="6.0.5" />
   </ItemGroup>
 
 </Project>

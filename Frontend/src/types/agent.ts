@@ -127,6 +127,11 @@ export interface LlmConfig {
   sandboxCpus?: number | null;
   sandboxMemoryMib?: number | null;
   sandboxK8sNamespace?: string | null;
+  sandboxMode?: string | null;
+  sandboxInstanceId?: string | null;
+
+  // Skill bindings
+  skillRefs?: string[];
 
   // History & Memory configuration
   enableChatHistory?: boolean | null;

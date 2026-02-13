@@ -26,6 +26,9 @@ internal sealed partial class KubernetesSandboxBox : ISandboxBox
 
     public string Image { get; }
 
+    /// <summary>Pod 名称（供外部引用）</summary>
+    public string PodName => _podName;
+
     [GeneratedRegex(@"""ExitCode""\s*,\s*""message""\s*:\s*""(\d+)""")]
     private static partial Regex ExitCodeRegex();
 
@@ -37,6 +40,16 @@ internal sealed partial class KubernetesSandboxBox : ISandboxBox
         _podName = podName;
         Image = image;
         _logger = logger;
+    }
+
+    /// <summary>
+    /// 附加到一个已存在的 Running Pod（用于持久化沙箱场景）。
+    /// 不创建新 Pod，仅创建执行代理对象。
+    /// </summary>
+    public static KubernetesSandboxBox Attach(
+        k8s.Kubernetes client, string ns, string podName, string image, ILogger logger)
+    {
+        return new KubernetesSandboxBox(client, ns, podName, image, logger);
     }
 
     /// <summary>

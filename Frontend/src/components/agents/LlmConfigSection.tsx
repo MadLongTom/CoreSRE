@@ -23,9 +23,10 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { ChevronDown, ChevronRight, FileJson, Terminal } from "lucide-react";
+import { ChevronDown, ChevronRight, FileJson, Terminal, Sparkles } from "lucide-react";
 import ProviderModelSelect from "@/components/agents/ProviderModelSelect";
 import ToolRefsPicker from "@/components/agents/ToolRefsPicker";
+import SkillRefsPicker from "@/components/agents/SkillRefsPicker";
 import { getAvailableFunctions } from "@/lib/api/tools";
 import type { BindableTool } from "@/types/tool";
 import type { LlmConfig } from "@/types/agent";
@@ -260,6 +261,20 @@ export default function LlmConfigSection({
                     在 Kubernetes Pod 容器中提供资源隔离的命令行、文件读写和代码执行能力。每个对话拥有独立的 Pod。开发环境使用 Docker Desktop 内置 K8s。
                   </p>
                 </div>
+              </div>
+
+              {/* Skill Bindings */}
+              <div className="sm:col-span-2 space-y-2">
+                <Label className="flex items-center gap-1.5">
+                  <Sparkles className="h-4 w-4" /> 绑定 Skill
+                </Label>
+                <p className="text-xs text-muted-foreground mb-2">
+                  选择要绑定到此 Agent 的 Skill。绑定后 Skill 摘要将注入 SystemPrompt，LLM 可通过 read_skill 工具按需加载完整内容。
+                </p>
+                <SkillRefsPicker
+                  value={config.skillRefs ?? []}
+                  onChange={(ids) => update({ skillRefs: ids })}
+                />
               </div>
             </div>
 
@@ -639,6 +654,20 @@ export default function LlmConfigSection({
                         ? `已启用 — ${config.sandboxType ?? "CodeBox"}${config.sandboxImage ? ` (${config.sandboxImage})` : ""}${config.sandboxCpus ? ` ${config.sandboxCpus}C` : ""}${config.sandboxMemoryMib ? ` ${config.sandboxMemoryMib}MiB` : ""}${config.sandboxK8sNamespace ? ` ns:${config.sandboxK8sNamespace}` : ""}`
                         : "未启用"}
                     </p>
+                  </div>
+                </div>
+              )}
+              {(config.skillRefs?.length ?? 0) > 0 && (
+                <div className="space-y-1 sm:col-span-2">
+                  <Label className="text-muted-foreground text-xs flex items-center gap-1">
+                    <Sparkles className="h-3.5 w-3.5" /> 绑定 Skill
+                  </Label>
+                  <div className="flex flex-wrap gap-1">
+                    {config.skillRefs!.map((ref, i) => (
+                      <Badge key={i} variant="secondary" className="text-xs">
+                        {ref.slice(0, 8)}...
+                      </Badge>
+                    ))}
                   </div>
                 </div>
               )}

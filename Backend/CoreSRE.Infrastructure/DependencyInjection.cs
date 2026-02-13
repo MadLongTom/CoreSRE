@@ -5,7 +5,9 @@ using CoreSRE.Domain.Interfaces;
 using CoreSRE.Infrastructure.Persistence;
 using CoreSRE.Infrastructure.Persistence.Sessions;
 using CoreSRE.Infrastructure.Services;
+using CoreSRE.Infrastructure.Services.Sandbox;
 using CoreSRE.Infrastructure.Services.Sandbox.Kubernetes;
+using CoreSRE.Infrastructure.Services.Storage;
 using k8s;
 using Microsoft.Agents.AI.Hosting;
 using Microsoft.EntityFrameworkCore;
@@ -117,6 +119,18 @@ public static class DependencyInjection
         var workflowExecutionChannel = System.Threading.Channels.Channel.CreateUnbounded<ExecuteWorkflowRequest>();
         services.AddSingleton(workflowExecutionChannel);
         services.AddHostedService<WorkflowExecutionBackgroundService>();
+
+        // ── S3 File Storage (MinIO) ──
+        services.AddScoped<IFileStorageService, MinioFileStorageService>();
+        services.AddHostedService<BucketInitializationService>();
+
+        // ── Skill Registration Repository ──
+        services.AddScoped<ISkillRegistrationRepository, SkillRegistrationRepository>();
+
+        // ── Sandbox Instance Repository + Manager ──
+        services.AddScoped<ISandboxInstanceRepository, SandboxInstanceRepository>();
+        services.AddScoped<IPersistentSandboxManager, PersistentSandboxManager>();
+        services.AddHostedService<SandboxAutoStopService>();
 
         return services;
     }

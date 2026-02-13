@@ -24,6 +24,9 @@ builder.Services.AddAGUI();
 // Aspire EF Core 增强（健康检查 + OTel 追踪 + 连接重试）
 builder.EnrichNpgsqlDbContext<AppDbContext>();
 
+// MinIO S3 客户端（通过 Aspire Resource Reference 自动注入连接字符串）
+builder.AddMinioClient("minio");
+
 // CORS - 允许前端访问
 builder.Services.AddCors(options =>
 {
@@ -56,6 +59,9 @@ app.MapChatEndpoints();
 app.MapAgentChatEndpoints();
 app.MapToolEndpoints();
 app.MapWorkflowEndpoints();
+app.MapFileEndpoints();
+app.MapSkillEndpoints();
+app.MapSandboxEndpoints();
 
 // ===== 自动迁移数据库（开发环境）=====
 using (var scope = app.Services.CreateScope())

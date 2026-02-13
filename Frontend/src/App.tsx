@@ -16,6 +16,12 @@ import WorkflowListPage from "@/pages/WorkflowListPage";
 import WorkflowCreatePage from "@/pages/WorkflowCreatePage";
 import WorkflowDetailPage from "@/pages/WorkflowDetailPage";
 import WorkflowExecutionDetailPage from "@/pages/WorkflowExecutionDetailPage";
+import SandboxListPage from "@/pages/SandboxListPage";
+import SandboxCreatePage from "@/pages/SandboxCreatePage";
+import SandboxDetailPage from "@/pages/SandboxDetailPage";
+import SkillListPage from "@/pages/SkillListPage";
+import SkillCreatePage from "@/pages/SkillCreatePage";
+import SkillDetailPage from "@/pages/SkillDetailPage";
 import NotFoundPage from "@/pages/NotFoundPage";
 
 const router = createBrowserRouter([
@@ -38,6 +44,12 @@ const router = createBrowserRouter([
       { path: "workflows/new", element: <WorkflowCreatePage /> },
       { path: "workflows/:id", element: <WorkflowDetailPage /> },
       { path: "workflows/:id/executions/:execId", element: <WorkflowExecutionDetailPage /> },
+      { path: "sandboxes", element: <SandboxListPage /> },
+      { path: "sandboxes/new", element: <SandboxCreatePage /> },
+      { path: "sandboxes/:id", element: <SandboxDetailPage /> },
+      { path: "skills", element: <SkillListPage /> },
+      { path: "skills/new", element: <SkillCreatePage /> },
+      { path: "skills/:id", element: <SkillDetailPage /> },
       { path: "chat", element: <ChatPage /> },
       { path: "*", element: <NotFoundPage /> },
     ],

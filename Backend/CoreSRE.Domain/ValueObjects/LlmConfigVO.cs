@@ -114,4 +114,26 @@ public sealed record LlmConfigVO
     /// Docker Desktop 内置 K8s 默认使用 default 命名空间。
     /// </summary>
     public string? SandboxK8sNamespace { get; init; }
+
+    /// <summary>
+    /// 沙箱模式：None / Ephemeral / Persistent。
+    /// Ephemeral = 每对话临时 Pod（向后兼容 EnableSandbox=true）；
+    /// Persistent = 持久化沙箱实例（由 SandboxInstanceId 指定）。
+    /// null 时根据 EnableSandbox 推断：true → Ephemeral, false/null → None。
+    /// </summary>
+    public string? SandboxMode { get; init; }
+
+    /// <summary>
+    /// 持久化沙箱实例 ID — 仅当 SandboxMode=Persistent 时有效。
+    /// 引用 SandboxInstance 表的 ID。
+    /// </summary>
+    public Guid? SandboxInstanceId { get; init; }
+
+    // ── Skills 配置 ──────────────────────────────────────────────────
+
+    /// <summary>
+    /// 技能引用列表 — 绑定到该 Agent 的 SkillRegistration ID 列表。
+    /// Agent 对话时按此列表注入 Skill 摘要到 SystemPrompt。
+    /// </summary>
+    public List<Guid> SkillRefs { get; init; } = [];
 }

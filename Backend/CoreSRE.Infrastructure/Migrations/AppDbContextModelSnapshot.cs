@@ -250,6 +250,228 @@ namespace CoreSRE.Infrastructure.Migrations
                     b.ToTable("mcp_tool_items", (string)null);
                 });
 
+            modelBuilder.Entity("CoreSRE.Domain.Entities.SandboxInstance", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid?>("AgentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("agent_id");
+
+                    b.Property<int>("AutoStopMinutes")
+                        .HasColumnType("integer")
+                        .HasColumnName("auto_stop_minutes");
+
+                    b.Property<int>("CpuCores")
+                        .HasColumnType("integer")
+                        .HasColumnName("cpu_cores");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Image")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("image");
+
+                    b.Property<string>("K8sNamespace")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("k8s_namespace");
+
+                    b.Property<DateTime?>("LastActivityAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_activity_at");
+
+                    b.Property<int>("MemoryMib")
+                        .HasColumnType("integer")
+                        .HasColumnName("memory_mib");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("name");
+
+                    b.Property<bool>("PersistWorkspace")
+                        .HasColumnType("boolean")
+                        .HasColumnName("persist_workspace");
+
+                    b.Property<string>("PodName")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("pod_name");
+
+                    b.Property<string>("SandboxType")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("sandbox_type");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("status");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AgentId");
+
+                    b.HasIndex("Status");
+
+                    b.ToTable("sandbox_instances", (string)null);
+                });
+
+            modelBuilder.Entity("CoreSRE.Domain.Entities.SkillRegistration", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("category");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("content");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("description");
+
+                    b.Property<bool>("HasFiles")
+                        .HasColumnType("boolean")
+                        .HasColumnName("has_files");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("name");
+
+                    b.PrimitiveCollection<string>("RequiresTools")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("requires_tools");
+
+                    b.Property<string>("Scope")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("scope");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("status");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Category");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.HasIndex("Scope");
+
+                    b.HasIndex("Status");
+
+                    b.ToTable("skill_registrations", (string)null);
+
+                    b.HasData(
+                        new
+                        {
+                            Id = new Guid("a0000000-0000-0000-0000-000000000001"),
+                            Category = "SRE",
+                            Content = "# Incident Response Skill\r\n\r\n## Purpose\r\nGuide the SRE through a structured incident response process, from initial triage\r\nto resolution and post-mortem documentation.\r\n\r\n## Workflow\r\n\r\n### 1. Triage\r\n- Gather initial facts: service affected, error symptoms, blast radius\r\n- Classify severity: SEV1 (critical), SEV2 (major), SEV3 (minor), SEV4 (cosmetic)\r\n- Identify on-call responders and communication channels\r\n\r\n### 2. Investigation\r\n- Check monitoring dashboards and recent deployments\r\n- Review error logs and metrics for anomalies\r\n- Identify potential root causes\r\n\r\n### 3. Mitigation\r\n- Propose immediate actions: rollback, feature flag toggle, scaling\r\n- Coordinate with relevant teams\r\n- Verify mitigation effectiveness\r\n\r\n### 4. Communication\r\n- Draft status page updates for stakeholders\r\n- Prepare internal Slack/Teams messages with timeline\r\n- Schedule follow-up check-ins\r\n\r\n### 5. Post-Mortem\r\n- Document timeline of events\r\n- Identify root cause and contributing factors\r\n- Propose action items with owners and deadlines\r\n- Generate blameless post-mortem report\r\n\r\n## Output Format\r\nAlways provide structured responses with:\r\n- Current phase indicator\r\n- Action items list\r\n- Severity and status summary",
+                            CreatedAt = new DateTime(2026, 2, 13, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Guide through incident triage, severity classification, communication templates, and post-mortem facilitation.",
+                            HasFiles = false,
+                            Name = "incident-response",
+                            RequiresTools = "[]",
+                            Scope = "Builtin",
+                            Status = "Active"
+                        },
+                        new
+                        {
+                            Id = new Guid("a0000000-0000-0000-0000-000000000002"),
+                            Category = "Development",
+                            Content = "# Code Review Skill\r\n\r\n## Purpose\r\nPerform thorough, systematic code reviews focusing on correctness, security,\r\nperformance, and maintainability.\r\n\r\n## Review Checklist\r\n\r\n### Correctness\r\n- Logic errors, off-by-one, null handling\r\n- Edge cases and boundary conditions\r\n- Error handling completeness\r\n\r\n### Security\r\n- Input validation and sanitization\r\n- SQL injection, XSS, CSRF vulnerabilities\r\n- Secrets/credentials in code\r\n- Authentication/authorization gaps\r\n\r\n### Performance\r\n- N+1 queries, unnecessary allocations\r\n- Missing indexes for database queries\r\n- Caching opportunities\r\n- Async/await usage correctness\r\n\r\n### Maintainability\r\n- Code clarity and naming conventions\r\n- SOLID principles adherence\r\n- Test coverage for new/changed logic\r\n- Documentation for public APIs\r\n\r\n## Output Format\r\nProvide findings categorized by severity:\r\n- 🔴 Critical: Must fix before merge\r\n- 🟡 Warning: Should fix, potential issues\r\n- 🔵 Suggestion: Nice-to-have improvements\r\n- 💡 Note: Informational observations",
+                            CreatedAt = new DateTime(2026, 2, 13, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Perform systematic code review: check style, security, performance, and suggest improvements.",
+                            HasFiles = false,
+                            Name = "code-review",
+                            RequiresTools = "[]",
+                            Scope = "Builtin",
+                            Status = "Active"
+                        },
+                        new
+                        {
+                            Id = new Guid("a0000000-0000-0000-0000-000000000003"),
+                            Category = "Database",
+                            Content = "# Database Operations Skill\r\n\r\n## Purpose\r\nAssist with database administration tasks including query optimization,\r\nschema migration planning, and backup/restore operations.\r\n\r\n## Capabilities\r\n\r\n### Query Optimization\r\n- Analyze EXPLAIN/EXPLAIN ANALYZE output\r\n- Suggest index creation strategies\r\n- Rewrite inefficient queries\r\n- Identify missing statistics and vacuum needs\r\n\r\n### Migration Planning\r\n- Generate safe migration scripts (up + down)\r\n- Plan zero-downtime schema changes\r\n- Identify backward-compatible migration patterns\r\n- Estimate migration duration for large tables\r\n\r\n### Backup & Restore\r\n- Design backup strategies (full, incremental, WAL archiving)\r\n- Test restore procedures\r\n- Point-in-time recovery planning\r\n- Cross-region replication setup\r\n\r\n### Monitoring\r\n- Connection pool analysis\r\n- Slow query log review\r\n- Lock contention diagnosis\r\n- Storage and growth projections\r\n\r\n## Supported Databases\r\nPostgreSQL (primary), MySQL, SQL Server, MongoDB\r\n\r\n## Safety Rules\r\n- Never run destructive operations without explicit confirmation\r\n- Always generate rollback scripts with migrations\r\n- Prefer `IF EXISTS` / `IF NOT EXISTS` guards",
+                            CreatedAt = new DateTime(2026, 2, 13, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Assist with database operations: query optimization, migration planning, backup/restore procedures.",
+                            HasFiles = false,
+                            Name = "database-ops",
+                            RequiresTools = "[]",
+                            Scope = "Builtin",
+                            Status = "Active"
+                        },
+                        new
+                        {
+                            Id = new Guid("a0000000-0000-0000-0000-000000000004"),
+                            Category = "Infrastructure",
+                            Content = "# Kubernetes Operations Skill\r\n\r\n## Purpose\r\nAssist with Kubernetes cluster management, workload troubleshooting,\r\nand infrastructure-as-code generation.\r\n\r\n## Capabilities\r\n\r\n### Troubleshooting\r\n- Diagnose CrashLoopBackOff, ImagePullBackOff, OOMKilled\r\n- Analyze pod events and container logs\r\n- Debug networking issues (DNS, Services, Ingress)\r\n- Investigate resource quota exhaustion\r\n\r\n### Resource Management\r\n- Right-size CPU/memory requests and limits\r\n- Configure HPA (Horizontal Pod Autoscaler)\r\n- Plan node pool sizing and scaling\r\n- Cost optimization recommendations\r\n\r\n### YAML Generation\r\n- Generate Deployment, Service, Ingress manifests\r\n- Create ConfigMap/Secret templates\r\n- Design RBAC policies (Role, ClusterRole, Bindings)\r\n- Write Helm chart templates\r\n\r\n### Operations\r\n- Rolling update strategies and rollback procedures\r\n- Blue-green and canary deployment patterns\r\n- Cluster upgrade planning\r\n- etcd backup and maintenance\r\n\r\n## Output Format\r\n- YAML manifests should be complete and ready to apply\r\n- Include namespace annotations\r\n- Add resource labels following conventions",
+                            CreatedAt = new DateTime(2026, 2, 13, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Help with Kubernetes cluster operations: troubleshooting pods, scaling, resource management, and YAML generation.",
+                            HasFiles = false,
+                            Name = "kubernetes-ops",
+                            RequiresTools = "[]",
+                            Scope = "Builtin",
+                            Status = "Active"
+                        },
+                        new
+                        {
+                            Id = new Guid("a0000000-0000-0000-0000-000000000005"),
+                            Category = "Observability",
+                            Content = "# Monitoring & Alerting Skill\r\n\r\n## Purpose\r\nHelp design effective monitoring strategies, create alerting rules,\r\nand define SLOs for service reliability.\r\n\r\n## Capabilities\r\n\r\n### Dashboard Design\r\n- RED method dashboards (Rate, Errors, Duration)\r\n- USE method dashboards (Utilization, Saturation, Errors)\r\n- Four Golden Signals implementation\r\n- Custom business metric dashboards\r\n\r\n### Alert Rules\r\n- Multi-window multi-burn-rate SLO alerts\r\n- Symptom-based alerting (avoid cause-based)\r\n- Alert routing and escalation policies\r\n- Reduce noise: grouping, inhibition, silencing\r\n\r\n### SLO Definition\r\n- Identify critical user journeys\r\n- Define SLI (Service Level Indicators)\r\n- Set SLO targets with error budgets\r\n- Calculate error budget burn rates\r\n\r\n### Supported Platforms\r\n- Prometheus + Grafana (PromQL)\r\n- Datadog (DQL)\r\n- Azure Monitor (KQL)\r\n- CloudWatch (Metrics Insights)\r\n\r\n## Output Format\r\n- Alert rules in platform-native syntax\r\n- SLO specs with calculation formulas\r\n- Dashboard JSON/YAML for import",
+                            CreatedAt = new DateTime(2026, 2, 13, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Design and optimize monitoring dashboards, alerting rules, and SLO definitions.",
+                            HasFiles = false,
+                            Name = "monitoring-alerting",
+                            RequiresTools = "[]",
+                            Scope = "Builtin",
+                            Status = "Active"
+                        });
+                });
+
             modelBuilder.Entity("CoreSRE.Domain.Entities.ToolRegistration", b =>
                 {
                     b.Property<Guid>("Id")
@@ -518,7 +740,15 @@ namespace CoreSRE.Infrastructure.Migrations
 
                             b1.Property<bool?>("AllowMultipleToolCalls");
 
+                            b1.Property<int?>("EmbeddingDimensions");
+
+                            b1.Property<string>("EmbeddingModelId");
+
+                            b1.Property<Guid?>("EmbeddingProviderId");
+
                             b1.Property<bool?>("EnableChatHistory");
+
+                            b1.Property<bool?>("EnableSandbox");
 
                             b1.Property<bool?>("EnableSemanticMemory");
 
@@ -531,6 +761,8 @@ namespace CoreSRE.Infrastructure.Migrations
                             b1.Property<int?>("MaxOutputTokens");
 
                             b1.Property<int?>("MemoryMaxResults");
+
+                            b1.Property<double?>("MemoryMinRelevanceScore");
 
                             b1.Property<string>("MemorySearchMode");
 
@@ -545,7 +777,24 @@ namespace CoreSRE.Infrastructure.Migrations
 
                             b1.Property<string>("ResponseFormatSchema");
 
+                            b1.Property<int?>("SandboxCpus");
+
+                            b1.Property<string>("SandboxImage");
+
+                            b1.Property<Guid?>("SandboxInstanceId");
+
+                            b1.Property<string>("SandboxK8sNamespace");
+
+                            b1.Property<int?>("SandboxMemoryMib");
+
+                            b1.Property<string>("SandboxMode");
+
+                            b1.Property<string>("SandboxType");
+
                             b1.Property<long?>("Seed");
+
+                            b1.PrimitiveCollection<string>("SkillRefs")
+                                .IsRequired();
 
                             b1.PrimitiveCollection<string>("StopSequences");
 
@@ -768,8 +1017,12 @@ namespace CoreSRE.Infrastructure.Migrations
                                     b2.Property<string>("SourceNodeId")
                                         .IsRequired();
 
+                                    b2.Property<int>("SourcePortIndex");
+
                                     b2.Property<string>("TargetNodeId")
                                         .IsRequired();
+
+                                    b2.Property<int>("TargetPortIndex");
 
                                     b2.HasKey("WorkflowGraphVOWorkflowDefinitionId", "__synthesizedOrdinal");
 
@@ -791,11 +1044,15 @@ namespace CoreSRE.Infrastructure.Migrations
                                     b2.Property<string>("DisplayName")
                                         .IsRequired();
 
+                                    b2.Property<int>("InputCount");
+
                                     b2.Property<string>("NodeId")
                                         .IsRequired();
 
                                     b2.Property<string>("NodeType")
                                         .IsRequired();
+
+                                    b2.Property<int>("OutputCount");
 
                                     b2.Property<Guid?>("ReferenceId");
 
@@ -851,8 +1108,12 @@ namespace CoreSRE.Infrastructure.Migrations
                                     b2.Property<string>("SourceNodeId")
                                         .IsRequired();
 
+                                    b2.Property<int>("SourcePortIndex");
+
                                     b2.Property<string>("TargetNodeId")
                                         .IsRequired();
+
+                                    b2.Property<int>("TargetPortIndex");
 
                                     b2.HasKey("WorkflowGraphVOWorkflowExecutionId", "__synthesizedOrdinal");
 
@@ -874,11 +1135,15 @@ namespace CoreSRE.Infrastructure.Migrations
                                     b2.Property<string>("DisplayName")
                                         .IsRequired();
 
+                                    b2.Property<int>("InputCount");
+
                                     b2.Property<string>("NodeId")
                                         .IsRequired();
 
                                     b2.Property<string>("NodeType")
                                         .IsRequired();
+
+                                    b2.Property<int>("OutputCount");
 
                                     b2.Property<Guid?>("ReferenceId");
 

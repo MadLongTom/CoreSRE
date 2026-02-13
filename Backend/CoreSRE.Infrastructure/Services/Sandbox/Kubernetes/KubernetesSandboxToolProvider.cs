@@ -1,6 +1,7 @@
 using System.Text.Json;
 using CoreSRE.Application.Interfaces;
 using CoreSRE.Domain.Enums;
+using CoreSRE.Domain.Interfaces;
 using CoreSRE.Domain.ValueObjects;
 using k8s;
 using Microsoft.Extensions.AI;
@@ -30,17 +31,20 @@ public sealed class KubernetesSandboxToolProvider : ISandboxToolProvider
     private readonly ILoggerFactory _loggerFactory;
     private readonly k8s.Kubernetes _k8sClient;
     private readonly SandboxPodPool _podPool;
+    private readonly ISandboxInstanceRepository _sandboxRepo;
 
     public KubernetesSandboxToolProvider(
         ILogger<KubernetesSandboxToolProvider> logger,
         ILoggerFactory loggerFactory,
         k8s.Kubernetes k8sClient,
-        SandboxPodPool podPool)
+        SandboxPodPool podPool,
+        ISandboxInstanceRepository sandboxRepo)
     {
         _logger = logger;
         _loggerFactory = loggerFactory;
         _k8sClient = k8sClient;
         _podPool = podPool;
+        _sandboxRepo = sandboxRepo;
     }
 
     public IReadOnlyList<AIFunction> CreateSandboxTools(
@@ -60,21 +64,44 @@ public sealed class KubernetesSandboxToolProvider : ISandboxToolProvider
             ? llmConfig.SandboxK8sNamespace
             : "coresre-sandbox";
 
-        // 每个 Agent + 会话一个 Pod（由 SandboxPodPool 统一管理生命周期）
-        var key = $"{agentId:N}/{conversationId}";
-        var box = _podPool.Boxes.GetOrAdd(key, _ =>
-        {
-            _logger.LogInformation(
-                "Creating K8s sandbox Pod for Agent={AgentId}, Conversation={ConversationId}, " +
-                "Image={Image}, Cpus={Cpus}m, Memory={Memory}MiB, Namespace={Namespace}, Type={BoxType}",
-                agentId, conversationId, image, cpuMillicores, memoryMib, ns, boxType);
+        // 判断沙箱模式：Persistent 使用已有 Pod，Ephemeral 创建临时 Pod
+        var sandboxMode = llmConfig.SandboxMode;
+        ISandboxBox box;
 
-            // 同步等待 Pod 创建（在 ConcurrentDictionary.GetOrAdd 回调中）
-            return KubernetesSandboxBox.CreateAsync(
-                _k8sClient, ns, image, cpuMillicores, memoryMib,
-                _loggerFactory.CreateLogger<KubernetesSandboxBox>())
+        if (string.Equals(sandboxMode, "Persistent", StringComparison.OrdinalIgnoreCase)
+            && llmConfig.SandboxInstanceId is not null)
+        {
+            // Persistent 模式 — 使用已存在的持久化沙箱 Pod
+            var sandboxInstance = _sandboxRepo.GetByIdAsync(llmConfig.SandboxInstanceId.Value)
                 .GetAwaiter().GetResult();
-        });
+
+            if (sandboxInstance is null || sandboxInstance.Status != Domain.Enums.SandboxStatus.Running
+                || string.IsNullOrEmpty(sandboxInstance.PodName))
+            {
+                _logger.LogWarning(
+                    "Persistent sandbox {SandboxId} not available, falling back to ephemeral Pod",
+                    llmConfig.SandboxInstanceId);
+                box = CreateEphemeralBox(agentId, conversationId, image, cpuMillicores, memoryMib, ns, boxType);
+            }
+            else
+            {
+                _logger.LogInformation(
+                    "Using persistent sandbox Pod={PodName} for Agent={AgentId}",
+                    sandboxInstance.PodName, agentId);
+
+                sandboxInstance.Touch();
+                _sandboxRepo.UpdateAsync(sandboxInstance).GetAwaiter().GetResult();
+
+                box = KubernetesSandboxBox.Attach(
+                    _k8sClient, sandboxInstance.K8sNamespace, sandboxInstance.PodName,
+                    sandboxInstance.Image, _loggerFactory.CreateLogger<KubernetesSandboxBox>());
+            }
+        }
+        else
+        {
+            // Ephemeral 模式 — 每对话创建/销毁 Pod（原有行为）
+            box = CreateEphemeralBox(agentId, conversationId, image, cpuMillicores, memoryMib, ns, boxType);
+        }
 
         var toolLogger = _loggerFactory.CreateLogger("CoreSRE.Sandbox.K8s");
 
@@ -111,6 +138,26 @@ public sealed class KubernetesSandboxToolProvider : ISandboxToolProvider
         SandboxType.ComputerBox => "python:3.12-slim",
         _ => "python:3.12-slim"
     };
+
+    /// <summary>创建临时沙箱 Pod（原有 Ephemeral 行为）</summary>
+    private ISandboxBox CreateEphemeralBox(
+        Guid agentId, string conversationId, string image,
+        int cpuMillicores, int memoryMib, string ns, SandboxType boxType)
+    {
+        var key = $"{agentId:N}/{conversationId}";
+        return _podPool.Boxes.GetOrAdd(key, _ =>
+        {
+            _logger.LogInformation(
+                "Creating ephemeral K8s sandbox Pod for Agent={AgentId}, Conversation={ConversationId}, " +
+                "Image={Image}, Cpus={Cpus}m, Memory={Memory}MiB, Namespace={Namespace}, Type={BoxType}",
+                agentId, conversationId, image, cpuMillicores, memoryMib, ns, boxType);
+
+            return KubernetesSandboxBox.CreateAsync(
+                _k8sClient, ns, image, cpuMillicores, memoryMib,
+                _loggerFactory.CreateLogger<KubernetesSandboxBox>())
+                .GetAwaiter().GetResult();
+        });
+    }
 }
 
 // =============================================================================
