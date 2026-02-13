@@ -1,6 +1,7 @@
 using A2A;
 using CoreSRE.Application.Interfaces;
 using CoreSRE.Application.Skills;
+using CoreSRE.Domain.Entities;
 using CoreSRE.Domain.Interfaces;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
@@ -147,32 +148,56 @@ public class AgentResolverService : IAgentResolver
         }
 
         // 3.7 如果绑定了 SkillRefs，注入渐进式披露工具（read_skill / read_skill_file）
+        // 规则：HasFiles=true 的 Skill 需要沙箱支持，无沙箱时跳过这些 Skill 并警告
         string? skillSummary = null;
+        var sandboxEnabled = agent.LlmConfig.EnableSandbox == true;
         var configuredSkillRefs = agent.LlmConfig.SkillRefs;
         if (configuredSkillRefs is not null && configuredSkillRefs.Count > 0)
         {
-            var skills = (await _skillRepo.GetActiveByIdsAsync(configuredSkillRefs)).ToList();
-            if (skills.Count > 0)
+            var allSkills = (await _skillRepo.GetActiveByIdsAsync(configuredSkillRefs)).ToList();
+            if (allSkills.Count > 0)
             {
-                // Build name → entity map for tool lookups
-                var skillMap = skills.ToDictionary(s => s.Name, s => s, StringComparer.OrdinalIgnoreCase);
-
-                // Inject read_skill tool (always)
-                allTools.Add(new ReadSkillAIFunction(skillMap));
-
-                // Inject read_skill_file tool only when at least one skill has files
-                var hasFileSkills = skills.Any(s => s.HasFiles);
-                if (hasFileSkills)
+                // 无沙箱时，过滤掉 HasFiles=true 的 Skill（文件包 Skill 必须搭配沙箱使用）
+                List<SkillRegistration> skills;
+                if (sandboxEnabled)
                 {
-                    allTools.Add(new ReadSkillFileAIFunction(skillMap, _fileStorage));
+                    skills = allSkills;
+                }
+                else
+                {
+                    var skippedSkills = allSkills.Where(s => s.HasFiles).ToList();
+                    skills = allSkills.Where(s => !s.HasFiles).ToList();
+                    if (skippedSkills.Count > 0)
+                    {
+                        _logger.LogWarning(
+                            "Agent '{AgentName}': {Count} skill(s) with file packages skipped (no sandbox enabled): {Names}",
+                            agent.Name, skippedSkills.Count,
+                            string.Join(", ", skippedSkills.Select(s => s.Name)));
+                    }
                 }
 
-                // Build skill summary for SystemPrompt injection
-                skillSummary = SkillPromptBuilder.BuildSkillSummary(skills);
-                var toolsSuffix = hasFileSkills ? " + read_skill_file" : "";
-                _logger.LogInformation(
-                    "Skills injected for Agent '{AgentName}': {SkillCount} skills, tools: read_skill{HasFilesTool}",
-                    agent.Name, skills.Count, toolsSuffix);
+                if (skills.Count > 0)
+                {
+                    // Build name → entity map for tool lookups
+                    var skillMap = skills.ToDictionary(s => s.Name, s => s, StringComparer.OrdinalIgnoreCase);
+
+                    // Inject read_skill tool (always — reads Markdown content from DB, no sandbox needed)
+                    allTools.Add(new ReadSkillAIFunction(skillMap));
+
+                    // Inject read_skill_file tool only when sandbox is active AND at least one skill has files
+                    var hasFileSkills = sandboxEnabled && skills.Any(s => s.HasFiles);
+                    if (hasFileSkills)
+                    {
+                        allTools.Add(new ReadSkillFileAIFunction(skillMap, _fileStorage));
+                    }
+
+                    // Build skill summary for SystemPrompt injection (includes file availability hints)
+                    skillSummary = SkillPromptBuilder.BuildSkillSummary(skills, sandboxEnabled);
+                    var toolsSuffix = hasFileSkills ? " + read_skill_file" : "";
+                    _logger.LogInformation(
+                        "Skills injected for Agent '{AgentName}': {SkillCount} skills, tools: read_skill{HasFilesTool}",
+                        agent.Name, skills.Count, toolsSuffix);
+                }
             }
         }
 
