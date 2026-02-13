@@ -9,6 +9,7 @@ using CoreSRE.Application.Sandboxes.Commands.UpdateSandbox;
 using CoreSRE.Application.Sandboxes.Queries.GetSandboxById;
 using CoreSRE.Application.Sandboxes.Queries.GetSandboxes;
 using CoreSRE.Domain.Enums;
+using CoreSRE.Domain.Interfaces;
 using MediatR;
 
 namespace CoreSRE.Endpoints;
@@ -32,6 +33,10 @@ public static class SandboxEndpoints
         group.MapPost("/{id:guid}/start", StartSandbox);
         group.MapPost("/{id:guid}/stop", StopSandbox);
         group.MapPost("/{id:guid}/exec", ExecSandbox);
+
+        // WebSocket 交互式终端
+        group.Map("/{id:guid}/terminal", SandboxTerminalHandler.HandleAsync)
+            .ExcludeFromDescription(); // WebSocket 端点不走 OpenAPI
 
         return app;
     }

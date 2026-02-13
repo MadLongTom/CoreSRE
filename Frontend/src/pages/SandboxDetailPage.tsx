@@ -10,11 +10,9 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -26,10 +24,10 @@ import {
   startSandbox,
   stopSandbox,
   deleteSandbox,
-  execSandbox,
 } from "@/lib/api/sandboxes";
-import type { SandboxInstance, SandboxExecResult } from "@/types/sandbox";
+import type { SandboxInstance } from "@/types/sandbox";
 import { SandboxStatusBadge } from "@/components/sandboxes/SandboxStatusBadge";
+import { SandboxTerminal } from "@/components/sandboxes/SandboxTerminal";
 
 export default function SandboxDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -38,13 +36,6 @@ export default function SandboxDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<SandboxError | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
-
-  // Exec state
-  const [execCommand, setExecCommand] = useState("");
-  const [execResults, setExecResults] = useState<
-    Array<{ command: string; result: SandboxExecResult }>
-  >([]);
-  const [execRunning, setExecRunning] = useState(false);
 
   const fetchSandbox = useCallback(async () => {
     if (!id) return;
@@ -109,36 +100,6 @@ export default function SandboxDetailPage() {
       setActionLoading(false);
     }
   }, [id, navigate]);
-
-  const handleExec = useCallback(async () => {
-    if (!id || !execCommand.trim()) return;
-    setExecRunning(true);
-    try {
-      const parts = execCommand.trim().split(/\s+/);
-      const result = await execSandbox(id, {
-        command: parts[0],
-        args: parts.slice(1),
-      });
-      if (result.success && result.data) {
-        setExecResults((prev) => [
-          ...prev,
-          { command: execCommand, result: result.data! },
-        ]);
-        setExecCommand("");
-      }
-    } catch (err) {
-      const apiErr = err as ApiError;
-      setExecResults((prev) => [
-        ...prev,
-        {
-          command: execCommand,
-          result: { exitCode: -1, stdout: "", stderr: apiErr.message ?? "执行失败" },
-        },
-      ]);
-    } finally {
-      setExecRunning(false);
-    }
-  }, [id, execCommand]);
 
   if (loading) {
     return (
@@ -248,54 +209,16 @@ export default function SandboxDetailPage() {
           </Card>
         </div>
 
-        {/* Terminal / Exec Section */}
+        {/* Web Terminal */}
         {sandbox.status === "Running" && (
-          <Card>
-            <CardHeader>
+          <Card className="flex flex-col" style={{ height: "480px" }}>
+            <CardHeader className="shrink-0 pb-2">
               <CardTitle className="flex items-center gap-2">
-                <Terminal className="h-5 w-5" /> 命令执行
+                <Terminal className="h-5 w-5" /> 终端
               </CardTitle>
-              <CardDescription>在沙箱中执行命令</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Output */}
-              {execResults.length > 0 && (
-                <div className="rounded-md bg-black p-4 font-mono text-sm text-green-400 max-h-96 overflow-y-auto space-y-3">
-                  {execResults.map((entry, i) => (
-                    <div key={i}>
-                      <div className="text-gray-400">$ {entry.command}</div>
-                      {entry.result.stdout && <pre className="whitespace-pre-wrap">{entry.result.stdout}</pre>}
-                      {entry.result.stderr && (
-                        <pre className="whitespace-pre-wrap text-red-400">{entry.result.stderr}</pre>
-                      )}
-                      <div className="text-gray-600 text-xs">
-                        exit code: {entry.result.exitCode}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Input */}
-              <div className="flex gap-2">
-                <Input
-                  className="font-mono"
-                  placeholder="输入命令..."
-                  value={execCommand}
-                  onChange={(e) => setExecCommand(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !execRunning) handleExec();
-                  }}
-                  disabled={execRunning}
-                />
-                <Button onClick={handleExec} disabled={execRunning || !execCommand.trim()}>
-                  {execRunning ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    "执行"
-                  )}
-                </Button>
-              </div>
+            <CardContent className="flex-1 min-h-0 pb-3">
+              <SandboxTerminal sandboxId={sandbox.id} />
             </CardContent>
           </Card>
         )}

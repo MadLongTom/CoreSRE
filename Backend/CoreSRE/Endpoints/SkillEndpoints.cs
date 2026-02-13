@@ -104,10 +104,10 @@ public static class SkillEndpoints
         return Results.NoContent();
     }
 
-    /// <summary>POST /api/skills/{id}/files — 上传文件到 Skill 文件包</summary>
+    /// <summary>POST /api/skills/{id}/files — 上传文件到 Skill 文件包（支持多文件）</summary>
     private static async Task<IResult> UploadSkillFiles(
         Guid id,
-        IFormFile file,
+        IFormFileCollection files,
         IFileStorageService storage,
         ISender sender,
         string? prefix = null)
@@ -116,19 +116,27 @@ public static class SkillEndpoints
         var skillResult = await sender.Send(new GetSkillByIdQuery(id));
         if (!skillResult.Success) return Results.NotFound(skillResult);
 
-        if (file is null || file.Length == 0)
-            return Results.BadRequest(new { success = false, message = "File is required." });
+        if (files is null || files.Count == 0)
+            return Results.BadRequest(new { success = false, message = "At least one file is required." });
 
-        var key = string.IsNullOrWhiteSpace(prefix)
-            ? $"{id}/{file.FileName}"
-            : $"{id}/{prefix.TrimEnd('/')}/{file.FileName}";
+        var uploaded = new List<object>();
+        foreach (var file in files)
+        {
+            if (file.Length == 0) continue;
 
-        using var stream = file.OpenReadStream();
-        await storage.UploadAsync("coresre-skills", key, stream,
-            file.ContentType ?? "application/octet-stream");
+            var key = string.IsNullOrWhiteSpace(prefix)
+                ? $"{id}/{file.FileName}"
+                : $"{id}/{prefix.TrimEnd('/')}/{file.FileName}";
 
-        return Results.Created($"/api/skills/{id}/files/{file.FileName}",
-            Result<object>.Ok(new { key, size = file.Length }));
+            using var stream = file.OpenReadStream();
+            await storage.UploadAsync("coresre-skills", key, stream,
+                file.ContentType ?? "application/octet-stream");
+
+            uploaded.Add(new { key, size = file.Length });
+        }
+
+        return Results.Created($"/api/skills/{id}/files",
+            Result<object>.Ok(new { uploaded = uploaded.Count, files = uploaded }));
     }
 
     /// <summary>GET /api/skills/{id}/files — 列出 Skill 文件包</summary>
