@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams, Link } from "react-router";
-import { ArrowLeft, Loader2, RefreshCw } from "lucide-react";
+import { ArrowLeft, Loader2, RefreshCw, Wifi, WifiOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -8,6 +8,7 @@ import { ExecutionStatusBadge } from "@/components/workflows/ExecutionStatusBadg
 import { DagExecutionViewer } from "@/components/workflows/DagExecutionViewer";
 import { NodeExecutionTimeline } from "@/components/workflows/NodeExecutionTimeline";
 import { getWorkflowById, getWorkflowExecutionById } from "@/lib/api/workflows";
+import { useWorkflowSignalR, applyNodeEvent, applyExecutionStatusEvent } from "@/hooks/useWorkflowSignalR";
 import type { WorkflowDetail, WorkflowExecutionDetail } from "@/types/workflow";
 
 export default function WorkflowExecutionDetailPage() {
@@ -49,14 +50,98 @@ export default function WorkflowExecutionDetailPage() {
     fetchData();
   }, [fetchData]);
 
-  // Auto-refresh for running executions
-  useEffect(() => {
-    if (!execution) return;
-    if (execution.status === "Running" || execution.status === "Pending") {
-      const timer = setInterval(fetchData, 3000);
-      return () => clearInterval(timer);
+  // SignalR real-time updates (replaces polling)
+  const { connectionState } = useWorkflowSignalR(
+    execution?.status === "Running" || execution?.status === "Pending" ? execId : undefined,
+    {
+      onExecutionStarted: () => {
+        setExecution((prev) =>
+          prev ? { ...prev, status: applyExecutionStatusEvent("started") } : prev
+        );
+      },
+      onNodeExecutionStarted: (_execId, nodeId, input) => {
+        setExecution((prev) =>
+          prev
+            ? {
+                ...prev,
+                nodeExecutions: applyNodeEvent(prev.nodeExecutions ?? [], nodeId, "Running", { input }),
+              }
+            : prev
+        );
+      },
+      onNodeExecutionCompleted: (_execId, nodeId, output) => {
+        setExecution((prev) =>
+          prev
+            ? {
+                ...prev,
+                nodeExecutions: applyNodeEvent(prev.nodeExecutions ?? [], nodeId, "Completed", { output }),
+              }
+            : prev
+        );
+      },
+      onNodeExecutionFailed: (_execId, nodeId, error) => {
+        setExecution((prev) =>
+          prev
+            ? {
+                ...prev,
+                nodeExecutions: applyNodeEvent(prev.nodeExecutions ?? [], nodeId, "Failed", { error }),
+              }
+            : prev
+        );
+      },
+      onNodeExecutionSkipped: (_execId, nodeId) => {
+        setExecution((prev) =>
+          prev
+            ? {
+                ...prev,
+                nodeExecutions: applyNodeEvent(prev.nodeExecutions ?? [], nodeId, "Skipped"),
+              }
+            : prev
+        );
+      },
+      onExecutionCompleted: (_execId, output) => {
+        setExecution((prev) =>
+          prev
+            ? {
+                ...prev,
+                status: applyExecutionStatusEvent("completed"),
+                output: output ? JSON.parse(output) : null,
+                completedAt: new Date().toISOString(),
+              }
+            : prev
+        );
+      },
+      onExecutionFailed: (_execId, error) => {
+        setExecution((prev) =>
+          prev
+            ? {
+                ...prev,
+                status: applyExecutionStatusEvent("failed"),
+                errorMessage: error,
+                completedAt: new Date().toISOString(),
+              }
+            : prev
+        );
+      },
+      onReconnected: () => {
+        // Re-fetch full state on reconnection to ensure consistency
+        fetchData();
+      },
+      onClose: () => {
+        // Fallback: start REST polling if SignalR permanently disconnects
+        if (execution?.status === "Running" || execution?.status === "Pending") {
+          const timer = setInterval(fetchData, 5000);
+          // Clean up on unmount or status change
+          const checkStatus = () => {
+            if (execution?.status !== "Running" && execution?.status !== "Pending") {
+              clearInterval(timer);
+            }
+          };
+          checkStatus();
+        }
+      },
     }
-  }, [execution, fetchData]);
+  );
 
   if (loading) {
     return (
@@ -100,11 +185,26 @@ export default function WorkflowExecutionDetailPage() {
           </Button>
         }
         actions={
-          isRunning ? (
+          <div className="flex items-center gap-2">
+            {isRunning && connectionState === "connected" && (
+              <span className="flex items-center gap-1 text-xs text-green-600">
+                <Wifi className="h-3 w-3" /> 实时
+              </span>
+            )}
+            {isRunning && connectionState === "reconnecting" && (
+              <span className="flex items-center gap-1 text-xs text-yellow-600">
+                <Wifi className="h-3 w-3 animate-pulse" /> 重连中
+              </span>
+            )}
+            {isRunning && (connectionState === "disconnected" || connectionState === "connecting") && (
+              <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                <WifiOff className="h-3 w-3" /> 离线
+              </span>
+            )}
             <Button variant="ghost" size="sm" onClick={fetchData}>
-              <RefreshCw className="mr-1 h-4 w-4 animate-spin" /> 刷新中…
+              <RefreshCw className="mr-1 h-4 w-4" /> 刷新
             </Button>
-          ) : null
+          </div>
         }
       />
 

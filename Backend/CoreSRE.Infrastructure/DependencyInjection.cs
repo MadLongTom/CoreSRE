@@ -113,6 +113,9 @@ public static class DependencyInjection
         // Expression Engine — V8 (ClearScript) JavaScript 表达式求值器
         services.AddScoped<IExpressionEvaluator, V8ExpressionEvaluator>();
 
+        // Workflow Execution Notifier — 实时推送执行事件
+        services.AddScoped<IWorkflowExecutionNotifier, NullWorkflowExecutionNotifier>();
+
         // Workflow Execution Engine + background service + channel
         services.AddScoped<IWorkflowEngine, WorkflowEngine>();
         services.AddScoped<IConditionEvaluator, ConditionEvaluator>();
@@ -126,6 +129,9 @@ public static class DependencyInjection
 
         // ── Skill Registration Repository ──
         services.AddScoped<ISkillRegistrationRepository, SkillRegistrationRepository>();
+
+        // ── Skill SKILL.md Import/Export Service ──
+        services.AddScoped<ISkillMdService, SkillMdService>();
 
         // ── Sandbox Instance Repository + Manager ──
         services.AddScoped<ISandboxInstanceRepository, SandboxInstanceRepository>();

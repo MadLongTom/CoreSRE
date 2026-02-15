@@ -22,6 +22,7 @@ public class WorkflowEngine : IWorkflowEngine
     private readonly IWorkflowExecutionRepository _executionRepo;
     private readonly IConditionEvaluator _conditionEvaluator;
     private readonly IExpressionEvaluator _expressionEvaluator;
+    private readonly IWorkflowExecutionNotifier _notifier;
     private readonly ILogger<WorkflowEngine> _logger;
 
     /// <summary>节点执行超时</summary>
@@ -37,6 +38,7 @@ public class WorkflowEngine : IWorkflowEngine
         IWorkflowExecutionRepository executionRepo,
         IConditionEvaluator conditionEvaluator,
         IExpressionEvaluator expressionEvaluator,
+        IWorkflowExecutionNotifier notifier,
         ILogger<WorkflowEngine> logger)
     {
         _agentResolver = agentResolver;
@@ -45,6 +47,7 @@ public class WorkflowEngine : IWorkflowEngine
         _executionRepo = executionRepo;
         _conditionEvaluator = conditionEvaluator;
         _expressionEvaluator = expressionEvaluator;
+        _notifier = notifier;
         _logger = logger;
     }
 
@@ -56,6 +59,7 @@ public class WorkflowEngine : IWorkflowEngine
 
         execution.Start();
         await _executionRepo.UpdateAsync(execution, cancellationToken);
+        await _notifier.ExecutionStartedAsync(execution.Id, execution.WorkflowDefinitionId, cancellationToken);
 
         try
         {
@@ -110,8 +114,10 @@ public class WorkflowEngine : IWorkflowEngine
                     _logger.LogError(errorMsg);
                     execution.FailNode(node.NodeId, errorMsg);
                     await _executionRepo.UpdateAsync(execution, cancellationToken);
+                    await _notifier.NodeExecutionFailedAsync(execution.Id, node.NodeId, errorMsg, cancellationToken);
                     execution.Fail(errorMsg);
                     await _executionRepo.UpdateAsync(execution, cancellationToken);
+                    await _notifier.ExecutionFailedAsync(execution.Id, errorMsg, cancellationToken);
                     return;
                 }
 
@@ -145,6 +151,7 @@ public class WorkflowEngine : IWorkflowEngine
 
                 execution.StartNode(node.NodeId, inputString);
                 await _executionRepo.UpdateAsync(execution, cancellationToken);
+                await _notifier.NodeExecutionStartedAsync(execution.Id, node.NodeId, inputString, cancellationToken);
 
                 using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                 cts.CancelAfter(NodeTimeout);
@@ -161,6 +168,7 @@ public class WorkflowEngine : IWorkflowEngine
 
                     execution.CompleteNode(node.NodeId, outputString);
                     await _executionRepo.UpdateAsync(execution, cancellationToken);
+                    await _notifier.NodeExecutionCompletedAsync(execution.Id, node.NodeId, outputString, cancellationToken);
 
                     ctx.RecordResult(node.NodeId, new NodeRunResult
                     {
@@ -181,8 +189,10 @@ public class WorkflowEngine : IWorkflowEngine
                     _logger.LogWarning("节点 {NodeId} {Error}", node.NodeId, timeoutMsg);
                     execution.FailNode(node.NodeId, timeoutMsg);
                     await _executionRepo.UpdateAsync(execution, cancellationToken);
+                    await _notifier.NodeExecutionFailedAsync(execution.Id, node.NodeId, timeoutMsg, cancellationToken);
                     execution.Fail($"节点 {node.NodeId} 执行超时");
                     await _executionRepo.UpdateAsync(execution, cancellationToken);
+                    await _notifier.ExecutionFailedAsync(execution.Id, $"节点 {node.NodeId} 执行超时", cancellationToken);
                     return;
                 }
                 catch (Exception ex)
@@ -190,8 +200,10 @@ public class WorkflowEngine : IWorkflowEngine
                     _logger.LogError(ex, "节点 {NodeId} 执行失败", node.NodeId);
                     execution.FailNode(node.NodeId, ex.Message);
                     await _executionRepo.UpdateAsync(execution, cancellationToken);
+                    await _notifier.NodeExecutionFailedAsync(execution.Id, node.NodeId, ex.Message, cancellationToken);
                     execution.Fail($"节点 {node.NodeId} 执行失败: {ex.Message}");
                     await _executionRepo.UpdateAsync(execution, cancellationToken);
+                    await _notifier.ExecutionFailedAsync(execution.Id, $"节点 {node.NodeId} 执行失败: {ex.Message}", cancellationToken);
                     return;
                 }
             }
@@ -216,6 +228,7 @@ public class WorkflowEngine : IWorkflowEngine
             }
             execution.Complete(finalOutput);
             await _executionRepo.UpdateAsync(execution, cancellationToken);
+            await _notifier.ExecutionCompletedAsync(execution.Id, lastOutput, cancellationToken);
 
             _logger.LogInformation("工作流 {ExecutionId} 执行完成", execution.Id);
         }
@@ -226,6 +239,7 @@ public class WorkflowEngine : IWorkflowEngine
             {
                 execution.Fail("工作流执行被取消");
                 await _executionRepo.UpdateAsync(execution, cancellationToken);
+                await _notifier.ExecutionFailedAsync(execution.Id, "工作流执行被取消", cancellationToken);
             }
         }
         catch (Exception ex)
@@ -235,6 +249,7 @@ public class WorkflowEngine : IWorkflowEngine
             {
                 execution.Fail(ex.Message);
                 await _executionRepo.UpdateAsync(execution, cancellationToken);
+                await _notifier.ExecutionFailedAsync(execution.Id, ex.Message, cancellationToken);
             }
         }
     }
@@ -404,6 +419,8 @@ public class WorkflowEngine : IWorkflowEngine
         execution.CompleteNode(fanOutNode.NodeId, inputString);
         nodeOutputs[fanOutNode.NodeId] = inputString;
         await _executionRepo.UpdateAsync(execution, cancellationToken);
+        await _notifier.NodeExecutionStartedAsync(execution.Id, fanOutNode.NodeId, inputString, cancellationToken);
+        await _notifier.NodeExecutionCompletedAsync(execution.Id, fanOutNode.NodeId, inputString, cancellationToken);
 
         if (!fanOutDownstream.TryGetValue(fanOutNode.NodeId, out var downstream) || downstream.Count == 0)
             return inputString;
@@ -412,6 +429,7 @@ public class WorkflowEngine : IWorkflowEngine
         foreach (var parallelNode in downstream)
         {
             execution.StartNode(parallelNode.NodeId, inputString);
+            await _notifier.NodeExecutionStartedAsync(execution.Id, parallelNode.NodeId, inputString, cancellationToken);
         }
         await _executionRepo.UpdateAsync(execution, cancellationToken);
 
@@ -455,12 +473,14 @@ public class WorkflowEngine : IWorkflowEngine
             {
                 _logger.LogError(result.Error, "并行节点 {NodeId} 执行失败", result.NodeId);
                 execution.FailNode(result.NodeId, result.Error.Message);
+                await _notifier.NodeExecutionFailedAsync(execution.Id, result.NodeId, result.Error.Message, cancellationToken);
             }
             else
             {
                 execution.CompleteNode(result.NodeId, result.Output);
                 nodeOutputs[result.NodeId] = result.Output;
                 _logger.LogInformation("并行节点 {NodeId} 执行完成", result.NodeId);
+                await _notifier.NodeExecutionCompletedAsync(execution.Id, result.NodeId, result.Output, cancellationToken);
 
                 // 累积输出给 FanIn
                 foreach (var edge in ctx.OutgoingEdges[result.NodeId])
@@ -483,8 +503,10 @@ public class WorkflowEngine : IWorkflowEngine
         if (results.Any(r => r.Error is not null))
         {
             var failedNodes = results.Where(r => r.Error is not null).Select(r => r.NodeId);
-            execution.Fail($"并行分支执行失败: {string.Join(", ", failedNodes)}");
+            var failMsg = $"并行分支执行失败: {string.Join(", ", failedNodes)}";
+            execution.Fail(failMsg);
             await _executionRepo.UpdateAsync(execution, cancellationToken);
+            await _notifier.ExecutionFailedAsync(execution.Id, failMsg, cancellationToken);
             return inputString;
         }
 
@@ -554,6 +576,8 @@ public class WorkflowEngine : IWorkflowEngine
         execution.CompleteNode(fanInNode.NodeId, aggregated);
         nodeOutputs[fanInNode.NodeId] = aggregated;
         await _executionRepo.UpdateAsync(execution, cancellationToken);
+        await _notifier.NodeExecutionStartedAsync(execution.Id, fanInNode.NodeId, fanInInput, cancellationToken);
+        await _notifier.NodeExecutionCompletedAsync(execution.Id, fanInNode.NodeId, aggregated, cancellationToken);
 
         return aggregated;
     }
@@ -764,6 +788,7 @@ public class WorkflowEngine : IWorkflowEngine
             if (edge.TargetNodeId != matchedTargetNodeId)
             {
                 execution.SkipNode(edge.TargetNodeId);
+                await _notifier.NodeExecutionSkippedAsync(execution.Id, edge.TargetNodeId, cancellationToken);
             }
         }
         await _executionRepo.UpdateAsync(execution, cancellationToken);

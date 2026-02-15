@@ -33,7 +33,13 @@ public class RegisterSkillCommandHandler : IRequestHandler<RegisterSkillCommand,
             description: request.Description,
             category: request.Category,
             content: request.Content,
-            scope: scope);
+            scope: scope,
+            license: request.License,
+            compatibility: request.Compatibility,
+            metadata: request.Metadata);
+
+        if (request.AllowedTools.Count > 0)
+            skill.SetAllowedTools(request.AllowedTools);
 
         if (request.RequiresTools.Count > 0)
             skill.SetRequiresTools(request.RequiresTools);

@@ -29,7 +29,10 @@ public class UpdateSkillCommandHandler : IRequestHandler<UpdateSkillCommand, Res
         if (existing is not null && existing.Id != request.Id)
             return Result<SkillRegistrationDto>.Conflict($"Skill with name '{request.Name}' already exists.");
 
-        skill.Update(request.Name, request.Description, request.Category, request.Content);
+        skill.Update(
+            request.Name, request.Description, request.Category, request.Content,
+            request.License, request.Compatibility, request.Metadata);
+        skill.SetAllowedTools(request.AllowedTools);
         skill.SetRequiresTools(request.RequiresTools);
 
         await _repository.UpdateAsync(skill, cancellationToken);

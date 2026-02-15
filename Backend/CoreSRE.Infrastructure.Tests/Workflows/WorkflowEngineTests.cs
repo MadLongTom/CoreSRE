@@ -43,6 +43,7 @@ public class WorkflowEngineTests
             _executionRepoMock.Object,
             _conditionEvaluatorMock.Object,
             _expressionEvaluatorMock.Object,
+            new NullWorkflowExecutionNotifier(),
             _loggerMock.Object);
     }
 

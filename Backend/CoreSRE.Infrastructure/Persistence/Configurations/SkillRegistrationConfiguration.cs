@@ -19,7 +19,7 @@ public class SkillRegistrationConfiguration : IEntityTypeConfiguration<SkillRegi
 
         builder.Property(e => e.Name)
             .HasColumnName("name")
-            .HasMaxLength(128)
+            .HasMaxLength(64)  // Agent Skills 规范: ≤64 字符
             .IsRequired();
 
         builder.Property(e => e.Description)
@@ -36,6 +36,27 @@ public class SkillRegistrationConfiguration : IEntityTypeConfiguration<SkillRegi
             .HasColumnName("content")
             .HasColumnType("text")
             .IsRequired();
+
+        // ── Agent Skills 规范新增字段 ──
+
+        builder.Property(e => e.License)
+            .HasColumnName("license")
+            .HasMaxLength(256);
+
+        builder.Property(e => e.Compatibility)
+            .HasColumnName("compatibility")
+            .HasMaxLength(500);
+
+        builder.Property(e => e.Metadata)
+            .HasColumnName("metadata")
+            .HasColumnType("jsonb");
+
+        builder.Property(e => e.AllowedTools)
+            .HasColumnName("allowed_tools")
+            .HasColumnType("jsonb")
+            .IsRequired();
+
+        // ── 标准字段（续）──
 
         builder.Property(e => e.Scope)
             .HasColumnName("scope")
@@ -131,6 +152,10 @@ Always provide structured responses with:
 - Action items list
 - Severity and status summary
 """,
+                License = (string?)null,
+                Compatibility = (string?)null,
+                AllowedTools = new List<Guid>(),
+                Metadata = (Dictionary<string, string>?)null,
                 Scope = SkillScope.Builtin,
                 Status = SkillStatus.Active,
                 RequiresTools = new List<Guid>(),
@@ -183,6 +208,10 @@ Provide findings categorized by severity:
 - 🔵 Suggestion: Nice-to-have improvements
 - 💡 Note: Informational observations
 """,
+                License = (string?)null,
+                Compatibility = (string?)null,
+                AllowedTools = new List<Guid>(),
+                Metadata = (Dictionary<string, string>?)null,
                 Scope = SkillScope.Builtin,
                 Status = SkillStatus.Active,
                 RequiresTools = new List<Guid>(),
@@ -237,6 +266,10 @@ PostgreSQL (primary), MySQL, SQL Server, MongoDB
 - Always generate rollback scripts with migrations
 - Prefer `IF EXISTS` / `IF NOT EXISTS` guards
 """,
+                License = (string?)null,
+                Compatibility = (string?)null,
+                AllowedTools = new List<Guid>(),
+                Metadata = (Dictionary<string, string>?)null,
                 Scope = SkillScope.Builtin,
                 Status = SkillStatus.Active,
                 RequiresTools = new List<Guid>(),
@@ -288,6 +321,10 @@ and infrastructure-as-code generation.
 - Include namespace annotations
 - Add resource labels following conventions
 """,
+                License = (string?)null,
+                Compatibility = (string?)null,
+                AllowedTools = new List<Guid>(),
+                Metadata = (Dictionary<string, string>?)null,
                 Scope = SkillScope.Builtin,
                 Status = SkillStatus.Active,
                 RequiresTools = new List<Guid>(),
@@ -339,6 +376,10 @@ and define SLOs for service reliability.
 - SLO specs with calculation formulas
 - Dashboard JSON/YAML for import
 """,
+                License = (string?)null,
+                Compatibility = (string?)null,
+                AllowedTools = new List<Guid>(),
+                Metadata = (Dictionary<string, string>?)null,
                 Scope = SkillScope.Builtin,
                 Status = SkillStatus.Active,
                 RequiresTools = new List<Guid>(),

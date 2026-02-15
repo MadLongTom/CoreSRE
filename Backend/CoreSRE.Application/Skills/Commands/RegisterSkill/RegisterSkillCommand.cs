@@ -13,6 +13,10 @@ public record RegisterSkillCommand : IRequest<Result<SkillRegistrationDto>>
     public string Description { get; init; } = string.Empty;
     public string Category { get; init; } = string.Empty;
     public string Content { get; init; } = string.Empty;
+    public string? License { get; init; }
+    public string? Compatibility { get; init; }
+    public Dictionary<string, string>? Metadata { get; init; }
+    public List<Guid> AllowedTools { get; init; } = [];
     public string Scope { get; init; } = "User";
     public List<Guid> RequiresTools { get; init; } = [];
 }

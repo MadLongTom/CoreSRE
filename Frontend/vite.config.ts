@@ -18,6 +18,11 @@ export default defineConfig({
         changeOrigin: true,
         ws: true,
       },
+      "/hubs": {
+        target: "http://localhost:5156",
+        changeOrigin: true,
+        ws: true,
+      },
       "/health": {
         target: "http://localhost:5156",
         changeOrigin: true,

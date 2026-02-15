@@ -60,11 +60,18 @@ public class ExecuteWorkflowCommandHandler : IRequestHandler<ExecuteWorkflowComm
             return Result<WorkflowExecutionDto>.Fail(refError);
 
         // 4. Snapshot graph and create execution (FR-023)
+        // Deep-copy the graph to avoid EF Core tracking the same owned VO instances
+        // under both WorkflowDefinition.Graph and WorkflowExecution.GraphSnapshot.
+        var graphSnapshot = workflow.Graph with
+        {
+            Nodes = workflow.Graph.Nodes.Select(n => n with { }).ToList(),
+            Edges = workflow.Graph.Edges.Select(e => e with { }).ToList(),
+        };
         var input = request.Input ?? JsonDocument.Parse("{}").RootElement;
         var execution = WorkflowExecution.Create(
             request.WorkflowDefinitionId,
             input,
-            workflow.Graph);
+            graphSnapshot);
 
         // 5. Persist execution
         await _executionRepo.AddAsync(execution, cancellationToken);

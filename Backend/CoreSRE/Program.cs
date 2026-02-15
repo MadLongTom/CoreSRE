@@ -1,5 +1,7 @@
 using CoreSRE.Application;
+using CoreSRE.Domain.Interfaces;
 using CoreSRE.Endpoints;
+using CoreSRE.Hubs;
 using CoreSRE.Infrastructure;
 using CoreSRE.Infrastructure.Persistence;
 using CoreSRE.Middleware;
@@ -20,6 +22,12 @@ builder.Services.AddInfrastructure(builder.Configuration);
 
 // AG-UI 协议中间件
 builder.Services.AddAGUI();
+
+// SignalR — 工作流执行实时推送
+builder.Services.AddSignalR();
+
+// 覆盖 NullWorkflowExecutionNotifier，使用 SignalR 实时推送
+builder.Services.AddScoped<IWorkflowExecutionNotifier, SignalRWorkflowNotifier>();
 
 // Aspire EF Core 增强（健康检查 + OTel 追踪 + 连接重试）
 builder.EnrichNpgsqlDbContext<AppDbContext>();
@@ -67,6 +75,9 @@ app.MapWorkflowEndpoints();
 app.MapFileEndpoints();
 app.MapSkillEndpoints();
 app.MapSandboxEndpoints();
+
+// ===== SignalR Hub =====
+app.MapHub<WorkflowHub>("/hubs/workflow");
 
 // ===== 自动迁移数据库（开发环境）=====
 using (var scope = app.Services.CreateScope())

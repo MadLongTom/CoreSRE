@@ -158,3 +158,53 @@ export async function deleteSkillFile(
     throw new ApiError(res.status, undefined, undefined, "Failed to delete file");
   }
 }
+
+/** GET /api/skills/:id/files/:key — download file content as text */
+export async function downloadSkillFileText(
+  id: string,
+  fileKey: string,
+): Promise<string> {
+  const encodedKey = encodeURIComponent(fileKey);
+  const res = await fetch(`/api/skills/${id}/files/${encodedKey}`);
+  if (!res.ok) {
+    throw new ApiError(res.status, undefined, undefined, "Failed to download file");
+  }
+  return res.text();
+}
+
+/** Build the URL for a skill file (used for image/pdf/office embeds) */
+export function getSkillFileUrl(id: string, fileKey: string): string {
+  const encodedKey = encodeURIComponent(fileKey);
+  return `/api/skills/${id}/files/${encodedKey}`;
+}
+
+// ---------------------------------------------------------------------------
+// Agent Skills Spec — Export / Import
+// ---------------------------------------------------------------------------
+
+/** GET /api/skills/:id/export — download SKILL.md as text */
+export async function exportSkillMd(id: string): Promise<string> {
+  const res = await fetch(`/api/skills/${id}/export`);
+  if (!res.ok) throw new ApiError(res.status, undefined, undefined, "Failed to export SKILL.md");
+  return res.text();
+}
+
+/** GET /api/skills/:id/export/zip — download as ZIP Blob */
+export async function exportSkillZip(id: string): Promise<Blob> {
+  const res = await fetch(`/api/skills/${id}/export/zip`);
+  if (!res.ok) throw new ApiError(res.status, undefined, undefined, "Failed to export ZIP");
+  return res.blob();
+}
+
+/** POST /api/skills/import — import skill from ZIP */
+export async function importSkillZip(
+  file: File,
+): Promise<ApiResult<{ id: string; name: string; filesUploaded: number; files: string[] }>> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const res = await fetchWithTimeout("/api/skills/import", {
+    method: "POST",
+    body: formData,
+  });
+  return res.json();
+}
