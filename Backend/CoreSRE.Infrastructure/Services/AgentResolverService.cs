@@ -131,6 +131,9 @@ public class AgentResolverService : IAgentResolver
             .GetChatClient(agent.LlmConfig.ModelId)
             .AsIChatClient();
 
+        // 规范化 tool call Arguments：防止 Bedrock/Anthropic 代理因 null Arguments 返回 400
+        chatClient = new ToolCallNormalizingChatClient(chatClient);
+
         // 3.5 如果有 ToolRefs，解析为 AIFunction 并用 FunctionInvokingChatClient 包装
         var allTools = new List<AIFunction>();
 
