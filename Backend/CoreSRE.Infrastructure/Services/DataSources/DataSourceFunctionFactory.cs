@@ -104,7 +104,12 @@ public sealed class DataSourceFunctionFactory : IDataSourceFunctionFactory
         return
         [
             AIFunctionFactory.Create(
-                async (string expression, string? start = null, string? end = null, string? step = null) =>
+                async (
+                    [Description("PromQL expression. Examples: 'up', 'rate(http_requests_total[5m])', 'histogram_quantile(0.99, rate(http_request_duration_seconds_bucket[5m]))'. Use list_metric_names first if unsure which metrics exist.")] string expression,
+                    [Description("Start time in ISO 8601 format (e.g. '2026-02-17T08:00:00Z'). Defaults to 1 hour ago if omitted. Use a wide range to avoid missing data.")] string? start = null,
+                    [Description("End time in ISO 8601 format (e.g. '2026-02-17T12:00:00Z'). Defaults to now if omitted.")] string? end = null,
+                    [Description("Step interval (e.g. '15s', '1m', '5m'). Defaults to auto if omitted.")] string? step = null
+                ) =>
                 {
                     var query = BuildTimeRangeQuery(expression, start, end, step);
                     var result = await querier.QueryAsync(ds, query);
@@ -113,7 +118,7 @@ public sealed class DataSourceFunctionFactory : IDataSourceFunctionFactory
                 new AIFunctionFactoryOptions
                 {
                     Name = $"query_metrics_{safeName}",
-                    Description = $"Query metrics from {ds.Name} ({ds.Product}) using PromQL expression. Returns time series data.",
+                    Description = $"Query metrics from {ds.Name} ({ds.Product}) using PromQL expression. Returns time series data. Tip: call list_metric_names_{safeName} first to discover available metrics.",
 
                 }),
 
@@ -126,7 +131,7 @@ public sealed class DataSourceFunctionFactory : IDataSourceFunctionFactory
                 new AIFunctionFactoryOptions
                 {
                     Name = $"list_metric_names_{safeName}",
-                    Description = $"List available metric names from {ds.Name} ({ds.Product}).",
+                    Description = $"List available metric names from {ds.Name} ({ds.Product}). Call this first before query_metrics to discover what metrics exist.",
 
                 }),
 
@@ -139,7 +144,7 @@ public sealed class DataSourceFunctionFactory : IDataSourceFunctionFactory
                 new AIFunctionFactoryOptions
                 {
                     Name = $"list_metric_labels_{safeName}",
-                    Description = $"List available label names from {ds.Name} ({ds.Product}).",
+                    Description = $"List available label names from {ds.Name} ({ds.Product}). Useful for knowing which dimensions can be used in PromQL queries.",
 
                 })
         ];
@@ -152,7 +157,12 @@ public sealed class DataSourceFunctionFactory : IDataSourceFunctionFactory
         return
         [
             AIFunctionFactory.Create(
-                async (string expression, string? start = null, string? end = null, int? limit = null) =>
+                async (
+                    [Description("LogQL stream selector and optional pipeline. Stream selector examples: '{namespace=\"demo-app\"}', '{app=\"order-service\"}', '{app=~\"order.*|payment.*\"}'. Pipeline filters: '|= \"error\"' (contains), '|~ \"(?i)error\"' (case-insensitive regex), '!= \"debug\"' (exclude). Full example: '{namespace=\"demo-app\"} |~ \"(?i)error|fail\"'. Call list_log_labels first to discover available label names.")] string expression,
+                    [Description("Start time in ISO 8601 format (e.g. '2026-02-17T08:00:00Z'). Defaults to 1 hour ago if omitted. Use a wide range (hours, not minutes) to avoid missing data.")] string? start = null,
+                    [Description("End time in ISO 8601 format (e.g. '2026-02-17T12:00:00Z'). Defaults to now if omitted.")] string? end = null,
+                    [Description("Maximum number of log entries to return. Defaults to server default if omitted.")] int? limit = null
+                ) =>
                 {
                     var query = new DataSourceQueryVO
                     {
@@ -166,7 +176,7 @@ public sealed class DataSourceFunctionFactory : IDataSourceFunctionFactory
                 new AIFunctionFactoryOptions
                 {
                     Name = $"query_logs_{safeName}",
-                    Description = $"Query logs from {ds.Name} ({ds.Product}) using LogQL expression. Returns log entries.",
+                    Description = $"Query logs from {ds.Name} ({ds.Product}) using LogQL expression. Returns log entries. IMPORTANT: Use LogQL syntax for the expression — stream selector in curly braces, pipeline stages with '|=', '|~', '!='. Call list_log_labels_{safeName} first to discover available label names and values.",
 
                 }),
 
@@ -179,7 +189,7 @@ public sealed class DataSourceFunctionFactory : IDataSourceFunctionFactory
                 new AIFunctionFactoryOptions
                 {
                     Name = $"list_log_labels_{safeName}",
-                    Description = $"List available log label names from {ds.Name} ({ds.Product}).",
+                    Description = $"List available log label names from {ds.Name} ({ds.Product}). Call this first before query_logs to discover available label names (e.g. app, namespace, pod, container) for building LogQL stream selectors.",
 
                 })
         ];
@@ -192,7 +202,9 @@ public sealed class DataSourceFunctionFactory : IDataSourceFunctionFactory
         return
         [
             AIFunctionFactory.Create(
-                async (string trace_id) =>
+                async (
+                    [Description("The full trace ID string (e.g. '4a0239dcee50c21c174d3d1867a615c9'). You can find trace IDs from search_traces results or from log entries that contain trace_id fields.")] string trace_id
+                ) =>
                 {
                     var query = new DataSourceQueryVO { Expression = trace_id };
                     var result = await querier.QueryAsync(ds, query);
@@ -201,12 +213,18 @@ public sealed class DataSourceFunctionFactory : IDataSourceFunctionFactory
                 new AIFunctionFactoryOptions
                 {
                     Name = $"get_trace_{safeName}",
-                    Description = $"Get a complete trace with all spans from {ds.Name} ({ds.Product}) by trace ID.",
+                    Description = $"Get a complete trace with all spans from {ds.Name} ({ds.Product}) by trace ID. Returns the full span tree for a single distributed trace.",
 
                 }),
 
             AIFunctionFactory.Create(
-                async (string service, string? operation = null, string? start = null, string? end = null, int? limit = null) =>
+                async (
+                    [Description("Service name to search traces for (e.g. 'order-service', 'payment-service'). Call list_services first to discover available service names.")] string service,
+                    [Description("Operation name filter (e.g. 'POST /api/orders', 'GET /health'). Omit to search all operations for the service. Do NOT pass empty string or 'unknown'.")] string? operation = null,
+                    [Description("Start time in ISO 8601 format (e.g. '2026-02-17T08:00:00Z'). Defaults to 1 hour ago if omitted. Use a wide range to avoid missing data.")] string? start = null,
+                    [Description("End time in ISO 8601 format (e.g. '2026-02-17T12:00:00Z'). Defaults to now if omitted.")] string? end = null,
+                    [Description("Maximum number of traces to return. Defaults to 20 if omitted.")] int? limit = null
+                ) =>
                 {
                     var filters = new List<LabelFilterVO>
                     {
@@ -227,7 +245,7 @@ public sealed class DataSourceFunctionFactory : IDataSourceFunctionFactory
                 new AIFunctionFactoryOptions
                 {
                     Name = $"search_traces_{safeName}",
-                    Description = $"Search traces from {ds.Name} ({ds.Product}) by service, operation, and time range.",
+                    Description = $"Search traces from {ds.Name} ({ds.Product}) by service name, with optional operation and time range filters. Omit operation to search all operations. Call list_services_{safeName} first to discover available service names.",
 
                 }),
 
@@ -240,7 +258,7 @@ public sealed class DataSourceFunctionFactory : IDataSourceFunctionFactory
                 new AIFunctionFactoryOptions
                 {
                     Name = $"list_services_{safeName}",
-                    Description = $"List available service names from {ds.Name} ({ds.Product}).",
+                    Description = $"List available service names from {ds.Name} ({ds.Product}). Call this first before search_traces to discover valid service names.",
 
                 })
         ];
@@ -253,7 +271,9 @@ public sealed class DataSourceFunctionFactory : IDataSourceFunctionFactory
         return
         [
             AIFunctionFactory.Create(
-                async (string? state = null) =>
+                async (
+                    [Description("Optional state filter: 'active', 'suppressed', or 'unprocessed'. Omit to list all alerts.")] string? state = null
+                ) =>
                 {
                     var additionalParams = new Dictionary<string, string>();
                     if (!string.IsNullOrEmpty(state))
@@ -271,7 +291,11 @@ public sealed class DataSourceFunctionFactory : IDataSourceFunctionFactory
                 }),
 
             AIFunctionFactory.Create(
-                async (string? alert_name = null, string? start = null, string? end = null) =>
+                async (
+                    [Description("Alert name to filter by (e.g. 'HighErrorRate', 'PodCrashLooping'). Omit to query all alerts.")] string? alert_name = null,
+                    [Description("Start time in ISO 8601 format (e.g. '2026-02-17T08:00:00Z'). Defaults to 1 hour ago if omitted.")] string? start = null,
+                    [Description("End time in ISO 8601 format (e.g. '2026-02-17T12:00:00Z'). Defaults to now if omitted.")] string? end = null
+                ) =>
                 {
                     var filters = new List<LabelFilterVO>();
                     if (!string.IsNullOrEmpty(alert_name))
@@ -301,7 +325,11 @@ public sealed class DataSourceFunctionFactory : IDataSourceFunctionFactory
         return
         [
             AIFunctionFactory.Create(
-                async (string kind, string? ns = null, string? labels = null) =>
+                async (
+                    [Description("Kubernetes resource kind. Valid values: 'Pod', 'Deployment', 'Service', 'Namespace', 'Node', 'ConfigMap', 'Secret', 'StatefulSet', 'DaemonSet', 'Job', 'CronJob', 'Ingress', 'ReplicaSet'.")] string kind,
+                    [Description("Kubernetes namespace to filter by (e.g. 'demo-app', 'default', 'kube-system'). Omit to list across all namespaces.")] string? ns = null,
+                    [Description("Label selector as comma-separated key=value pairs (e.g. 'app=order-service,version=v1'). Omit to list all resources of the specified kind.")] string? labels = null
+                ) =>
                 {
                     var filters = new List<LabelFilterVO>();
                     if (!string.IsNullOrEmpty(ns))
@@ -327,11 +355,15 @@ public sealed class DataSourceFunctionFactory : IDataSourceFunctionFactory
                 new AIFunctionFactoryOptions
                 {
                     Name = $"list_resources_{safeName}",
-                    Description = $"List resources from {ds.Name} ({ds.Product}). Specify kind (Pod, Deployment, Service, Namespace, Node, etc.), optional namespace, optional labels (comma-separated key=value)."
+                    Description = $"List Kubernetes resources from {ds.Name} ({ds.Product}) by kind, with optional namespace and label filters."
                 }),
 
             AIFunctionFactory.Create(
-                async (string kind, string name, string? ns = null) =>
+                async (
+                    [Description("Kubernetes resource kind (e.g. 'Pod', 'Deployment', 'Service').")] string kind,
+                    [Description("Exact resource name (e.g. 'order-service-6bb647cc8-2mxvj' for a Pod, 'order-service' for a Deployment).")] string name,
+                    [Description("Kubernetes namespace (e.g. 'demo-app', 'default'). Omit if the resource is cluster-scoped (e.g. Node, Namespace).")] string? ns = null
+                ) =>
                 {
                     var filters = new List<LabelFilterVO>();
                     if (!string.IsNullOrEmpty(ns))
@@ -350,7 +382,7 @@ public sealed class DataSourceFunctionFactory : IDataSourceFunctionFactory
                 new AIFunctionFactoryOptions
                 {
                     Name = $"get_resource_{safeName}",
-                    Description = $"Get a specific resource from {ds.Name} ({ds.Product}) by kind, name, and optional namespace."
+                    Description = $"Get a specific Kubernetes resource from {ds.Name} ({ds.Product}) by kind, name, and optional namespace."
                 })
         ];
     }
@@ -362,7 +394,13 @@ public sealed class DataSourceFunctionFactory : IDataSourceFunctionFactory
         return
         [
             AIFunctionFactory.Create(
-                async (string? repo = null, string? branch = null, string? since = null, string? until = null, int? limit = null) =>
+                async (
+                    [Description("Repository path in 'owner/repo' format (e.g. 'microsoft/vscode'). Omit to list across all repos.")] string? repo = null,
+                    [Description("Branch name (e.g. 'main', 'develop'). Omit to include all branches.")] string? branch = null,
+                    [Description("Start date in ISO 8601 format (e.g. '2026-02-17T00:00:00Z'). Omit for no start filter.")] string? since = null,
+                    [Description("End date in ISO 8601 format. Omit for no end filter.")] string? until = null,
+                    [Description("Maximum number of commits to return. Omit for server default.")] int? limit = null
+                ) =>
                 {
                     var additionalParams = new Dictionary<string, string>();
                     if (!string.IsNullOrEmpty(repo)) additionalParams["repo"] = repo;
@@ -385,7 +423,11 @@ public sealed class DataSourceFunctionFactory : IDataSourceFunctionFactory
                 }),
 
             AIFunctionFactory.Create(
-                async (string? repo = null, string? status = null, int? limit = null) =>
+                async (
+                    [Description("Repository path in 'owner/repo' format. Omit to list across all repos.")] string? repo = null,
+                    [Description("Pipeline status filter (e.g. 'success', 'failed', 'running'). Omit to list all statuses.")] string? status = null,
+                    [Description("Maximum number of pipelines to return. Omit for server default.")] int? limit = null
+                ) =>
                 {
                     var additionalParams = new Dictionary<string, string>();
                     if (!string.IsNullOrEmpty(repo)) additionalParams["repo"] = repo;
