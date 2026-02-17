@@ -10,6 +10,7 @@ public class LlmConfigDto
     public string ModelId { get; set; } = string.Empty;
     public string? Instructions { get; set; }
     public List<Guid> ToolRefs { get; set; } = [];
+    public List<DataSourceRefDto> DataSourceRefs { get; set; } = [];
 
     // ── ChatOptions 扩展配置 ──
     public float? Temperature { get; set; }

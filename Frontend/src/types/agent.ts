@@ -138,6 +138,13 @@ export interface SecurityScheme {
   parameters?: string;
 }
 
+/** Maps to backend DataSourceRefVO — per-function datasource binding */
+export interface DataSourceRef {
+  dataSourceId: string;
+  /** Enabled function names. null/undefined = all functions */
+  enabledFunctions?: string[] | null;
+}
+
 /** Maps to backend LlmConfigDto */
 export interface LlmConfig {
   providerId?: string | null;
@@ -145,6 +152,7 @@ export interface LlmConfig {
   modelId: string;
   instructions?: string;
   toolRefs: string[];
+  dataSourceRefs?: DataSourceRef[];
 
   // ChatOptions extended configuration
   temperature?: number | null;

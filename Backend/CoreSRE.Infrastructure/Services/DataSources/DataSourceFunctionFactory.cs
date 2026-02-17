@@ -104,7 +104,7 @@ public sealed class DataSourceFunctionFactory : IDataSourceFunctionFactory
         return
         [
             AIFunctionFactory.Create(
-                async (string expression, string? start, string? end, string? step) =>
+                async (string expression, string? start = null, string? end = null, string? step = null) =>
                 {
                     var query = BuildTimeRangeQuery(expression, start, end, step);
                     var result = await querier.QueryAsync(ds, query);
@@ -152,7 +152,7 @@ public sealed class DataSourceFunctionFactory : IDataSourceFunctionFactory
         return
         [
             AIFunctionFactory.Create(
-                async (string expression, string? start, string? end, int? limit) =>
+                async (string expression, string? start = null, string? end = null, int? limit = null) =>
                 {
                     var query = new DataSourceQueryVO
                     {
@@ -206,7 +206,7 @@ public sealed class DataSourceFunctionFactory : IDataSourceFunctionFactory
                 }),
 
             AIFunctionFactory.Create(
-                async (string service, string? operation, string? start, string? end, int? limit) =>
+                async (string service, string? operation = null, string? start = null, string? end = null, int? limit = null) =>
                 {
                     var filters = new List<LabelFilterVO>
                     {
@@ -253,7 +253,7 @@ public sealed class DataSourceFunctionFactory : IDataSourceFunctionFactory
         return
         [
             AIFunctionFactory.Create(
-                async (string? state) =>
+                async (string? state = null) =>
                 {
                     var additionalParams = new Dictionary<string, string>();
                     if (!string.IsNullOrEmpty(state))
@@ -271,7 +271,7 @@ public sealed class DataSourceFunctionFactory : IDataSourceFunctionFactory
                 }),
 
             AIFunctionFactory.Create(
-                async (string? alert_name, string? start, string? end) =>
+                async (string? alert_name = null, string? start = null, string? end = null) =>
                 {
                     var filters = new List<LabelFilterVO>();
                     if (!string.IsNullOrEmpty(alert_name))
@@ -301,7 +301,7 @@ public sealed class DataSourceFunctionFactory : IDataSourceFunctionFactory
         return
         [
             AIFunctionFactory.Create(
-                async (string kind, string? ns, string? labels) =>
+                async (string kind, string? ns = null, string? labels = null) =>
                 {
                     var filters = new List<LabelFilterVO>();
                     if (!string.IsNullOrEmpty(ns))
@@ -331,7 +331,7 @@ public sealed class DataSourceFunctionFactory : IDataSourceFunctionFactory
                 }),
 
             AIFunctionFactory.Create(
-                async (string kind, string name, string? ns) =>
+                async (string kind, string name, string? ns = null) =>
                 {
                     var filters = new List<LabelFilterVO>();
                     if (!string.IsNullOrEmpty(ns))
@@ -362,7 +362,7 @@ public sealed class DataSourceFunctionFactory : IDataSourceFunctionFactory
         return
         [
             AIFunctionFactory.Create(
-                async (string? repo, string? branch, string? since, string? until, int? limit) =>
+                async (string? repo = null, string? branch = null, string? since = null, string? until = null, int? limit = null) =>
                 {
                     var additionalParams = new Dictionary<string, string>();
                     if (!string.IsNullOrEmpty(repo)) additionalParams["repo"] = repo;
@@ -385,7 +385,7 @@ public sealed class DataSourceFunctionFactory : IDataSourceFunctionFactory
                 }),
 
             AIFunctionFactory.Create(
-                async (string? repo, string? status, int? limit) =>
+                async (string? repo = null, string? status = null, int? limit = null) =>
                 {
                     var additionalParams = new Dictionary<string, string>();
                     if (!string.IsNullOrEmpty(repo)) additionalParams["repo"] = repo;

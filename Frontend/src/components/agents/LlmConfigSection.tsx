@@ -23,15 +23,18 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { ChevronDown, ChevronRight, FileJson, Terminal, Sparkles } from "lucide-react";
+import { ChevronDown, ChevronRight, Database, FileJson, Terminal, Sparkles } from "lucide-react";
 import ProviderModelSelect from "@/components/agents/ProviderModelSelect";
 import ToolRefsPicker from "@/components/agents/ToolRefsPicker";
+import DataSourceRefsPicker from "@/components/agents/DataSourceRefsPicker";
 import SkillRefsPicker from "@/components/agents/SkillRefsPicker";
 import { getAvailableFunctions } from "@/lib/api/tools";
 import { getSandboxes, getSandboxById } from "@/lib/api/sandboxes";
 import { getSkills } from "@/lib/api/skills";
+import { getDataSources } from "@/lib/api/datasources";
 import type { SandboxInstance } from "@/types/sandbox";
 import type { BindableTool } from "@/types/tool";
+import type { DataSourceRegistration } from "@/types/datasource";
 import type { LlmConfig } from "@/types/agent";
 
 const EXAMPLE_SCHEMA = JSON.stringify(
@@ -151,6 +154,23 @@ export default function LlmConfigSection({
     return () => { cancelled = true; };
   }, [editing, config.skillRefs]);
 
+  // Resolve datasource names for view mode
+  const [resolvedDataSources, setResolvedDataSources] = useState<Map<string, DataSourceRegistration>>(new Map());
+  useEffect(() => {
+    if (editing || !config.dataSourceRefs?.length) return;
+    let cancelled = false;
+    getDataSources({ pageSize: 200 })
+      .then((result) => {
+        if (!cancelled && result.data) {
+          const map = new Map<string, DataSourceRegistration>();
+          for (const ds of result.data.items) map.set(ds.id, ds);
+          setResolvedDataSources(map);
+        }
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [editing, config.dataSourceRefs]);
+
   // Check if any advanced option has a value
   const hasAdvancedValues =
     config.temperature != null ||
@@ -215,6 +235,18 @@ export default function LlmConfigSection({
                   onChange={(ids) => update({ toolRefs: ids })}
                 />
               </div>
+              <div className="space-y-2 sm:col-span-2">
+                <Label className="flex items-center gap-1.5">
+                  <Database className="h-4 w-4" /> 数据源工具
+                </Label>
+                <p className="text-xs text-muted-foreground mb-1">
+                  绑定数据源后，Agent 可调用对应的查询函数（如 query_metrics、query_logs 等）。可展开函数列表选择性启用。
+                </p>
+                <DataSourceRefsPicker
+                  value={config.dataSourceRefs ?? []}
+                  onChange={(refs) => update({ dataSourceRefs: refs })}
+                />
+              </div>
               <div className="sm:col-span-2 flex items-center gap-3 rounded-md border p-3 bg-muted/30">
                 <Terminal className="h-5 w-5 text-muted-foreground shrink-0" />
                 <div className="flex-1 space-y-2">
@@ -271,7 +303,7 @@ export default function LlmConfigSection({
                             </SelectTrigger>
                             <SelectContent>
                               {sandboxInstances.filter(s => s.status === "Running" || s.status === "Stopped").length === 0 && (
-                                <SelectItem value="" disabled>暂无可用沙箱实例，请先在沙箱管理页创建</SelectItem>
+                                <SelectItem value="__none__" disabled>暂无可用沙箱实例，请先在沙箱管理页创建</SelectItem>
                               )}
                               {sandboxInstances
                                 .filter(s => s.status === "Running" || s.status === "Stopped")
@@ -764,6 +796,36 @@ export default function LlmConfigSection({
                         {resolvedSkills.get(ref) ?? ref.slice(0, 8) + "…"}
                       </Badge>
                     ))}
+                  </div>
+                </div>
+              )}
+              {(config.dataSourceRefs?.length ?? 0) > 0 && (
+                <div className="space-y-1 sm:col-span-2">
+                  <Label className="text-muted-foreground text-xs flex items-center gap-1">
+                    <Database className="h-3.5 w-3.5" /> 数据源工具
+                  </Label>
+                  <div className="flex flex-wrap gap-1">
+                    {config.dataSourceRefs!.map((ref, i) => {
+                      const ds = resolvedDataSources.get(ref.dataSourceId);
+                      const totalFns = ds?.metadata?.availableFunctions?.length ?? 0;
+                      const enabledFns = ref.enabledFunctions ? ref.enabledFunctions.length : totalFns;
+                      return (
+                        <Badge key={i} variant="secondary" className="text-xs gap-1">
+                          <Database className="h-3 w-3" />
+                          {ds ? ds.name : ref.dataSourceId.slice(0, 8) + "…"}
+                          {ds && (
+                            <span className="text-muted-foreground">
+                              ({ds.product})
+                            </span>
+                          )}
+                          {totalFns > 0 && ref.enabledFunctions && (
+                            <span className="text-muted-foreground">
+                              [{enabledFns}/{totalFns}]
+                            </span>
+                          )}
+                        </Badge>
+                      );
+                    })}
                   </div>
                 </div>
               )}

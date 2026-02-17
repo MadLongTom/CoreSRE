@@ -27,6 +27,7 @@ public class AgentMappingProfile : Profile
         CreateMap<AgentInterfaceVO, AgentInterfaceDto>();
         CreateMap<SecuritySchemeVO, SecuritySchemeDto>();
         CreateMap<LlmConfigVO, LlmConfigDto>();
+        CreateMap<DataSourceRefVO, DataSourceRefDto>();
 
         // DTOs → Value Objects (for command handling)
         CreateMap<AgentCardDto, AgentCardVO>();
@@ -36,6 +37,7 @@ public class AgentMappingProfile : Profile
         CreateMap<LlmConfigDto, LlmConfigVO>()
             .ForSourceMember(s => s.ProviderName, opt => opt.DoNotValidate())
             .ForSourceMember(s => s.EmbeddingProviderName, opt => opt.DoNotValidate());
+        CreateMap<DataSourceRefDto, DataSourceRefVO>();
 
         // TeamConfig: Value Object ↔ DTO
         CreateMap<TeamConfigVO, TeamConfigDto>()
