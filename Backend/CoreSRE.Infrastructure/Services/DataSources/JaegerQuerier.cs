@@ -138,6 +138,8 @@ public class JaegerQuerier : IDataSourceQuerier
 
         if (serviceFilter is not null)
             queryParams.Add($"service={Uri.EscapeDataString(serviceFilter.Value)}");
+        else if (!string.IsNullOrEmpty(query.Expression))
+            queryParams.Add($"service={Uri.EscapeDataString(query.Expression)}");  // Use expression as service name
 
         // Extract operation from filters
         var operationFilter = query.Filters?.FirstOrDefault(f =>
@@ -225,7 +227,7 @@ public class JaegerQuerier : IDataSourceQuerier
                 {
                     var childOf = refs.EnumerateArray().FirstOrDefault(r =>
                         r.TryGetProperty("refType", out var rt) && rt.GetString() == "CHILD_OF");
-                    if (childOf.TryGetProperty("spanID", out var psid))
+                    if (childOf.ValueKind == JsonValueKind.Object && childOf.TryGetProperty("spanID", out var psid))
                         parentSpanId = psid.GetString();
                 }
 

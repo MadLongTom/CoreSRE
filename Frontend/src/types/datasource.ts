@@ -147,21 +147,76 @@ export interface UpdateDataSourceRequest {
   defaultQueryConfig?: CreateDataSourceQueryConfig;
 }
 
-// ── Query request/response types ──
+// ── Query request/response types (maps to backend DataSourceQueryVO / DataSourceResultVO) ──
+
+export interface DataSourceTimeRange {
+  start: string;   // ISO 8601
+  end: string;     // ISO 8601
+  step?: string;   // e.g. "15s", "1m"
+}
+
+export interface DataSourceLabelFilter {
+  key: string;
+  operator: "Eq" | "Neq" | "Regex" | "NotRegex";
+  value: string;
+}
 
 export interface DataSourceQueryRequest {
-  expression: string;
-  timeRange?: string;
-  filters?: Record<string, string>;
-  maxResults?: number;
+  expression?: string;
+  timeRange?: DataSourceTimeRange;
+  filters?: DataSourceLabelFilter[];
+  pagination?: { offset: number; limit: number };
   additionalParams?: Record<string, string>;
 }
 
 export interface DataSourceQueryResult {
-  resources: DataSourceResource[];
-  totalCount: number;
-  queryTimeMs: number;
-  warnings?: string[];
+  resultType: number | string;  // 0=TimeSeries,1=LogEntries,2=Spans,3=Alerts,4=Resources
+  timeSeries?: DataSourceTimeSeries[];
+  logEntries?: DataSourceLogEntry[];
+  spans?: DataSourceSpan[];
+  alerts?: DataSourceAlert[];
+  resources?: DataSourceResource[];
+  totalCount?: number;
+  truncated?: boolean;
+}
+
+export interface DataSourceTimeSeries {
+  metricName: string;
+  labels: Record<string, string>;
+  dataPoints: { timestamp: string; value: number }[];
+}
+
+export interface DataSourceLogEntry {
+  timestamp: string;
+  level?: string;
+  message: string;
+  labels?: Record<string, string>;
+  source?: string;
+  traceId?: string;
+}
+
+export interface DataSourceSpan {
+  traceId: string;
+  spanId: string;
+  parentSpanId?: string;
+  operationName: string;
+  serviceName: string;
+  durationMicros: number;
+  status?: string;
+  tags?: Record<string, string>;
+  startTime: string;
+}
+
+export interface DataSourceAlert {
+  alertId?: string;
+  alertName: string;
+  severity?: string;
+  status: string;
+  startsAt: string;
+  endsAt?: string;
+  labels?: Record<string, string>;
+  annotations?: Record<string, string>;
+  fingerprint?: string;
 }
 
 export interface DataSourceResource {

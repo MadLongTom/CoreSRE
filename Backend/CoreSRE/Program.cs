@@ -7,6 +7,7 @@ using CoreSRE.Infrastructure.Persistence;
 using CoreSRE.Middleware;
 using Microsoft.Agents.AI.Hosting.AGUI;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -15,6 +16,12 @@ builder.AddServiceDefaults();
 
 // ===== 服务注册 =====
 builder.Services.AddOpenApi();
+
+// JSON 序列化 — 支持枚举字符串 + 数字双模式
+builder.Services.ConfigureHttpJsonOptions(options =>
+{
+    options.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
+});
 
 // DDD 分层服务注册
 builder.Services.AddApplication();

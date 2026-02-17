@@ -47,7 +47,10 @@ public class LokiQuerier : IDataSourceQuerier
         }
         else
         {
-            url = $"/loki/api/v1/query?query={Uri.EscapeDataString(expression)}&limit={limit}";
+            // Default to last 1 hour range — Loki instant query returns 400 for stream selectors
+            var end = DateTime.UtcNow.ToString("o");
+            var start = DateTime.UtcNow.AddHours(-1).ToString("o");
+            url = $"/loki/api/v1/query_range?query={Uri.EscapeDataString(expression)}&start={start}&end={end}&limit={limit}";
         }
 
         var response = await client.GetAsync(url, ct);

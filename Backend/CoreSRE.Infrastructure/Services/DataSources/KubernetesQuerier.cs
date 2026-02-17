@@ -450,19 +450,16 @@ public class KubernetesQuerier : IDataSourceQuerier
             config = KubernetesClientConfiguration.BuildConfigFromConfigFile(stream);
         }
         else if (!string.IsNullOrEmpty(registration.ConnectionConfig.BaseUrl)
-                 && registration.ConnectionConfig.BaseUrl != "https://kubernetes.default.svc")
+                 && registration.ConnectionConfig.BaseUrl != "https://kubernetes.default.svc"
+                 && !string.IsNullOrEmpty(registration.ConnectionConfig.EncryptedCredential))
         {
-            // Use BaseUrl + token auth
+            // Use BaseUrl + explicit token auth (remote clusters)
             config = new KubernetesClientConfiguration
             {
                 Host = registration.ConnectionConfig.BaseUrl,
+                AccessToken = registration.ConnectionConfig.EncryptedCredential,
                 SkipTlsVerify = registration.ConnectionConfig.TlsSkipVerify
             };
-
-            if (!string.IsNullOrEmpty(registration.ConnectionConfig.EncryptedCredential))
-            {
-                config.AccessToken = registration.ConnectionConfig.EncryptedCredential;
-            }
         }
         else
         {

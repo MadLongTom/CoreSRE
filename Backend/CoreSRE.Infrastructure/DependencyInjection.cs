@@ -16,6 +16,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.AspNetCore.DataProtection;
+using Npgsql;
 
 namespace CoreSRE.Infrastructure;
 
@@ -26,8 +27,12 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
+        var dataSourceBuilder = new NpgsqlDataSourceBuilder(configuration.GetConnectionString("coresre"));
+        dataSourceBuilder.EnableDynamicJson();
+        var dataSource = dataSourceBuilder.Build();
+
         services.AddDbContext<AppDbContext>(options =>
-            options.UseNpgsql(configuration.GetConnectionString("coresre")));
+            options.UseNpgsql(dataSource));
 
         // Singleton IDbContextFactory for services outside scoped lifetime (e.g., AgentSessionStore).
         // Cannot use AddDbContextFactory here because AddDbContext already registered

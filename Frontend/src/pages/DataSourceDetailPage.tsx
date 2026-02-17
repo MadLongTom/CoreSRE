@@ -51,11 +51,21 @@ import type {
   DataSourceCategory,
   DataSourceStatus,
   AuthType,
-  DataSourceResource,
+  DataSourceQueryResult,
 } from "@/types/datasource";
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleString();
+}
+
+/** Parse relative time like "5m", "1h", "24h", "7d" into milliseconds */
+function parseRelativeTime(input: string): number | null {
+  const m = input.trim().match(/^(\d+(?:\.\d+)?)\s*(s|m|h|d)$/i);
+  if (!m) return null;
+  const val = parseFloat(m[1]);
+  const unit = m[2].toLowerCase();
+  const multipliers: Record<string, number> = { s: 1000, m: 60000, h: 3600000, d: 86400000 };
+  return val * (multipliers[unit] ?? 0);
 }
 
 export default function DataSourceDetailPage() {
@@ -102,7 +112,7 @@ export default function DataSourceDetailPage() {
   const [queryExpression, setQueryExpression] = useState("");
   const [queryTimeRange, setQueryTimeRange] = useState("5m");
   const [querying, setQuerying] = useState(false);
-  const [queryResults, setQueryResults] = useState<DataSourceResource[] | null>(null);
+  const [queryResults, setQueryResults] = useState<DataSourceQueryResult | null>(null);
   const [queryError, setQueryError] = useState<string | null>(null);
 
   // Delete dialog
@@ -276,12 +286,25 @@ export default function DataSourceDetailPage() {
     setQueryError(null);
     setQueryResults(null);
     try {
+      // Build timeRange object from relative string ("5m", "1h", etc.)
+      const trimmed = queryTimeRange.trim();
+      let timeRange: { start: string; end: string } | undefined;
+      if (trimmed) {
+        const ms = parseRelativeTime(trimmed);
+        if (ms && ms > 0) {
+          const now = new Date();
+          timeRange = {
+            start: new Date(now.getTime() - ms).toISOString(),
+            end: now.toISOString(),
+          };
+        }
+      }
       const result = await queryDataSource(id, {
         expression: queryExpression.trim(),
-        timeRange: queryTimeRange.trim() || undefined,
+        timeRange,
       });
       if (result.success && result.data) {
-        setQueryResults(result.data.resources);
+        setQueryResults(result.data);
       } else {
         setQueryError(result.message ?? "查询失败");
       }
@@ -883,50 +906,210 @@ export default function DataSourceDetailPage() {
                 {queryResults && (
                   <div className="space-y-2">
                     <p className="text-sm text-muted-foreground">
-                      返回 {queryResults.length} 条结果
+                      返回 {queryResults.totalCount ?? 0} 条结果
+                      {queryResults.truncated && " (已截断)"}
                     </p>
                     <div className="max-h-96 overflow-auto rounded-md border">
-                      <table className="w-full text-sm">
-                        <thead className="bg-muted/50 sticky top-0">
-                          <tr>
-                            <th className="px-3 py-2 text-left font-medium">Kind</th>
-                            <th className="px-3 py-2 text-left font-medium">Name</th>
-                            <th className="px-3 py-2 text-left font-medium">Namespace</th>
-                            <th className="px-3 py-2 text-left font-medium">Status</th>
-                            <th className="px-3 py-2 text-left font-medium">Updated</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {queryResults.map((r, i) => (
-                            <tr key={i} className="border-t">
-                              <td className="px-3 py-2">
-                                <Badge variant="outline" className="text-xs">{r.kind}</Badge>
-                              </td>
-                              <td className="px-3 py-2 font-mono text-xs">{r.name}</td>
-                              <td className="px-3 py-2 text-muted-foreground">{r.namespace || "—"}</td>
-                              <td className="px-3 py-2">
-                                {r.status && (
-                                  <Badge
-                                    variant={
-                                      r.status === "Running" || r.status === "Active" || r.status === "Healthy" || r.status === "success"
-                                        ? "default"
-                                        : r.status === "Failed" || r.status === "Error" || r.status === "failure"
-                                          ? "destructive"
-                                          : "secondary"
-                                    }
-                                    className="text-xs"
-                                  >
-                                    {r.status}
-                                  </Badge>
-                                )}
-                              </td>
-                              <td className="px-3 py-2 text-xs text-muted-foreground">
-                                {r.updatedAt ? formatDate(r.updatedAt) : "—"}
-                              </td>
+
+                      {/* Resources (K8s / ArgoCD / GitHub) */}
+                      {queryResults.resources && queryResults.resources.length > 0 && (
+                        <table className="w-full text-sm">
+                          <thead className="bg-muted/50 sticky top-0">
+                            <tr>
+                              <th className="px-3 py-2 text-left font-medium">Kind</th>
+                              <th className="px-3 py-2 text-left font-medium">Name</th>
+                              <th className="px-3 py-2 text-left font-medium">Namespace</th>
+                              <th className="px-3 py-2 text-left font-medium">Status</th>
+                              <th className="px-3 py-2 text-left font-medium">Updated</th>
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                          </thead>
+                          <tbody>
+                            {queryResults.resources.map((r, i) => (
+                              <tr key={i} className="border-t">
+                                <td className="px-3 py-2">
+                                  <Badge variant="outline" className="text-xs">{r.kind}</Badge>
+                                </td>
+                                <td className="px-3 py-2 font-mono text-xs">{r.name}</td>
+                                <td className="px-3 py-2 text-muted-foreground">{r.namespace || "—"}</td>
+                                <td className="px-3 py-2">
+                                  {r.status && (
+                                    <Badge
+                                      variant={
+                                        r.status === "Running" || r.status === "Active" || r.status === "Healthy" || r.status === "success"
+                                          ? "default"
+                                          : r.status === "Failed" || r.status === "Error" || r.status === "failure"
+                                            ? "destructive"
+                                            : "secondary"
+                                      }
+                                      className="text-xs"
+                                    >
+                                      {r.status}
+                                    </Badge>
+                                  )}
+                                </td>
+                                <td className="px-3 py-2 text-xs text-muted-foreground">
+                                  {r.updatedAt ? formatDate(r.updatedAt) : "—"}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+
+                      {/* TimeSeries (Prometheus / VictoriaMetrics) */}
+                      {queryResults.timeSeries && queryResults.timeSeries.length > 0 && (
+                        <table className="w-full text-sm">
+                          <thead className="bg-muted/50 sticky top-0">
+                            <tr>
+                              <th className="px-3 py-2 text-left font-medium">Metric</th>
+                              <th className="px-3 py-2 text-left font-medium">Labels</th>
+                              <th className="px-3 py-2 text-left font-medium">Value</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {queryResults.timeSeries.map((ts, i) => (
+                              <tr key={i} className="border-t">
+                                <td className="px-3 py-2 font-mono text-xs">{ts.metricName}</td>
+                                <td className="px-3 py-2 text-xs text-muted-foreground">
+                                  {Object.entries(ts.labels).map(([k, v]) => `${k}="${v}"`).join(", ")}
+                                </td>
+                                <td className="px-3 py-2 font-mono text-xs">
+                                  {ts.dataPoints.length > 0
+                                    ? ts.dataPoints[ts.dataPoints.length - 1].value
+                                    : "—"}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+
+                      {/* LogEntries (Loki) */}
+                      {queryResults.logEntries && queryResults.logEntries.length > 0 && (
+                        <table className="w-full text-sm">
+                          <thead className="bg-muted/50 sticky top-0">
+                            <tr>
+                              <th className="px-3 py-2 text-left font-medium">Time</th>
+                              <th className="px-3 py-2 text-left font-medium">Level</th>
+                              <th className="px-3 py-2 text-left font-medium">Message</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {queryResults.logEntries.map((le, i) => (
+                              <tr key={i} className="border-t">
+                                <td className="px-3 py-2 text-xs text-muted-foreground whitespace-nowrap">
+                                  {formatDate(le.timestamp)}
+                                </td>
+                                <td className="px-3 py-2">
+                                  {le.level && (
+                                    <Badge
+                                      variant={
+                                        le.level === "error" || le.level === "fatal"
+                                          ? "destructive"
+                                          : le.level === "warn" || le.level === "warning"
+                                            ? "secondary"
+                                            : "outline"
+                                      }
+                                      className="text-xs"
+                                    >
+                                      {le.level}
+                                    </Badge>
+                                  )}
+                                </td>
+                                <td className="px-3 py-2 font-mono text-xs max-w-md truncate">
+                                  {le.message}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+
+                      {/* Spans (Jaeger / Tempo) */}
+                      {queryResults.spans && queryResults.spans.length > 0 && (
+                        <table className="w-full text-sm">
+                          <thead className="bg-muted/50 sticky top-0">
+                            <tr>
+                              <th className="px-3 py-2 text-left font-medium">Service</th>
+                              <th className="px-3 py-2 text-left font-medium">Operation</th>
+                              <th className="px-3 py-2 text-left font-medium">Duration</th>
+                              <th className="px-3 py-2 text-left font-medium">TraceID</th>
+                              <th className="px-3 py-2 text-left font-medium">Time</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {queryResults.spans.map((sp, i) => (
+                              <tr key={i} className="border-t">
+                                <td className="px-3 py-2 text-xs">{sp.serviceName}</td>
+                                <td className="px-3 py-2 font-mono text-xs">{sp.operationName}</td>
+                                <td className="px-3 py-2 text-xs whitespace-nowrap">
+                                  {sp.durationMicros >= 1000
+                                    ? `${(sp.durationMicros / 1000).toFixed(1)}ms`
+                                    : `${sp.durationMicros}μs`}
+                                </td>
+                                <td className="px-3 py-2 font-mono text-xs text-muted-foreground">
+                                  {sp.traceId.slice(0, 12)}…
+                                </td>
+                                <td className="px-3 py-2 text-xs text-muted-foreground whitespace-nowrap">
+                                  {formatDate(sp.startTime)}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+
+                      {/* Alerts (Alertmanager) */}
+                      {queryResults.alerts && queryResults.alerts.length > 0 && (
+                        <table className="w-full text-sm">
+                          <thead className="bg-muted/50 sticky top-0">
+                            <tr>
+                              <th className="px-3 py-2 text-left font-medium">Alert</th>
+                              <th className="px-3 py-2 text-left font-medium">Severity</th>
+                              <th className="px-3 py-2 text-left font-medium">Status</th>
+                              <th className="px-3 py-2 text-left font-medium">Started</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {queryResults.alerts.map((a, i) => (
+                              <tr key={i} className="border-t">
+                                <td className="px-3 py-2 font-mono text-xs">{a.alertName}</td>
+                                <td className="px-3 py-2">
+                                  {a.severity && (
+                                    <Badge
+                                      variant={
+                                        a.severity === "critical"
+                                          ? "destructive"
+                                          : a.severity === "warning"
+                                            ? "secondary"
+                                            : "outline"
+                                      }
+                                      className="text-xs"
+                                    >
+                                      {a.severity}
+                                    </Badge>
+                                  )}
+                                </td>
+                                <td className="px-3 py-2 text-xs">{a.status}</td>
+                                <td className="px-3 py-2 text-xs text-muted-foreground whitespace-nowrap">
+                                  {formatDate(a.startsAt)}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+
+                      {/* Empty state */}
+                      {!queryResults.resources?.length &&
+                       !queryResults.timeSeries?.length &&
+                       !queryResults.logEntries?.length &&
+                       !queryResults.spans?.length &&
+                       !queryResults.alerts?.length && (
+                        <div className="p-4 text-center text-sm text-muted-foreground">
+                          无结果
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}

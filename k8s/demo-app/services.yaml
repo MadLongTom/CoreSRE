@@ -1,0 +1,725 @@
+# ──────────────────── 模拟分布式业务系统 ────────────────────
+# 使用 Python + prometheus_client 模拟 3 个微服务:
+#   - order-service   (接收订单 → 调用 payment + inventory)
+#   - payment-service (模拟支付处理)
+#   - inventory-service (模拟库存扣减)
+# 每个服务输出:
+#   - Prometheus metrics (/metrics)
+#   - JSON structured logs (stdout → Promtail)
+#   - Trace ID 传播 (通过 header)
+# ────────────────────────────────────────────────────────
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: service-code
+  namespace: demo-app
+data:
+  requirements.txt: |
+    prometheus_client==0.22.1
+    opentelemetry-api==1.33.0
+    opentelemetry-sdk==1.33.0
+    opentelemetry-exporter-otlp-proto-http==1.33.0
+    opentelemetry-instrumentation-urllib==0.54b0
+    flask==3.1.1
+    opentelemetry-instrumentation-flask==0.54b0
+
+  common.py: |
+    import os, json, time, random, uuid, logging, sys
+    from datetime import datetime, timezone
+    from functools import wraps
+
+    SERVICE_NAME = os.environ.get("SERVICE_NAME", "unknown")
+
+    class JsonFormatter(logging.Formatter):
+        def format(self, record):
+            log_entry = {
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "level": record.levelname.lower(),
+                "msg": record.getMessage(),
+                "service": SERVICE_NAME,
+                "logger": record.name,
+            }
+            if hasattr(record, "trace_id") and record.trace_id:
+                log_entry["trace_id"] = record.trace_id
+            if hasattr(record, "span_id") and record.span_id:
+                log_entry["span_id"] = record.span_id
+            if record.exc_info:
+                log_entry["exception"] = self.formatException(record.exc_info)
+            return json.dumps(log_entry)
+
+    def setup_logging():
+        handler = logging.StreamHandler(sys.stdout)
+        handler.setFormatter(JsonFormatter())
+        root = logging.getLogger()
+        root.handlers.clear()
+        root.addHandler(handler)
+        root.setLevel(logging.INFO)
+        # suppress noisy libs
+        logging.getLogger("urllib3").setLevel(logging.WARNING)
+        logging.getLogger("werkzeug").setLevel(logging.WARNING)
+
+    def setup_tracing(service_name):
+        from opentelemetry import trace
+        from opentelemetry.sdk.trace import TracerProvider
+        from opentelemetry.sdk.trace.export import BatchSpanProcessor
+        from opentelemetry.sdk.resources import Resource
+        from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+
+        otel_endpoint = os.environ.get("OTEL_EXPORTER_OTLP_ENDPOINT", "http://jaeger.observability.svc.cluster.local:4318")
+
+        resource = Resource.create({"service.name": service_name})
+        provider = TracerProvider(resource=resource)
+        exporter = OTLPSpanExporter(endpoint=f"{otel_endpoint}/v1/traces")
+        provider.add_span_processor(BatchSpanProcessor(exporter))
+        trace.set_tracer_provider(provider)
+        return trace.get_tracer(service_name)
+
+  order_service.py: |
+    import os, time, random, logging, urllib.request, json
+    from flask import Flask, request, jsonify
+    from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
+    from common import setup_logging, setup_tracing, SERVICE_NAME
+
+    setup_logging()
+    tracer = setup_tracing("order-service")
+    logger = logging.getLogger("order-service")
+
+    from opentelemetry.instrumentation.flask import FlaskInstrumentor
+    from opentelemetry.instrumentation.urllib import URLLibInstrumentor
+    from opentelemetry import trace
+
+    app = Flask(__name__)
+    FlaskInstrumentor().instrument_app(app)
+    URLLibInstrumentor().instrument()
+
+    REQUEST_COUNT = Counter('http_requests_total', 'Total HTTP requests',
+                            ['method', 'endpoint', 'status', 'app'])
+    REQUEST_DURATION = Histogram('http_request_duration_seconds', 'HTTP request duration',
+                                 ['method', 'endpoint', 'app'],
+                                 buckets=[0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5])
+    ORDER_TOTAL = Counter('orders_total', 'Total orders processed', ['status', 'app'])
+
+    PAYMENT_URL = os.environ.get("PAYMENT_URL", "http://payment-service:8080")
+    INVENTORY_URL = os.environ.get("INVENTORY_URL", "http://inventory-service:8080")
+
+    @app.route('/health')
+    def health():
+        return jsonify({"status": "ok", "service": "order-service"})
+
+    @app.route('/metrics')
+    def metrics():
+        return generate_latest(), 200, {'Content-Type': CONTENT_TYPE_LATEST}
+
+    @app.route('/api/orders', methods=['POST'])
+    def create_order():
+        start = time.time()
+        span = trace.get_current_span()
+        trace_id = format(span.get_span_context().trace_id, '032x') if span.get_span_context().is_valid else ""
+
+        try:
+            # Simulate processing
+            time.sleep(random.uniform(0.01, 0.05))
+
+            # Call payment service
+            payment_req = urllib.request.Request(
+                f"{PAYMENT_URL}/api/payments",
+                data=json.dumps({"amount": random.uniform(10, 500), "order_id": random.randint(1000, 9999)}).encode(),
+                headers={"Content-Type": "application/json"}
+            )
+            payment_resp = urllib.request.urlopen(payment_req, timeout=5)
+            payment_result = json.loads(payment_resp.read())
+
+            # Call inventory service
+            inv_req = urllib.request.Request(
+                f"{INVENTORY_URL}/api/inventory/reserve",
+                data=json.dumps({"product_id": f"SKU-{random.randint(100,999)}", "quantity": random.randint(1,5)}).encode(),
+                headers={"Content-Type": "application/json"}
+            )
+            inv_resp = urllib.request.urlopen(inv_req, timeout=5)
+            inv_result = json.loads(inv_resp.read())
+
+            status = "201"
+            ORDER_TOTAL.labels(status="success", app="order-service").inc()
+            logger.info("Order created successfully", extra={"trace_id": trace_id, "span_id": ""})
+
+            duration = time.time() - start
+            REQUEST_COUNT.labels(method='POST', endpoint='/api/orders', status=status, app='order-service').inc()
+            REQUEST_DURATION.labels(method='POST', endpoint='/api/orders', app='order-service').observe(duration)
+
+            return jsonify({"status": "created", "payment": payment_result, "inventory": inv_result}), 201
+
+        except Exception as e:
+            duration = time.time() - start
+            status = "500"
+            REQUEST_COUNT.labels(method='POST', endpoint='/api/orders', status=status, app='order-service').inc()
+            REQUEST_DURATION.labels(method='POST', endpoint='/api/orders', app='order-service').observe(duration)
+            ORDER_TOTAL.labels(status="failed", app="order-service").inc()
+            logger.error(f"Order creation failed: {e}", extra={"trace_id": trace_id, "span_id": ""})
+            return jsonify({"error": str(e)}), 500
+
+    @app.route('/api/orders', methods=['GET'])
+    def list_orders():
+        start = time.time()
+        time.sleep(random.uniform(0.005, 0.02))
+        duration = time.time() - start
+        REQUEST_COUNT.labels(method='GET', endpoint='/api/orders', status='200', app='order-service').inc()
+        REQUEST_DURATION.labels(method='GET', endpoint='/api/orders', app='order-service').observe(duration)
+        return jsonify({"orders": [{"id": i, "status": "completed"} for i in range(1, 6)]})
+
+    if __name__ == '__main__':
+        logger.info("Order service starting on port 8080")
+        app.run(host='0.0.0.0', port=8080)
+
+  payment_service.py: |
+    import os, time, random, logging, json
+    from flask import Flask, request, jsonify
+    from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
+    from common import setup_logging, setup_tracing, SERVICE_NAME
+
+    setup_logging()
+    tracer = setup_tracing("payment-service")
+    logger = logging.getLogger("payment-service")
+
+    from opentelemetry.instrumentation.flask import FlaskInstrumentor
+    from opentelemetry import trace
+
+    app = Flask(__name__)
+    FlaskInstrumentor().instrument_app(app)
+
+    REQUEST_COUNT = Counter('http_requests_total', 'Total HTTP requests',
+                            ['method', 'endpoint', 'status', 'app'])
+    REQUEST_DURATION = Histogram('http_request_duration_seconds', 'HTTP request duration',
+                                 ['method', 'endpoint', 'app'],
+                                 buckets=[0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5])
+    PAYMENT_TOTAL = Counter('payments_total', 'Total payments processed', ['status', 'gateway', 'app'])
+
+    @app.route('/health')
+    def health():
+        return jsonify({"status": "ok", "service": "payment-service"})
+
+    @app.route('/metrics')
+    def metrics():
+        return generate_latest(), 200, {'Content-Type': CONTENT_TYPE_LATEST}
+
+    @app.route('/api/payments', methods=['POST'])
+    def process_payment():
+        start = time.time()
+        span = trace.get_current_span()
+        trace_id = format(span.get_span_context().trace_id, '032x') if span.get_span_context().is_valid else ""
+
+        try:
+            data = request.get_json(silent=True) or {}
+            amount = data.get("amount", 0)
+
+            # Simulate payment processing with occasional failures
+            time.sleep(random.uniform(0.02, 0.15))
+
+            if random.random() < 0.03:  # 3% failure rate
+                raise Exception("Payment gateway timeout")
+
+            gateway = random.choice(["stripe", "paypal", "alipay"])
+            PAYMENT_TOTAL.labels(status="success", gateway=gateway, app="payment-service").inc()
+
+            logger.info(f"Payment processed: amount={amount:.2f}, gateway={gateway}",
+                       extra={"trace_id": trace_id, "span_id": ""})
+
+            duration = time.time() - start
+            REQUEST_COUNT.labels(method='POST', endpoint='/api/payments', status='200', app='payment-service').inc()
+            REQUEST_DURATION.labels(method='POST', endpoint='/api/payments', app='payment-service').observe(duration)
+            return jsonify({"status": "approved", "gateway": gateway, "transaction_id": f"txn-{random.randint(10000,99999)}"})
+
+        except Exception as e:
+            duration = time.time() - start
+            PAYMENT_TOTAL.labels(status="failed", gateway="unknown", app="payment-service").inc()
+            REQUEST_COUNT.labels(method='POST', endpoint='/api/payments', status='500', app='payment-service').inc()
+            REQUEST_DURATION.labels(method='POST', endpoint='/api/payments', app='payment-service').observe(duration)
+            logger.error(f"Payment failed: {e}", extra={"trace_id": trace_id, "span_id": ""})
+            return jsonify({"error": str(e)}), 500
+
+    if __name__ == '__main__':
+        logger.info("Payment service starting on port 8080")
+        app.run(host='0.0.0.0', port=8080)
+
+  inventory_service.py: |
+    import os, time, random, logging, json
+    from flask import Flask, request, jsonify
+    from prometheus_client import Counter, Histogram, Gauge, generate_latest, CONTENT_TYPE_LATEST
+    from common import setup_logging, setup_tracing, SERVICE_NAME
+
+    setup_logging()
+    tracer = setup_tracing("inventory-service")
+    logger = logging.getLogger("inventory-service")
+
+    from opentelemetry.instrumentation.flask import FlaskInstrumentor
+    from opentelemetry import trace
+
+    app = Flask(__name__)
+    FlaskInstrumentor().instrument_app(app)
+
+    REQUEST_COUNT = Counter('http_requests_total', 'Total HTTP requests',
+                            ['method', 'endpoint', 'status', 'app'])
+    REQUEST_DURATION = Histogram('http_request_duration_seconds', 'HTTP request duration',
+                                 ['method', 'endpoint', 'app'],
+                                 buckets=[0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5])
+    INVENTORY_LEVEL = Gauge('inventory_level', 'Current inventory level', ['product_id', 'app'])
+
+    # Simulate inventory state
+    inventory = {f"SKU-{i}": random.randint(50, 200) for i in range(100, 200)}
+
+    @app.route('/health')
+    def health():
+        return jsonify({"status": "ok", "service": "inventory-service"})
+
+    @app.route('/metrics')
+    def metrics():
+        # Export a few inventory levels as gauges
+        for sku in list(inventory.keys())[:10]:
+            INVENTORY_LEVEL.labels(product_id=sku, app="inventory-service").set(inventory[sku])
+        return generate_latest(), 200, {'Content-Type': CONTENT_TYPE_LATEST}
+
+    @app.route('/api/inventory/reserve', methods=['POST'])
+    def reserve_inventory():
+        start = time.time()
+        span = trace.get_current_span()
+        trace_id = format(span.get_span_context().trace_id, '032x') if span.get_span_context().is_valid else ""
+
+        try:
+            data = request.get_json(silent=True) or {}
+            product_id = data.get("product_id", "SKU-100")
+            quantity = data.get("quantity", 1)
+
+            # Simulate processing
+            time.sleep(random.uniform(0.01, 0.08))
+
+            if random.random() < 0.02:  # 2% out-of-stock
+                raise Exception(f"Insufficient stock for {product_id}")
+
+            current = inventory.get(product_id, 100)
+            inventory[product_id] = max(0, current - quantity)
+
+            logger.info(f"Inventory reserved: {product_id} x{quantity}, remaining={inventory[product_id]}",
+                       extra={"trace_id": trace_id, "span_id": ""})
+
+            duration = time.time() - start
+            REQUEST_COUNT.labels(method='POST', endpoint='/api/inventory/reserve', status='200', app='inventory-service').inc()
+            REQUEST_DURATION.labels(method='POST', endpoint='/api/inventory/reserve', app='inventory-service').observe(duration)
+            return jsonify({"status": "reserved", "product_id": product_id, "remaining": inventory[product_id]})
+
+        except Exception as e:
+            duration = time.time() - start
+            REQUEST_COUNT.labels(method='POST', endpoint='/api/inventory/reserve', status='500', app='inventory-service').inc()
+            REQUEST_DURATION.labels(method='POST', endpoint='/api/inventory/reserve', app='inventory-service').observe(duration)
+            logger.error(f"Inventory reservation failed: {e}",
+                        extra={"trace_id": trace_id, "span_id": ""})
+            return jsonify({"error": str(e)}), 500
+
+    @app.route('/api/inventory', methods=['GET'])
+    def list_inventory():
+        start = time.time()
+        time.sleep(random.uniform(0.005, 0.02))
+        duration = time.time() - start
+        REQUEST_COUNT.labels(method='GET', endpoint='/api/inventory', status='200', app='inventory-service').inc()
+        REQUEST_DURATION.labels(method='GET', endpoint='/api/inventory', app='inventory-service').observe(duration)
+        items = [{"product_id": k, "quantity": v} for k, v in list(inventory.items())[:20]]
+        return jsonify({"items": items})
+
+    if __name__ == '__main__':
+        logger.info("Inventory service starting on port 8080")
+        app.run(host='0.0.0.0', port=8080)
+
+  traffic_generator.py: |
+    """
+    Traffic generator — runs as a CronJob or sidecar to continuously
+    hit the order-service and generate realistic telemetry data.
+    """
+    import time, random, urllib.request, json, logging, sys
+    from common import setup_logging
+
+    setup_logging()
+    logger = logging.getLogger("traffic-generator")
+
+    ORDER_URL = "http://order-service:8080"
+    PAYMENT_URL = "http://payment-service:8080"
+    INVENTORY_URL = "http://inventory-service:8080"
+
+    def make_request(method, url, data=None):
+        try:
+            req = urllib.request.Request(url, method=method)
+            if data:
+                req.data = json.dumps(data).encode()
+                req.add_header("Content-Type", "application/json")
+            resp = urllib.request.urlopen(req, timeout=10)
+            return resp.status
+        except Exception as e:
+            logger.warning(f"Request failed: {method} {url}: {e}")
+            return 0
+
+    def run():
+        logger.info("Traffic generator starting — generating load for demo-app")
+        cycle = 0
+        while True:
+            cycle += 1
+            # Create orders (most traffic)
+            for _ in range(random.randint(2, 8)):
+                make_request("POST", f"{ORDER_URL}/api/orders",
+                            {"items": [{"sku": f"SKU-{random.randint(100,199)}", "qty": random.randint(1,3)}]})
+                time.sleep(random.uniform(0.2, 1.0))
+
+            # List orders
+            make_request("GET", f"{ORDER_URL}/api/orders")
+
+            # Direct payment check
+            if random.random() < 0.3:
+                make_request("POST", f"{PAYMENT_URL}/api/payments",
+                            {"amount": random.uniform(5, 200)})
+
+            # Direct inventory check
+            if random.random() < 0.3:
+                make_request("GET", f"{INVENTORY_URL}/api/inventory")
+
+            # Health checks
+            for svc_url in [ORDER_URL, PAYMENT_URL, INVENTORY_URL]:
+                make_request("GET", f"{svc_url}/health")
+
+            if cycle % 10 == 0:
+                logger.info(f"Traffic cycle {cycle} completed")
+
+            time.sleep(random.uniform(1, 3))
+
+    if __name__ == '__main__':
+        run()
+
+---
+# ──────────────────── Deployments ────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: order-service
+  namespace: demo-app
+  labels:
+    app: order-service
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: order-service
+  template:
+    metadata:
+      labels:
+        app: order-service
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+    spec:
+      initContainers:
+        - name: install-deps
+          image: python:3.12-slim
+          command: ["pip", "install", "--target=/app/site-packages", "-r", "/app/src/requirements.txt"]
+          volumeMounts:
+            - name: code
+              mountPath: /app/src/requirements.txt
+              subPath: requirements.txt
+            - name: site-packages
+              mountPath: /app/site-packages
+      containers:
+        - name: app
+          image: python:3.12-slim
+          command: ["python", "/app/src/order_service.py"]
+          env:
+            - name: SERVICE_NAME
+              value: "order-service"
+            - name: PYTHONPATH
+              value: "/app/site-packages:/app/src"
+            - name: PAYMENT_URL
+              value: "http://payment-service:8080"
+            - name: INVENTORY_URL
+              value: "http://inventory-service:8080"
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "http://jaeger.observability.svc.cluster.local:4318"
+          ports:
+            - containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+          volumeMounts:
+            - name: code
+              mountPath: /app/src
+            - name: site-packages
+              mountPath: /app/site-packages
+      volumes:
+        - name: code
+          configMap:
+            name: service-code
+        - name: site-packages
+          emptyDir: {}
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: payment-service
+  namespace: demo-app
+  labels:
+    app: payment-service
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: payment-service
+  template:
+    metadata:
+      labels:
+        app: payment-service
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+    spec:
+      initContainers:
+        - name: install-deps
+          image: python:3.12-slim
+          command: ["pip", "install", "--target=/app/site-packages", "-r", "/app/src/requirements.txt"]
+          volumeMounts:
+            - name: code
+              mountPath: /app/src/requirements.txt
+              subPath: requirements.txt
+            - name: site-packages
+              mountPath: /app/site-packages
+      containers:
+        - name: app
+          image: python:3.12-slim
+          command: ["python", "/app/src/payment_service.py"]
+          env:
+            - name: SERVICE_NAME
+              value: "payment-service"
+            - name: PYTHONPATH
+              value: "/app/site-packages:/app/src"
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "http://jaeger.observability.svc.cluster.local:4318"
+          ports:
+            - containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+          volumeMounts:
+            - name: code
+              mountPath: /app/src
+            - name: site-packages
+              mountPath: /app/site-packages
+      volumes:
+        - name: code
+          configMap:
+            name: service-code
+        - name: site-packages
+          emptyDir: {}
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inventory-service
+  namespace: demo-app
+  labels:
+    app: inventory-service
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: inventory-service
+  template:
+    metadata:
+      labels:
+        app: inventory-service
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+    spec:
+      initContainers:
+        - name: install-deps
+          image: python:3.12-slim
+          command: ["pip", "install", "--target=/app/site-packages", "-r", "/app/src/requirements.txt"]
+          volumeMounts:
+            - name: code
+              mountPath: /app/src/requirements.txt
+              subPath: requirements.txt
+            - name: site-packages
+              mountPath: /app/site-packages
+      containers:
+        - name: app
+          image: python:3.12-slim
+          command: ["python", "/app/src/inventory_service.py"]
+          env:
+            - name: SERVICE_NAME
+              value: "inventory-service"
+            - name: PYTHONPATH
+              value: "/app/site-packages:/app/src"
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "http://jaeger.observability.svc.cluster.local:4318"
+          ports:
+            - containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+          volumeMounts:
+            - name: code
+              mountPath: /app/src
+            - name: site-packages
+              mountPath: /app/site-packages
+      volumes:
+        - name: code
+          configMap:
+            name: service-code
+        - name: site-packages
+          emptyDir: {}
+
+---
+# ──────────────────── Traffic Generator ────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: traffic-generator
+  namespace: demo-app
+  labels:
+    app: traffic-generator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: traffic-generator
+  template:
+    metadata:
+      labels:
+        app: traffic-generator
+    spec:
+      initContainers:
+        - name: install-deps
+          image: python:3.12-slim
+          command: ["pip", "install", "--target=/app/site-packages", "-r", "/app/src/requirements.txt"]
+          volumeMounts:
+            - name: code
+              mountPath: /app/src/requirements.txt
+              subPath: requirements.txt
+            - name: site-packages
+              mountPath: /app/site-packages
+        - name: wait-for-services
+          image: python:3.12-slim
+          command: ["sh", "-c", "echo 'Waiting 30s for services to start...'; sleep 30"]
+      containers:
+        - name: generator
+          image: python:3.12-slim
+          command: ["python", "/app/src/traffic_generator.py"]
+          env:
+            - name: SERVICE_NAME
+              value: "traffic-generator"
+            - name: PYTHONPATH
+              value: "/app/site-packages:/app/src"
+          resources:
+            requests:
+              cpu: 25m
+              memory: 64Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
+          volumeMounts:
+            - name: code
+              mountPath: /app/src
+            - name: site-packages
+              mountPath: /app/site-packages
+      volumes:
+        - name: code
+          configMap:
+            name: service-code
+        - name: site-packages
+          emptyDir: {}
+
+---
+# ──────────────────── Services ────────────────────
+apiVersion: v1
+kind: Service
+metadata:
+  name: order-service
+  namespace: demo-app
+spec:
+  selector:
+    app: order-service
+  ports:
+    - port: 8080
+      targetPort: 8080
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: payment-service
+  namespace: demo-app
+spec:
+  selector:
+    app: payment-service
+  ports:
+    - port: 8080
+      targetPort: 8080
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: inventory-service
+  namespace: demo-app
+spec:
+  selector:
+    app: inventory-service
+  ports:
+    - port: 8080
+      targetPort: 8080

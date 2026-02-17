@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace CoreSRE.Infrastructure.Persistence;
 
@@ -18,8 +19,12 @@ internal sealed class StandaloneDbContextFactory : IDbContextFactory<AppDbContex
 
     public AppDbContext CreateDbContext()
     {
+        var dsBuilder = new NpgsqlDataSourceBuilder(_connectionString);
+        dsBuilder.EnableDynamicJson();
+        var dataSource = dsBuilder.Build();
+
         var options = new DbContextOptionsBuilder<AppDbContext>()
-            .UseNpgsql(_connectionString)
+            .UseNpgsql(dataSource)
             .Options;
         return new AppDbContext(options);
     }
