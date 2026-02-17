@@ -36,5 +36,12 @@ public class AgentMappingProfile : Profile
         CreateMap<LlmConfigDto, LlmConfigVO>()
             .ForSourceMember(s => s.ProviderName, opt => opt.DoNotValidate())
             .ForSourceMember(s => s.EmbeddingProviderName, opt => opt.DoNotValidate());
+
+        // TeamConfig: Value Object ↔ DTO
+        CreateMap<TeamConfigVO, TeamConfigDto>()
+            .ForMember(d => d.Mode, opt => opt.MapFrom(s => s.Mode.ToString()));
+        CreateMap<HandoffTargetVO, HandoffTargetDto>();
+        CreateMap<HandoffTargetDto, HandoffTargetVO>()
+            .ConstructUsing(s => new HandoffTargetVO(s.TargetAgentId, s.Reason));
     }
 }

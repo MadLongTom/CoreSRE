@@ -8,9 +8,10 @@ namespace CoreSRE.Application.Agents.Commands.RegisterAgent;
 /// </summary>
 public class RegisterAgentCommandValidator : AbstractValidator<RegisterAgentCommand>
 {
-    private static readonly string[] ValidAgentTypes = ["A2A", "ChatClient", "Workflow"];
+    private static readonly string[] ValidAgentTypes = ["A2A", "ChatClient", "Workflow", "Team"];
     private static readonly string[] ValidResponseFormats = ["Text", "Json"];
     private static readonly string[] ValidToolModes = ["Auto", "Required", "None"];
+    private static readonly string[] ValidTeamModes = ["Sequential", "Concurrent", "RoundRobin", "Handoffs", "Selector", "MagneticOne"];
 
     public RegisterAgentCommandValidator()
     {
@@ -93,6 +94,83 @@ public class RegisterAgentCommandValidator : AbstractValidator<RegisterAgentComm
             RuleFor(x => x.WorkflowRef)
                 .NotNull().WithMessage("WorkflowRef is required for Workflow agents.")
                 .NotEqual(Guid.Empty).WithMessage("WorkflowRef must not be empty.");
+        });
+
+        // Team type-specific rules
+        When(x => x.AgentType == "Team", () =>
+        {
+            RuleFor(x => x.TeamConfig)
+                .NotNull().WithMessage("TeamConfig is required for Team agents.");
+
+            When(x => x.TeamConfig is not null, () =>
+            {
+                RuleFor(x => x.TeamConfig!.Mode)
+                    .NotEmpty().WithMessage("TeamConfig.Mode is required.")
+                    .Must(m => ValidTeamModes.Contains(m))
+                    .WithMessage($"TeamConfig.Mode must be one of: {string.Join(", ", ValidTeamModes)}.");
+
+                RuleFor(x => x.TeamConfig!.ParticipantIds)
+                    .NotEmpty().WithMessage("ParticipantIds must not be empty.");
+
+                RuleFor(x => x.TeamConfig!)
+                    .Must(tc => tc.ParticipantIds.All(id => id != Guid.Empty))
+                    .WithMessage("ParticipantIds must not contain empty GUIDs.")
+                    .When(x => x.TeamConfig!.ParticipantIds.Count > 0);
+
+                RuleFor(x => x.TeamConfig!.MaxIterations)
+                    .GreaterThan(0).WithMessage("MaxIterations must be greater than 0.");
+
+                // Sequential / Concurrent / RoundRobin: at least 2 participants
+                When(x => x.TeamConfig!.Mode is "Sequential" or "Concurrent" or "RoundRobin", () =>
+                {
+                    RuleFor(x => x.TeamConfig!.ParticipantIds)
+                        .Must(ids => ids.Count >= 2)
+                        .WithMessage(x => $"{x.TeamConfig!.Mode} Team requires at least 2 participants.");
+                });
+
+                // Selector: at least 2 participants + provider/model
+                When(x => x.TeamConfig!.Mode == "Selector", () =>
+                {
+                    RuleFor(x => x.TeamConfig!.ParticipantIds)
+                        .Must(ids => ids.Count >= 2)
+                        .WithMessage("Selector Team requires at least 2 participants.");
+
+                    RuleFor(x => x.TeamConfig!.SelectorProviderId)
+                        .NotNull().WithMessage("SelectorProviderId is required for Selector mode.");
+
+                    RuleFor(x => x.TeamConfig!.SelectorModelId)
+                        .NotEmpty().WithMessage("SelectorModelId is required for Selector mode.");
+                });
+
+                // Handoffs: InitialAgentId + routes
+                When(x => x.TeamConfig!.Mode == "Handoffs", () =>
+                {
+                    RuleFor(x => x.TeamConfig!.InitialAgentId)
+                        .NotNull().WithMessage("InitialAgentId is required for Handoffs mode.");
+
+                    RuleFor(x => x.TeamConfig!)
+                        .Must(tc => tc.InitialAgentId.HasValue && tc.ParticipantIds.Contains(tc.InitialAgentId.Value))
+                        .WithMessage("InitialAgentId must be one of the ParticipantIds.")
+                        .When(x => x.TeamConfig!.InitialAgentId.HasValue);
+
+                    RuleFor(x => x.TeamConfig!.HandoffRoutes)
+                        .NotNull().WithMessage("HandoffRoutes is required for Handoffs mode.");
+
+                    RuleFor(x => x.TeamConfig!.HandoffRoutes)
+                        .Must(r => r!.Count > 0).WithMessage("HandoffRoutes must not be empty.")
+                        .When(x => x.TeamConfig!.HandoffRoutes is not null);
+                });
+
+                // MagneticOne: orchestrator provider/model
+                When(x => x.TeamConfig!.Mode == "MagneticOne", () =>
+                {
+                    RuleFor(x => x.TeamConfig!.OrchestratorProviderId)
+                        .NotNull().WithMessage("OrchestratorProviderId is required for MagneticOne mode.");
+
+                    RuleFor(x => x.TeamConfig!.OrchestratorModelId)
+                        .NotEmpty().WithMessage("OrchestratorModelId is required for MagneticOne mode.");
+                });
+            });
         });
     }
 

@@ -32,6 +32,9 @@ public class AgentRegistration : BaseEntity
     /// <summary>Workflow Agent 引用的 WorkflowDefinition ID（仅 Workflow 类型）</summary>
     public Guid? WorkflowRef { get; private set; }
 
+    /// <summary>Team Agent 的编排配置（仅 Team 类型，JSONB）</summary>
+    public TeamConfigVO? TeamConfig { get; private set; }
+
     /// <summary>Agent 健康检查状态（JSONB）</summary>
     public HealthCheckVO HealthCheck { get; private set; } = HealthCheckVO.Default();
 
@@ -116,6 +119,29 @@ public class AgentRegistration : BaseEntity
         };
     }
 
+    /// <summary>创建 Team 类型 Agent</summary>
+    public static AgentRegistration CreateTeam(
+        string name,
+        string? description,
+        TeamConfigVO teamConfig)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name, nameof(name));
+        ArgumentNullException.ThrowIfNull(teamConfig, nameof(teamConfig));
+
+        if (name.Length > 200)
+            throw new ArgumentException("Name must not exceed 200 characters.", nameof(name));
+
+        return new AgentRegistration
+        {
+            Name = name,
+            Description = description,
+            AgentType = AgentType.Team,
+            Status = AgentStatus.Registered,
+            TeamConfig = teamConfig,
+            HealthCheck = HealthCheckVO.Default()
+        };
+    }
+
     /// <summary>
     /// 更新 Agent 配置。agentType 不可变更，按当前类型校验更新数据的合法性。
     /// </summary>
@@ -125,7 +151,8 @@ public class AgentRegistration : BaseEntity
         string? endpoint,
         AgentCardVO? agentCard,
         LlmConfigVO? llmConfig,
-        Guid? workflowRef)
+        Guid? workflowRef,
+        TeamConfigVO? teamConfig = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name, nameof(name));
 
@@ -151,6 +178,10 @@ public class AgentRegistration : BaseEntity
                 if (workflowRef is null || workflowRef == Guid.Empty)
                     throw new ArgumentException("WorkflowRef must not be empty.", nameof(workflowRef));
                 break;
+
+            case AgentType.Team:
+                ArgumentNullException.ThrowIfNull(teamConfig, nameof(teamConfig));
+                break;
         }
 
         Name = name;
@@ -159,5 +190,6 @@ public class AgentRegistration : BaseEntity
         AgentCard = agentCard;
         LlmConfig = llmConfig;
         WorkflowRef = workflowRef;
+        TeamConfig = teamConfig;
     }
 }

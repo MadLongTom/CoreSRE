@@ -74,6 +74,12 @@ public class AgentRegistrationConfiguration : IEntityTypeConfiguration<AgentRegi
             hc.ToJson("health_check");
         });
 
+        // TeamConfigVO uses Npgsql native JSONB mapping (not EF Core OwnsOne/ToJson)
+        // because it contains Dictionary<Guid, List<HandoffTargetVO>> which OwnsOne doesn't support.
+        builder.Property(e => e.TeamConfig)
+            .HasColumnType("jsonb")
+            .HasColumnName("team_config");
+
         // Indexes
         builder.HasIndex(e => e.Name)
             .IsUnique();

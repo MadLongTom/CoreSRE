@@ -12,5 +12,8 @@ public enum AgentType
     ChatClient,
 
     /// <summary>工作流 Agent，引用 WorkflowDefinition</summary>
-    Workflow
+    Workflow,
+
+    /// <summary>Team Agent，通过 TeamConfig 配置多 Agent 编排模式</summary>
+    Team
 }

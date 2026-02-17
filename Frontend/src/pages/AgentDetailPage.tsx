@@ -16,6 +16,8 @@ import { AgentStatusBadge } from "@/components/agents/AgentStatusBadge";
 import AgentCardSection from "@/components/agents/AgentCardSection";
 import LlmConfigSection from "@/components/agents/LlmConfigSection";
 import BoundToolsSection from "@/components/agents/BoundToolsSection";
+import TeamConfigForm from "@/components/agents/TeamConfigForm";
+import { DEFAULT_TEAM_CONFIG } from "@/components/agents/TeamConfigForm";
 import { DeleteAgentDialog } from "@/components/agents/DeleteAgentDialog";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { getAgentById, updateAgent, ApiError } from "@/lib/api/agents";
@@ -23,8 +25,11 @@ import type {
   AgentRegistration,
   AgentCard,
   LlmConfig,
+  TeamConfig,
   UpdateAgentRequest,
 } from "@/types/agent";
+import { TEAM_MODE_LABELS } from "@/types/agent";
+import type { TeamMode } from "@/types/agent";
 
 export default function AgentDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -48,6 +53,7 @@ export default function AgentDetailPage() {
   const [editWorkflowRef, setEditWorkflowRef] = useState("");
   const [editAgentCard, setEditAgentCard] = useState<AgentCard | null>(null);
   const [editLlmConfig, setEditLlmConfig] = useState<LlmConfig | null>(null);
+  const [editTeamConfig, setEditTeamConfig] = useState<TeamConfig>(DEFAULT_TEAM_CONFIG);
 
   // Delete dialog
   const [showDelete, setShowDelete] = useState(false);
@@ -121,6 +127,11 @@ export default function AgentDetailPage() {
         ? JSON.parse(JSON.stringify(agent.llmConfig))
         : null,
     );
+    setEditTeamConfig(
+      agent.teamConfig
+        ? JSON.parse(JSON.stringify(agent.teamConfig))
+        : DEFAULT_TEAM_CONFIG,
+    );
     setEditing(true);
     setDirty(false);
     setSaveErrors([]);
@@ -158,6 +169,8 @@ export default function AgentDetailPage() {
       request.llmConfig = editLlmConfig ?? undefined;
     } else if (agent.agentType === "Workflow") {
       request.workflowRef = editWorkflowRef.trim() || undefined;
+    } else if (agent.agentType === "Team") {
+      request.teamConfig = editTeamConfig;
     }
 
     try {
@@ -435,6 +448,71 @@ export default function AgentDetailPage() {
               <p className="text-sm font-mono">
                 {agent.workflowRef ?? "—"}
               </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {agent.agentType === "Team" && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Team 配置</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {editing ? (
+              <TeamConfigForm
+                value={editTeamConfig}
+                onChange={(config) => {
+                  setEditTeamConfig(config);
+                  markDirty();
+                }}
+                excludeAgentId={agent.id}
+              />
+            ) : agent.teamConfig ? (
+              <div className="space-y-3 text-sm">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                  <div>
+                    <Label className="text-muted-foreground text-xs">编排模式</Label>
+                    <p>{TEAM_MODE_LABELS[agent.teamConfig.mode as TeamMode] ?? agent.teamConfig.mode}</p>
+                  </div>
+                  <div>
+                    <Label className="text-muted-foreground text-xs">最大轮次</Label>
+                    <p>{agent.teamConfig.maxIterations}</p>
+                  </div>
+                  <div>
+                    <Label className="text-muted-foreground text-xs">参与者数量</Label>
+                    <p>{agent.teamConfig.participantIds.length}</p>
+                  </div>
+                  {agent.teamConfig.mode === "Handoffs" && agent.teamConfig.initialAgentId && (
+                    <div>
+                      <Label className="text-muted-foreground text-xs">初始 Agent</Label>
+                      <p className="font-mono truncate" title={agent.teamConfig.initialAgentId}>
+                        {agent.teamConfig.initialAgentId.slice(0, 8)}…
+                      </p>
+                    </div>
+                  )}
+                </div>
+                {agent.teamConfig.mode === "Selector" && (
+                  <div>
+                    <Label className="text-muted-foreground text-xs">允许连续发言</Label>
+                    <p>{agent.teamConfig.allowRepeatedSpeaker ? "是" : "否"}</p>
+                  </div>
+                )}
+                {agent.teamConfig.mode === "MagneticOne" && (
+                  <div>
+                    <Label className="text-muted-foreground text-xs">最大停滞次数</Label>
+                    <p>{agent.teamConfig.maxStalls}</p>
+                  </div>
+                )}
+                {agent.teamConfig.mode === "Concurrent" && agent.teamConfig.aggregationStrategy && (
+                  <div>
+                    <Label className="text-muted-foreground text-xs">聚合策略</Label>
+                    <p>{agent.teamConfig.aggregationStrategy}</p>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">— 未配置 —</p>
             )}
           </CardContent>
         </Card>

@@ -7,14 +7,53 @@
 // Enums (string literal unions)
 // ---------------------------------------------------------------------------
 
-/** Maps to backend AgentType enum: A2A, ChatClient, Workflow */
-export type AgentType = "A2A" | "ChatClient" | "Workflow";
+/** Maps to backend AgentType enum: A2A, ChatClient, Workflow, Team */
+export type AgentType = "A2A" | "ChatClient" | "Workflow" | "Team";
 
 /** Maps to backend AgentStatus enum: Registered, Active, Inactive, Error */
 export type AgentStatus = "Registered" | "Active" | "Inactive" | "Error";
 
 /** All valid agent types for iteration */
-export const AGENT_TYPES: AgentType[] = ["A2A", "ChatClient", "Workflow"];
+export const AGENT_TYPES: AgentType[] = ["A2A", "ChatClient", "Workflow", "Team"];
+
+/** Maps to backend TeamMode enum */
+export type TeamMode =
+  | "Sequential"
+  | "Concurrent"
+  | "RoundRobin"
+  | "Handoffs"
+  | "Selector"
+  | "MagneticOne";
+
+/** All valid team modes for iteration */
+export const TEAM_MODES: TeamMode[] = [
+  "Sequential",
+  "Concurrent",
+  "RoundRobin",
+  "Handoffs",
+  "Selector",
+  "MagneticOne",
+];
+
+/** Team mode display labels */
+export const TEAM_MODE_LABELS: Record<TeamMode, string> = {
+  Sequential: "顺序管道",
+  Concurrent: "并发聚合",
+  RoundRobin: "轮询",
+  Handoffs: "交接/Swarm",
+  Selector: "LLM 选择",
+  MagneticOne: "MagneticOne",
+};
+
+/** Team mode descriptions */
+export const TEAM_MODE_DESCRIPTIONS: Record<TeamMode, string> = {
+  Sequential: "Agent 按顺序依次处理，前一个的输出作为后一个的输入",
+  Concurrent: "所有 Agent 同时处理相同输入，结果聚合",
+  RoundRobin: "Agent 按固定顺序循环发言",
+  Handoffs: "Agent 根据路由规则自主决定交接给下一个 Agent",
+  Selector: "由 LLM 动态选择下一个发言的 Agent",
+  MagneticOne: "双循环账本编排，Orchestrator 管理 Agent 协作",
+};
 
 /** All valid agent statuses for iteration */
 export const AGENT_STATUSES: AgentStatus[] = [
@@ -65,6 +104,7 @@ export interface AgentRegistration {
   agentCard?: AgentCard;
   llmConfig?: LlmConfig;
   workflowRef?: string;
+  teamConfig?: TeamConfig;
   createdAt: string;
   updatedAt?: string;
 }
@@ -146,6 +186,34 @@ export interface LlmConfig {
   memoryMinRelevanceScore?: number | null;
 }
 
+/** Maps to backend TeamConfigDto */
+export interface TeamConfig {
+  mode: string;
+  participantIds: string[];
+  maxIterations: number;
+  // Handoffs
+  handoffRoutes?: Record<string, HandoffTarget[]>;
+  initialAgentId?: string | null;
+  // Selector
+  selectorProviderId?: string | null;
+  selectorModelId?: string | null;
+  selectorPrompt?: string | null;
+  allowRepeatedSpeaker: boolean;
+  // MagneticOne
+  orchestratorProviderId?: string | null;
+  orchestratorModelId?: string | null;
+  maxStalls: number;
+  finalAnswerPrompt?: string | null;
+  // Concurrent
+  aggregationStrategy?: string | null;
+}
+
+/** Maps to backend HandoffTargetDto */
+export interface HandoffTarget {
+  targetAgentId: string;
+  reason?: string | null;
+}
+
 // ---------------------------------------------------------------------------
 // Search Types
 // ---------------------------------------------------------------------------
@@ -188,6 +256,7 @@ export interface CreateAgentRequest {
   agentCard?: AgentCard;
   llmConfig?: LlmConfig;
   workflowRef?: string;
+  teamConfig?: TeamConfig;
 }
 
 /** Maps to backend UpdateAgentCommand — PUT /api/agents/{id} body (no agentType) */
@@ -198,6 +267,7 @@ export interface UpdateAgentRequest {
   agentCard?: AgentCard;
   llmConfig?: LlmConfig;
   workflowRef?: string;
+  teamConfig?: TeamConfig;
 }
 
 // ---------------------------------------------------------------------------

@@ -16,4 +16,5 @@ public record RegisterAgentCommand : IRequest<Result<AgentRegistrationDto>>
     public AgentCardDto? AgentCard { get; init; }
     public LlmConfigDto? LlmConfig { get; init; }
     public Guid? WorkflowRef { get; init; }
+    public TeamConfigDto? TeamConfig { get; init; }
 }

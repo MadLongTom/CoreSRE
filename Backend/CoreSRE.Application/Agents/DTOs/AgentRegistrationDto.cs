@@ -14,6 +14,7 @@ public class AgentRegistrationDto
     public AgentCardDto? AgentCard { get; set; }
     public LlmConfigDto? LlmConfig { get; set; }
     public Guid? WorkflowRef { get; set; }
+    public TeamConfigDto? TeamConfig { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
 }

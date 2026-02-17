@@ -14,6 +14,9 @@ import {
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import LlmConfigSection from "@/components/agents/LlmConfigSection";
+import TeamConfigForm, {
+  DEFAULT_TEAM_CONFIG,
+} from "@/components/agents/TeamConfigForm";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { createAgent, resolveAgentCard, ApiError } from "@/lib/api/agents";
 import type {
@@ -24,12 +27,14 @@ import type {
   AgentInterface,
   SecurityScheme,
   ResolvedAgentCard,
+  TeamConfig,
 } from "@/types/agent";
 
 const TYPE_DESCRIPTIONS: Record<AgentType, string> = {
   A2A: "Agent-to-Agent 协议，通过 HTTP 端点暴露技能",
   ChatClient: "基于 LLM 的聊天客户端 Agent",
   Workflow: "基于工作流引擎的编排 Agent",
+  Team: "多 Agent 协作编排，支持多种团队模式",
 };
 
 export default function AgentCreatePage() {
@@ -75,6 +80,11 @@ export default function AgentCreatePage() {
 
   // Workflow fields
   const [workflowRef, setWorkflowRef] = useState("");
+
+  // Team fields
+  const [teamConfig, setTeamConfig] = useState<TeamConfig>({
+    ...DEFAULT_TEAM_CONFIG,
+  });
 
   const handleSelectType = (type: AgentType) => {
     setSelectedType(type);
@@ -193,6 +203,8 @@ export default function AgentCreatePage() {
       };
     } else if (selectedType === "Workflow") {
       request.workflowRef = workflowRef.trim() || undefined;
+    } else if (selectedType === "Team") {
+      request.teamConfig = teamConfig;
     }
 
     try {
@@ -571,6 +583,24 @@ export default function AgentCreatePage() {
                     placeholder="Workflow GUID（可选）"
                   />
                 </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Team-specific fields */}
+          {selectedType === "Team" && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Team 编排配置</CardTitle>
+                <CardDescription>
+                  选择编排模式并配置参与者 Agent 和模式特定参数
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <TeamConfigForm
+                  value={teamConfig}
+                  onChange={setTeamConfig}
+                />
               </CardContent>
             </Card>
           )}

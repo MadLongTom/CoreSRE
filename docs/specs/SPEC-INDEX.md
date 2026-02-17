@@ -643,6 +643,13 @@ P1-Skills (Agent Skills & 持久化沙箱 — MVP 可用) ← NEW
   ├── SPEC-093: 沙箱管理前端与 Web Terminal
   └── SPEC-094: Skills 管理前端与 Agent 绑定 UI
 
+P1-Team (Team Agent 多 Agent 编排) ← NEW
+  │   详见 [TEAM-AGENT-SPEC-INDEX](TEAM-AGENT-SPEC-INDEX.md)
+  ├── SPEC-100: Team Agent 领域模型与 CRUD
+  ├── SPEC-101: Team Agent 执行引擎（内置 4 模式） ★
+  ├── SPEC-102: Selector 模式 — LLM 动态选择
+  └── SPEC-103: MagneticOne 模式 — 双循环账本编排
+
 P2 (增强功能 — 第二轮迭代)
   ├── SPEC-002: Agent 健康检查
   ├── SPEC-014: 配额与熔断

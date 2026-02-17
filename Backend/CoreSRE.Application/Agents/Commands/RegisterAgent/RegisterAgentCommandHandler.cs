@@ -47,6 +47,11 @@ public class RegisterAgentCommandHandler : IRequestHandler<RegisterAgentCommand,
                 request.Description,
                 request.WorkflowRef!.Value),
 
+            AgentType.Team => AgentRegistration.CreateTeam(
+                request.Name,
+                request.Description,
+                MapTeamConfig(request.TeamConfig!)),
+
             _ => throw new ArgumentException($"Unsupported agent type: {request.AgentType}")
         };
 
@@ -55,5 +60,34 @@ public class RegisterAgentCommandHandler : IRequestHandler<RegisterAgentCommand,
 
         var dto = _mapper.Map<AgentRegistrationDto>(agent);
         return Result<AgentRegistrationDto>.Ok(dto);
+    }
+
+    private TeamConfigVO MapTeamConfig(TeamConfigDto dto)
+    {
+        var mode = Enum.Parse<TeamMode>(dto.Mode);
+
+        Dictionary<Guid, List<HandoffTargetVO>>? handoffRoutes = null;
+        if (dto.HandoffRoutes is not null)
+        {
+            handoffRoutes = dto.HandoffRoutes.ToDictionary(
+                kvp => kvp.Key,
+                kvp => kvp.Value.Select(t => new HandoffTargetVO(t.TargetAgentId, t.Reason)).ToList());
+        }
+
+        return TeamConfigVO.Create(
+            mode: mode,
+            participantIds: dto.ParticipantIds,
+            maxIterations: dto.MaxIterations,
+            handoffRoutes: handoffRoutes,
+            initialAgentId: dto.InitialAgentId,
+            selectorProviderId: dto.SelectorProviderId,
+            selectorModelId: dto.SelectorModelId,
+            selectorPrompt: dto.SelectorPrompt,
+            allowRepeatedSpeaker: dto.AllowRepeatedSpeaker,
+            orchestratorProviderId: dto.OrchestratorProviderId,
+            orchestratorModelId: dto.OrchestratorModelId,
+            maxStalls: dto.MaxStalls,
+            finalAnswerPrompt: dto.FinalAnswerPrompt,
+            aggregationStrategy: dto.AggregationStrategy);
     }
 }
