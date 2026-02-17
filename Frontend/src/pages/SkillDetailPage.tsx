@@ -362,19 +362,10 @@ export default function SkillDetailPage() {
             {/* File tree */}
             <div className="flex-1 overflow-y-auto">
               <SkillFileTree files={files} skillId={id}
-                selectedFile={selectedFile} onSelect={handleSelectFile} />
+                selectedFile={selectedFile} onSelect={handleSelectFile}
+                onDelete={isBuiltin ? undefined : handleFileDelete}
+                readOnly={isBuiltin} />
             </div>
-
-            {/* Delete selected file */}
-            {selectedFile && !isBuiltin && (
-              <div className="border-t p-2">
-                <Button size="sm" variant="ghost"
-                  className="w-full text-destructive hover:text-destructive text-xs h-7"
-                  onClick={() => handleFileDelete(selectedFile)}>
-                  <X className="mr-1 h-3 w-3" /> 删除选中文件
-                </Button>
-              </div>
-            )}
           </div>
         )}
 

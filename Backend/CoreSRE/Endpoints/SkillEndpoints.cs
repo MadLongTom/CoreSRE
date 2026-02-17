@@ -118,6 +118,7 @@ public static class SkillEndpoints
         IFormFileCollection files,
         IFileStorageService storage,
         ISender sender,
+        ISkillRegistrationRepository skillRepo,
         string? prefix = null)
     {
         // Verify skill exists
@@ -141,6 +142,17 @@ public static class SkillEndpoints
                 file.ContentType ?? "application/octet-stream");
 
             uploaded.Add(new { key, size = file.Length });
+        }
+
+        // Mark skill as having files
+        if (uploaded.Count > 0)
+        {
+            var skill = await skillRepo.GetByIdAsync(id);
+            if (skill is not null && !skill.HasFiles)
+            {
+                skill.SetHasFiles(true);
+                await skillRepo.UpdateAsync(skill);
+            }
         }
 
         return Results.Created($"/api/skills/{id}/files",
@@ -175,13 +187,27 @@ public static class SkillEndpoints
     private static async Task<IResult> DeleteSkillFile(
         Guid id,
         string key,
-        IFileStorageService storage)
+        IFileStorageService storage,
+        ISkillRegistrationRepository skillRepo)
     {
         var fullKey = $"{id}/{key}";
         var exists = await storage.ExistsAsync("coresre-skills", fullKey);
         if (!exists) return Results.NotFound();
 
         await storage.DeleteAsync("coresre-skills", fullKey);
+
+        // If no files remain, clear the HasFiles flag
+        var remaining = await storage.ListAsync("coresre-skills", $"{id}/");
+        if (remaining.Count == 0)
+        {
+            var skill = await skillRepo.GetByIdAsync(id);
+            if (skill is { HasFiles: true })
+            {
+                skill.SetHasFiles(false);
+                await skillRepo.UpdateAsync(skill);
+            }
+        }
+
         return Results.NoContent();
     }
 

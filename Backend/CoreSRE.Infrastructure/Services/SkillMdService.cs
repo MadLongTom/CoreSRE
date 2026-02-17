@@ -142,8 +142,7 @@ public sealed partial class SkillMdService : ISkillMdService
                 await writer.WriteAsync(Export(skill, resolvedAllowedToolNames));
             }
 
-            // Files from S3
-            if (skill.HasFiles)
+            // Files from S3 (always attempt listing regardless of HasFiles flag)
             {
                 var files = await _fileStorage.ListAsync(Bucket, $"{skill.Id}/", cancellationToken);
                 foreach (var file in files)

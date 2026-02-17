@@ -25,11 +25,8 @@ public class DeleteSkillCommandHandler : IRequestHandler<DeleteSkillCommand, Res
         if (skill is null)
             return Result<bool>.NotFound();
 
-        // Clean up S3 file package
-        if (skill.HasFiles)
-        {
-            await _fileStorage.DeletePrefixAsync("coresre-skills", $"{skill.Id}/", cancellationToken);
-        }
+        // Clean up S3 file package (always attempt, in case HasFiles flag is stale)
+        await _fileStorage.DeletePrefixAsync("coresre-skills", $"{skill.Id}/", cancellationToken);
 
         await _repository.DeleteAsync(skill.Id, cancellationToken);
 

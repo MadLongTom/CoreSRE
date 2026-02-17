@@ -28,6 +28,9 @@ import ProviderModelSelect from "@/components/agents/ProviderModelSelect";
 import ToolRefsPicker from "@/components/agents/ToolRefsPicker";
 import SkillRefsPicker from "@/components/agents/SkillRefsPicker";
 import { getAvailableFunctions } from "@/lib/api/tools";
+import { getSandboxes, getSandboxById } from "@/lib/api/sandboxes";
+import { getSkills } from "@/lib/api/skills";
+import type { SandboxInstance } from "@/types/sandbox";
 import type { BindableTool } from "@/types/tool";
 import type { LlmConfig } from "@/types/agent";
 
@@ -82,6 +85,21 @@ export default function LlmConfigSection({
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [historyMemoryOpen, setHistoryMemoryOpen] = useState(false);
 
+  // Load available persistent sandbox instances for the picker
+  const [sandboxInstances, setSandboxInstances] = useState<SandboxInstance[]>([]);
+  useEffect(() => {
+    if (!editing || !config.enableSandbox) return;
+    let cancelled = false;
+    getSandboxes({ pageSize: 100 })
+      .then((result) => {
+        if (!cancelled && result.data) {
+          setSandboxInstances(result.data.items);
+        }
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [editing, config.enableSandbox]);
+
   // Schema validation (memoised to avoid re-parsing on every render)
   const schemaError = useMemo(
     () => validateJsonSchema(config.responseFormatSchema ?? ""),
@@ -102,6 +120,36 @@ export default function LlmConfigSection({
       .catch(() => {});
     return () => { cancelled = true; };
   }, [editing, config.toolRefs]);
+
+  // Resolve sandbox instance name for view mode
+  const [resolvedSandboxName, setResolvedSandboxName] = useState<string | null>(null);
+  useEffect(() => {
+    if (editing || !config.sandboxInstanceId) return;
+    let cancelled = false;
+    getSandboxById(config.sandboxInstanceId)
+      .then((result) => {
+        if (!cancelled && result.data) setResolvedSandboxName(result.data.name);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [editing, config.sandboxInstanceId]);
+
+  // Resolve skill names for view mode
+  const [resolvedSkills, setResolvedSkills] = useState<Map<string, string>>(new Map());
+  useEffect(() => {
+    if (editing || !config.skillRefs?.length) return;
+    let cancelled = false;
+    getSkills({ pageSize: 200 })
+      .then((result) => {
+        if (!cancelled && result.data) {
+          const map = new Map<string, string>();
+          for (const s of result.data.items) map.set(s.id, s.name);
+          setResolvedSkills(map);
+        }
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [editing, config.skillRefs]);
 
   // Check if any advanced option has a value
   const hasAdvancedValues =
@@ -182,6 +230,8 @@ export default function LlmConfigSection({
                           sandboxCpus: checked ? config.sandboxCpus : null,
                           sandboxMemoryMib: checked ? config.sandboxMemoryMib : null,
                           sandboxK8sNamespace: checked ? config.sandboxK8sNamespace : null,
+                          sandboxMode: checked ? (config.sandboxMode ?? "Ephemeral") : null,
+                          sandboxInstanceId: checked ? config.sandboxInstanceId : null,
                         })
                       }
                     />
@@ -189,6 +239,51 @@ export default function LlmConfigSection({
                   </div>
                   {config.enableSandbox && (
                     <div className="space-y-2 pl-1">
+                      <div className="flex items-center gap-2">
+                        <Label htmlFor="edit-sandboxMode" className="text-xs text-muted-foreground whitespace-nowrap">沙盒模式</Label>
+                        <Select
+                          value={config.sandboxMode ?? "Ephemeral"}
+                          onValueChange={(v) =>
+                            update({
+                              sandboxMode: v,
+                              sandboxInstanceId: v === "Persistent" ? config.sandboxInstanceId : null,
+                            })
+                          }
+                        >
+                          <SelectTrigger id="edit-sandboxMode" className="h-8 w-[200px] text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Ephemeral">临时沙箱 — 每次对话新建 Pod</SelectItem>
+                            <SelectItem value="Persistent">持久化沙箱 — 绑定已有实例</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      {config.sandboxMode === "Persistent" && (
+                        <div className="flex items-center gap-2">
+                          <Label htmlFor="edit-sandboxInstanceId" className="text-xs text-muted-foreground whitespace-nowrap">沙箱实例</Label>
+                          <Select
+                            value={config.sandboxInstanceId ?? ""}
+                            onValueChange={(v) => update({ sandboxInstanceId: v || null })}
+                          >
+                            <SelectTrigger id="edit-sandboxInstanceId" className="h-8 w-[320px] text-xs">
+                              <SelectValue placeholder="选择持久化沙箱实例…" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {sandboxInstances.filter(s => s.status === "Running" || s.status === "Stopped").length === 0 && (
+                                <SelectItem value="" disabled>暂无可用沙箱实例，请先在沙箱管理页创建</SelectItem>
+                              )}
+                              {sandboxInstances
+                                .filter(s => s.status === "Running" || s.status === "Stopped")
+                                .map((s) => (
+                                  <SelectItem key={s.id} value={s.id}>
+                                    {s.name} — {s.status} ({s.sandboxType}, {s.image})
+                                  </SelectItem>
+                                ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
                       <div className="flex items-center gap-2">
                         <Label htmlFor="edit-sandboxType" className="text-xs text-muted-foreground whitespace-nowrap">沙盒类型</Label>
                         <Select
@@ -258,7 +353,7 @@ export default function LlmConfigSection({
                     </div>
                   )}
                   <p className="text-xs text-muted-foreground">
-                    在 Kubernetes Pod 容器中提供资源隔离的命令行、文件读写和代码执行能力。每个对话拥有独立的 Pod。开发环境使用 Docker Desktop 内置 K8s。
+                    在 Kubernetes Pod 容器中提供资源隔离的命令行、文件读写和代码执行能力。临时沙箱每次对话新建 Pod；持久化沙箱绑定已有实例，Pod 文件可持久保存。
                   </p>
                 </div>
               </div>
@@ -652,7 +747,7 @@ export default function LlmConfigSection({
                     <Terminal className="h-4 w-4 text-muted-foreground" />
                     <p className="text-sm">
                       {config.enableSandbox
-                        ? `已启用 — ${config.sandboxType ?? "CodeBox"}${config.sandboxImage ? ` (${config.sandboxImage})` : ""}${config.sandboxCpus ? ` ${config.sandboxCpus}C` : ""}${config.sandboxMemoryMib ? ` ${config.sandboxMemoryMib}MiB` : ""}${config.sandboxK8sNamespace ? ` ns:${config.sandboxK8sNamespace}` : ""}`
+                        ? `已启用 — ${config.sandboxMode === "Persistent" ? "持久化" : "临时"}沙箱 ${config.sandboxType ?? "CodeBox"}${config.sandboxImage ? ` (${config.sandboxImage})` : ""}${config.sandboxCpus ? ` ${config.sandboxCpus}C` : ""}${config.sandboxMemoryMib ? ` ${config.sandboxMemoryMib}MiB` : ""}${config.sandboxK8sNamespace ? ` ns:${config.sandboxK8sNamespace}` : ""}${config.sandboxMode === "Persistent" && config.sandboxInstanceId ? ` → ${resolvedSandboxName ?? config.sandboxInstanceId.slice(0, 8) + "…"}` : ""}`
                         : "未启用"}
                     </p>
                   </div>
@@ -666,7 +761,7 @@ export default function LlmConfigSection({
                   <div className="flex flex-wrap gap-1">
                     {config.skillRefs!.map((ref, i) => (
                       <Badge key={i} variant="secondary" className="text-xs">
-                        {ref.slice(0, 8)}...
+                        {resolvedSkills.get(ref) ?? ref.slice(0, 8) + "…"}
                       </Badge>
                     ))}
                   </div>

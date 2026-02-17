@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
-import { Loader2, Plus, Sparkles } from "lucide-react";
+import { Loader2, Plus, Sparkles, Download, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/table";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { ApiError } from "@/lib/api/agents";
-import { getSkills, deleteSkill } from "@/lib/api/skills";
+import { getSkills, deleteSkill, exportSkillZip, importSkillZip } from "@/lib/api/skills";
 import type { SkillRegistration } from "@/types/skill";
 import { SKILL_SCOPES, SKILL_STATUSES } from "@/types/skill";
 import { DeleteSkillDialog } from "@/components/skills/DeleteSkillDialog";
@@ -36,6 +36,9 @@ export default function SkillListPage() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<SkillRegistration | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [exportingId, setExportingId] = useState<string | null>(null);
+  const importInputRef = useRef<HTMLInputElement>(null);
 
   const fetchSkills = useCallback(async () => {
     setLoading(true);
@@ -76,14 +79,71 @@ export default function SkillListPage() {
     }
   }, [deleteTarget, fetchSkills]);
 
+  const handleImport = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImporting(true);
+    setError(null);
+    try {
+      await importSkillZip(file);
+      await fetchSkills();
+    } catch (err) {
+      const apiErr = err as ApiError;
+      setError(apiErr.message ?? "导入 Skill 失败");
+    } finally {
+      setImporting(false);
+      if (importInputRef.current) importInputRef.current.value = "";
+    }
+  }, [fetchSkills]);
+
+  const handleExport = useCallback(async (skill: SkillRegistration) => {
+    setExportingId(skill.id);
+    try {
+      const blob = await exportSkillZip(skill.id);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${skill.name}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      const apiErr = err as ApiError;
+      setError(apiErr.message ?? "导出 Skill 失败");
+    } finally {
+      setExportingId(null);
+    }
+  }, []);
+
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       <PageHeader
         title="Skill 管理"
         actions={
-          <Button size="sm" asChild>
-            <Link to="/skills/new"><Plus className="mr-1 h-4 w-4" /> 新建 Skill</Link>
-          </Button>
+          <div className="flex items-center gap-2">
+            <input
+              ref={importInputRef}
+              type="file"
+              accept=".zip"
+              className="hidden"
+              onChange={handleImport}
+            />
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={importing}
+              onClick={() => importInputRef.current?.click()}
+            >
+              {importing
+                ? <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                : <Upload className="mr-1 h-4 w-4" />}
+              导入 Skill
+            </Button>
+            <Button size="sm" asChild>
+              <Link to="/skills/new"><Plus className="mr-1 h-4 w-4" /> 新建 Skill</Link>
+            </Button>
+          </div>
         }
       />
 
@@ -184,6 +244,17 @@ export default function SkillListPage() {
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-1">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        title="导出 ZIP"
+                        disabled={exportingId === skill.id}
+                        onClick={() => handleExport(skill)}
+                      >
+                        {exportingId === skill.id
+                          ? <Loader2 className="h-4 w-4 animate-spin" />
+                          : <Download className="h-4 w-4" />}
+                      </Button>
                       <Button size="sm" variant="outline" asChild>
                         <Link to={`/skills/${skill.id}`}>编辑</Link>
                       </Button>
