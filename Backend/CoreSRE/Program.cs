@@ -71,6 +71,8 @@ app.MapProviderEndpoints();
 app.MapChatEndpoints();
 app.MapAgentChatEndpoints();
 app.MapToolEndpoints();
+app.MapDataSourceEndpoints();
+app.MapWebhookEndpoints();
 app.MapWorkflowEndpoints();
 app.MapFileEndpoints();
 app.MapSkillEndpoints();

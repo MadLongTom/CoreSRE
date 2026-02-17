@@ -171,6 +171,7 @@ public class MockAgentTests
             providerRepo,
             new Mock<IHttpClientFactory>().Object,
             new Mock<IToolFunctionFactory>().Object,
+            new Mock<IDataSourceFunctionFactory>().Object,
             new Mock<ISandboxToolProvider>().Object,
             new Mock<ISkillRegistrationRepository>().Object,
             new Mock<IFileStorageService>().Object,

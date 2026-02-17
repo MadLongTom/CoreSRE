@@ -18,6 +18,9 @@ public sealed record LlmConfigVO
     /// <summary>工具引用列表（M2 模块 ID，可为空）</summary>
     public List<Guid> ToolRefs { get; init; } = [];
 
+    /// <summary>数据源引用列表 — 控制到函数级别的细粒度绑定</summary>
+    public List<DataSourceRefVO> DataSourceRefs { get; init; } = [];
+
     // ── ChatOptions 扩展配置 ──────────────────────────────────────────────
 
     /// <summary>生成温度（0‒2），越低越确定</summary>

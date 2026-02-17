@@ -29,6 +29,7 @@ public class AgentResolverService : IAgentResolver
     private readonly ILlmProviderRepository _providerRepo;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IToolFunctionFactory _toolFunctionFactory;
+    private readonly IDataSourceFunctionFactory _dataSourceFunctionFactory;
     private readonly ISandboxToolProvider _sandboxToolProvider;
     private readonly ISkillRegistrationRepository _skillRepo;
     private readonly IFileStorageService _fileStorage;
@@ -42,6 +43,7 @@ public class AgentResolverService : IAgentResolver
         ILlmProviderRepository providerRepo,
         IHttpClientFactory httpClientFactory,
         IToolFunctionFactory toolFunctionFactory,
+        IDataSourceFunctionFactory dataSourceFunctionFactory,
         ISandboxToolProvider sandboxToolProvider,
         ISkillRegistrationRepository skillRepo,
         IFileStorageService fileStorage,
@@ -53,6 +55,7 @@ public class AgentResolverService : IAgentResolver
         _providerRepo = providerRepo;
         _httpClientFactory = httpClientFactory;
         _toolFunctionFactory = toolFunctionFactory;
+        _dataSourceFunctionFactory = dataSourceFunctionFactory;
         _sandboxToolProvider = sandboxToolProvider;
         _skillRepo = skillRepo;
         _fileStorage = fileStorage;
@@ -135,6 +138,16 @@ public class AgentResolverService : IAgentResolver
         {
             var refFunctions = await _toolFunctionFactory.CreateFunctionsAsync(toolRefs);
             allTools.AddRange(refFunctions);
+        }
+
+        // 3.5.1 如果有 DataSourceRefs，解析为 AIFunction
+        if (agent.LlmConfig.DataSourceRefs is { Count: > 0 } dsRefs)
+        {
+            var dsFunctions = await _dataSourceFunctionFactory.CreateFunctionsAsync(dsRefs);
+            allTools.AddRange(dsFunctions);
+            _logger.LogInformation(
+                "DataSource functions enabled for Agent '{AgentName}': {FuncCount} functions from {RefCount} datasource refs",
+                agent.Name, dsFunctions.Count, dsRefs.Count);
         }
 
         // 3.6 如果启用沙盒，注入沙盒工具（命令行、文件读写、代码执行）

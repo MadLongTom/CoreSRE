@@ -5,6 +5,7 @@ using CoreSRE.Domain.Interfaces;
 using CoreSRE.Infrastructure.Persistence;
 using CoreSRE.Infrastructure.Persistence.Sessions;
 using CoreSRE.Infrastructure.Services;
+using CoreSRE.Infrastructure.Services.DataSources;
 using CoreSRE.Infrastructure.Services.Sandbox;
 using CoreSRE.Infrastructure.Services.Sandbox.Kubernetes;
 using CoreSRE.Infrastructure.Services.Storage;
@@ -129,6 +130,27 @@ public static class DependencyInjection
 
         // ── Skill Registration Repository ──
         services.AddScoped<ISkillRegistrationRepository, SkillRegistrationRepository>();
+
+        // ── DataSource Registration Repository ──
+        services.AddScoped<IDataSourceRegistrationRepository, DataSourceRegistrationRepository>();
+
+        // ── DataSource Querier services + factory + named HttpClient ──
+        services.AddHttpClient("DataSourceQuerier");
+        services.AddScoped<IDataSourceQuerier, PrometheusQuerier>();
+        services.AddScoped<IDataSourceQuerier, LokiQuerier>();
+        services.AddScoped<IDataSourceQuerier, JaegerQuerier>();
+        services.AddScoped<IDataSourceQuerier, AlertmanagerQuerier>();
+        services.AddScoped<IDataSourceQuerier, KubernetesQuerier>();
+        services.AddScoped<IDataSourceQuerier, ArgoCDQuerier>();
+        services.AddScoped<IDataSourceQuerier, GitHubQuerier>();
+        services.AddScoped<IDataSourceQuerier, GitLabQuerier>();
+        services.AddScoped<IDataSourceQuerierFactory, DataSourceQuerierFactory>();
+
+        // DataSource-to-AIFunction conversion factory (for ChatClient datasource binding)
+        services.AddScoped<IDataSourceFunctionFactory, DataSourceFunctionFactory>();
+
+        // DataSource periodic health check background service
+        services.AddHostedService<DataSourceHealthCheckBackgroundService>();
 
         // ── Skill SKILL.md Import/Export Service ──
         services.AddScoped<ISkillMdService, SkillMdService>();

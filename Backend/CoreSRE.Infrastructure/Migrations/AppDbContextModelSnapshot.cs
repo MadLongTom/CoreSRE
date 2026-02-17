@@ -159,6 +159,83 @@ namespace CoreSRE.Infrastructure.Migrations
                     b.ToTable("conversations", (string)null);
                 });
 
+            modelBuilder.Entity("CoreSRE.Domain.Entities.DataSourceRegistration", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("category");
+
+                    b.Property<DataSourceConnectionVO>("ConnectionConfig")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("connection_config");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<QueryConfigVO>("DefaultQueryConfig")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("default_query_config");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("text")
+                        .HasColumnName("description");
+
+                    b.Property<DataSourceHealthVO>("HealthCheck")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("health_check");
+
+                    b.Property<DataSourceMetadataVO>("Metadata")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("metadata");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("name");
+
+                    b.Property<string>("Product")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("product");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Category");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.HasIndex("Product");
+
+                    b.HasIndex("Status");
+
+                    b.ToTable("data_source_registrations", (string)null);
+                });
+
             modelBuilder.Entity("CoreSRE.Domain.Entities.LlmProvider", b =>
                 {
                     b.Property<Guid>("Id")
@@ -849,6 +926,27 @@ namespace CoreSRE.Infrastructure.Migrations
 
                             b1.WithOwner()
                                 .HasForeignKey("AgentRegistrationId");
+
+                            b1.OwnsMany("CoreSRE.Domain.ValueObjects.DataSourceRefVO", "DataSourceRefs", b2 =>
+                                {
+                                    b2.Property<Guid>("LlmConfigVOAgentRegistrationId");
+
+                                    b2.Property<int>("__synthesizedOrdinal")
+                                        .ValueGeneratedOnAdd();
+
+                                    b2.Property<Guid>("DataSourceId");
+
+                                    b2.PrimitiveCollection<string>("EnabledFunctions");
+
+                                    b2.HasKey("LlmConfigVOAgentRegistrationId", "__synthesizedOrdinal");
+
+                                    b2.ToTable("agent_registrations");
+
+                                    b2.WithOwner()
+                                        .HasForeignKey("LlmConfigVOAgentRegistrationId");
+                                });
+
+                            b1.Navigation("DataSourceRefs");
                         });
 
                     b.Navigation("AgentCard");

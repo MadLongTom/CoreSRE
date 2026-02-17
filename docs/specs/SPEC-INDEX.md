@@ -570,18 +570,18 @@ CREATE TABLE agent_sessions (
 
 ## 模块 M8：数据源接入（异构数据统一语义层）
 
-### SPEC-070: 异构数据源注册与管理
+### SPEC-070: ~~异构数据源注册与管理~~ → 已升级为 SPEC-200 ~ 204
 
-**优先级**: P2  
+**优先级**: P1 (升级)  
 **对应课题成果**: 2  
 
-**简述**: 支持注册多种异构数据源（Prometheus 指标、ElasticSearch/Loki 日志、结构化数据库表等）。注册时提供连接配置和数据类型。平台将每个数据源抽象为 MCP Resource 概念（URI 模板 + 内容类型），供 Agent 通过统一语义查询数据，而不需要了解底层存储协议。
+**简述**: 原 SPEC-070 已拆分为 5 个独立 Spec，详见 [DATASOURCE-SPEC-INDEX](DATASOURCE-SPEC-INDEX.md)。
 
-**领域模型**: `DataSourceRegistration`（聚合根，Name, Type: Metrics/Logs/Database, ConnectionConfig, ResourceUriTemplate）  
-**端点**: `POST/GET /api/datasources`, `GET/PUT/DELETE /api/datasources/{id}`  
-
-**第三方库映射**:
-- `mcp-specification/` → Resource 系统（URI 模板、text/binary 内容）
+- SPEC-200: 数据源领域模型与 CRUD
+- SPEC-201: 查询抽象 + Prometheus / Loki 实现
+- SPEC-202: Agent 绑定与 AIFunction 桥接
+- SPEC-203: Tracing / Alerting 查询实现
+- SPEC-204: Deployment / Git 查询 + Webhook
 
 ---
 
@@ -650,6 +650,13 @@ P1-Team (Team Agent 多 Agent 编排) ← NEW
   ├── SPEC-102: Selector 模式 — LLM 动态选择
   └── SPEC-103: MagneticOne 模式 — 双循环账本编排
 
+P1-DataSource (SRE 数据源集成 — 基础设施接入) ← NEW
+  │   详见 [DATASOURCE-SPEC-INDEX](DATASOURCE-SPEC-INDEX.md)
+  ├── SPEC-200: 数据源领域模型与 CRUD
+  ├── SPEC-201: 查询抽象 + Prometheus / Loki 实现 ★
+  ├── SPEC-202: Agent 绑定与 AIFunction 桥接 ★
+  └── SPEC-203: Tracing / Alerting 查询实现
+
 P2 (增强功能 — 第二轮迭代)
   ├── SPEC-002: Agent 健康检查
   ├── SPEC-014: 配额与熔断
@@ -658,9 +665,9 @@ P2 (增强功能 — 第二轮迭代)
   ├── SPEC-024: 执行暂停/取消/回溯
   ├── SPEC-025: 短时/长时工具编排
   ├── SPEC-041: Agent 状态面板
-  ├── SPEC-070: 异构数据源接入
   ├── SPEC-084: 部分执行与数据追踪 ← NEW
-  └── SPEC-085: 前端升级与并发执行 ← NEW
+  ├── SPEC-085: 前端升级与并发执行 ← NEW
+  └── SPEC-204: Deployment / Git 查询 + Webhook ← NEW
 
 P3 (远期增强)
   └── SPEC-003: Agent 能力语义搜索

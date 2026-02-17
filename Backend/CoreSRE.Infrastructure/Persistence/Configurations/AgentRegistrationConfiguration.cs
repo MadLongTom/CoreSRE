@@ -67,6 +67,7 @@ public class AgentRegistrationConfiguration : IEntityTypeConfiguration<AgentRegi
         builder.OwnsOne(e => e.LlmConfig, llm =>
         {
             llm.ToJson("llm_config");
+            llm.OwnsMany(l => l.DataSourceRefs);
         });
 
         builder.OwnsOne(e => e.HealthCheck, hc =>

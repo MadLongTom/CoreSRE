@@ -1,5 +1,5 @@
 import { NavLink } from "react-router";
-import { List, Search, Bot, Server, MessageSquare, Wrench, GitBranch, Container, Sparkles } from "lucide-react";
+import { List, Search, Bot, Server, MessageSquare, Wrench, GitBranch, Container, Sparkles, Database } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Separator } from "@/components/ui/separator";
 
@@ -12,6 +12,7 @@ const navItems = [
   { to: "/skills", label: "Skill 管理", icon: Sparkles },
   { to: "/workflows", label: "工作流管理", icon: GitBranch },
   { to: "/sandboxes", label: "沙箱管理", icon: Container },
+  { to: "/datasources", label: "数据源管理", icon: Database },
 ];
 
 export function Sidebar() {

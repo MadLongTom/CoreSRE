@@ -22,6 +22,9 @@ import SandboxDetailPage from "@/pages/SandboxDetailPage";
 import SkillListPage from "@/pages/SkillListPage";
 import SkillCreatePage from "@/pages/SkillCreatePage";
 import SkillDetailPage from "@/pages/SkillDetailPage";
+import DataSourceListPage from "@/pages/DataSourceListPage";
+import DataSourceCreatePage from "@/pages/DataSourceCreatePage";
+import DataSourceDetailPage from "@/pages/DataSourceDetailPage";
 import NotFoundPage from "@/pages/NotFoundPage";
 
 const router = createBrowserRouter([
@@ -50,6 +53,9 @@ const router = createBrowserRouter([
       { path: "skills", element: <SkillListPage /> },
       { path: "skills/new", element: <SkillCreatePage /> },
       { path: "skills/:id", element: <SkillDetailPage /> },
+      { path: "datasources", element: <DataSourceListPage /> },
+      { path: "datasources/new", element: <DataSourceCreatePage /> },
+      { path: "datasources/:id", element: <DataSourceDetailPage /> },
       { path: "chat", element: <ChatPage /> },
       { path: "*", element: <NotFoundPage /> },
     ],
