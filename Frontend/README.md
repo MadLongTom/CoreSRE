@@ -1,73 +1,95 @@
-# React + TypeScript + Vite
+# CoreSRE Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React 19 single-page application for the CoreSRE AI agent orchestration platform.
 
-Currently, two official plugins are available:
+## Tech Stack
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+| Technology | Version | Purpose |
+|-----------|---------|---------|
+| React | 19 | UI framework |
+| TypeScript | 5.9 | Type safety |
+| Vite | 7 | Build tooling + HMR |
+| Tailwind CSS | 4 | Utility-first styling |
+| shadcn/ui | — | Component library |
+| React Router | 7 | Client-side routing |
+| React Hook Form + Zod | — | Forms & validation |
+| AG-UI Protocol | 0.0.44 | Agent streaming communication |
+| SignalR | 10 | Real-time workflow updates |
+| Monaco Editor | — | Code editing |
+| xterm.js | — | Terminal emulator (sandbox) |
+| React Flow + dagre | — | Visual workflow editor |
+| react-markdown | — | Markdown chat rendering |
+| RxJS | — | Reactive event streams |
 
-## React Compiler
+## Project Structure
 
-The React Compiler is currently not compatible with SWC. See [this issue](https://github.com/vitejs/vite-plugin-react/issues/428) for tracking the progress.
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```
+src/
+├── pages/                          # Route pages
+│   ├── agents/                     # Agent list, create, detail, search
+│   ├── chat/                       # Agent chat interface
+│   ├── datasources/                # Data source list, create, detail
+│   ├── providers/                  # LLM provider list, create, detail
+│   ├── sandboxes/                  # Sandbox list, create, detail
+│   ├── skills/                     # Skill list, create, detail
+│   ├── tools/                      # Tool list, create, detail
+│   └── workflows/                  # Workflow list, create, detail, execution
+│
+├── components/
+│   ├── agents/                     # Agent-specific components
+│   ├── chat/                       # Chat UI components
+│   ├── datasources/                # Data source components
+│   ├── layout/                     # App layout (sidebar, navbar)
+│   ├── providers/                  # Provider components
+│   ├── sandboxes/                  # Sandbox + terminal components
+│   ├── skills/                     # Skill components
+│   ├── tools/                      # Tool components
+│   ├── ui/                         # shadcn/ui primitives
+│   └── workflows/                  # Workflow canvas, node editors
+│
+├── lib/                            # Utilities, API client, helpers
+├── hooks/                          # Custom React hooks
+├── types/                          # TypeScript type definitions
+├── App.tsx                         # Root component + routing
+├── main.tsx                        # Entry point
+└── index.css                       # Global styles (Tailwind)
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Development
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+### Prerequisites
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+- Node.js 22+
+- npm
+
+### Install & Run
+
+```bash
+npm install
+npm run dev
+```
+
+Dev server starts at http://localhost:5173 with hot module replacement.
+
+API requests are proxied to the backend at `http://localhost:5156`:
+
+| Path | Target | Notes |
+|------|--------|-------|
+| `/api/chat/stream` | Backend | SSE streaming (no buffering) |
+| `/api/*` | Backend | REST API + WebSocket |
+| `/hubs/*` | Backend | SignalR WebSocket |
+| `/health`, `/alive` | Backend | Health probes |
+
+### Build
+
+```bash
+npm run build
+```
+
+Output in `dist/`.
+
+### Lint
+
+```bash
+npm run lint
 ```
