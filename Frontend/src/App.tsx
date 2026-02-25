@@ -25,6 +25,11 @@ import SkillDetailPage from "@/pages/SkillDetailPage";
 import DataSourceListPage from "@/pages/DataSourceListPage";
 import DataSourceCreatePage from "@/pages/DataSourceCreatePage";
 import DataSourceDetailPage from "@/pages/DataSourceDetailPage";
+import IncidentListPage from "@/pages/IncidentListPage";
+import IncidentDetailPage from "@/pages/IncidentDetailPage";
+import AlertRuleListPage from "@/pages/AlertRuleListPage";
+import AlertRuleFormPage from "@/pages/AlertRuleFormPage";
+import AlertRuleDetailPage from "@/pages/AlertRuleDetailPage";
 import NotFoundPage from "@/pages/NotFoundPage";
 
 const router = createBrowserRouter([
@@ -57,6 +62,12 @@ const router = createBrowserRouter([
       { path: "datasources/new", element: <DataSourceCreatePage /> },
       { path: "datasources/:id", element: <DataSourceDetailPage /> },
       { path: "chat", element: <ChatPage /> },
+      { path: "incidents", element: <IncidentListPage /> },
+      { path: "incidents/:id", element: <IncidentDetailPage /> },
+      { path: "alert-rules", element: <AlertRuleListPage /> },
+      { path: "alert-rules/new", element: <AlertRuleFormPage /> },
+      { path: "alert-rules/:id", element: <AlertRuleDetailPage /> },
+      { path: "alert-rules/:id/edit", element: <AlertRuleFormPage /> },
       { path: "*", element: <NotFoundPage /> },
     ],
   },

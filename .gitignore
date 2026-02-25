@@ -60,3 +60,6 @@ sandboxes/
 Backend/_reflect.csx
 Backend/_reflector/
 Backend/decompiled-*.cs
+
+# ===== Paper =====
+paper/

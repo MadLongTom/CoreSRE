@@ -36,6 +36,9 @@ builder.Services.AddSignalR();
 // 覆盖 NullWorkflowExecutionNotifier，使用 SignalR 实时推送
 builder.Services.AddScoped<IWorkflowExecutionNotifier, SignalRWorkflowNotifier>();
 
+// Incident 实时推送
+builder.Services.AddScoped<CoreSRE.Application.Alerts.Interfaces.IIncidentNotifier, SignalRIncidentNotifier>();
+
 // Aspire EF Core 增强（健康检查 + OTel 追踪 + 连接重试）
 builder.EnrichNpgsqlDbContext<AppDbContext>();
 
@@ -84,9 +87,12 @@ app.MapWorkflowEndpoints();
 app.MapFileEndpoints();
 app.MapSkillEndpoints();
 app.MapSandboxEndpoints();
+app.MapAlertRuleEndpoints();
+app.MapIncidentEndpoints();
 
 // ===== SignalR Hub =====
 app.MapHub<WorkflowHub>("/hubs/workflow");
+app.MapHub<IncidentHub>("/hubs/incident");
 
 // ===== 自动迁移数据库（开发环境）=====
 using (var scope = app.Services.CreateScope())

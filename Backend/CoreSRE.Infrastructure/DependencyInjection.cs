@@ -139,6 +139,28 @@ public static class DependencyInjection
         // ── DataSource Registration Repository ──
         services.AddScoped<IDataSourceRegistrationRepository, DataSourceRegistrationRepository>();
 
+        // ── Alert & Incident Repositories ──
+        services.AddScoped<IAlertRuleRepository, AlertRuleRepository>();
+        services.AddScoped<IIncidentRepository, IncidentRepository>();
+
+        // ── Alert Payload Parser ──
+        services.AddSingleton<Application.Alerts.Interfaces.IAlertmanagerPayloadParser, AlertmanagerPayloadParser>();
+
+        // ── Incident Dispatcher ──
+        services.AddScoped<Application.Alerts.Interfaces.IIncidentDispatcher, IncidentDispatcherService>();
+
+        // ── SOP Parser ──
+        services.AddSingleton<Application.Alerts.Interfaces.ISopParserService, SopParserService>();
+
+        // ── Agent Caller (abstracts Agent framework for Application layer) ──
+        services.AddScoped<Application.Alerts.Interfaces.IAgentCaller, AgentCallerService>();
+
+        // ── Notification Channels ──
+        services.AddHttpClient("NotificationChannel");
+        services.AddScoped<Application.Alerts.Interfaces.INotificationChannel, Services.Notifications.SlackNotificationChannel>();
+        services.AddScoped<Application.Alerts.Interfaces.INotificationChannel, Services.Notifications.TeamsNotificationChannel>();
+        services.AddScoped<Application.Alerts.Interfaces.INotificationDispatcher, Services.Notifications.NotificationDispatcher>();
+
         // ── DataSource Querier services + factory + named HttpClient ──
         services.AddHttpClient("DataSourceQuerier");
         services.AddScoped<IDataSourceQuerier, PrometheusQuerier>();

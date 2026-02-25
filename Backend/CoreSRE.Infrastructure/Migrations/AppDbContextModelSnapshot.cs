@@ -123,6 +123,88 @@ namespace CoreSRE.Infrastructure.Migrations
                     b.ToTable("agent_sessions", (string)null);
                 });
 
+            modelBuilder.Entity("CoreSRE.Domain.Entities.AlertRule", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<int>("CooldownMinutes")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(15)
+                        .HasColumnName("cooldown_minutes");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("text")
+                        .HasColumnName("description");
+
+                    b.Property<List<AlertMatcherVO>>("Matchers")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("matchers");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("name");
+
+                    b.PrimitiveCollection<string>("NotificationChannels")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("notification_channels");
+
+                    b.Property<Guid?>("ResponderAgentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("responder_agent_id");
+
+                    b.Property<string>("Severity")
+                        .IsRequired()
+                        .HasMaxLength(8)
+                        .HasColumnType("character varying(8)")
+                        .HasColumnName("severity");
+
+                    b.Property<Guid?>("SopId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("sop_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("status");
+
+                    b.Property<Guid?>("SummarizerAgentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("summarizer_agent_id");
+
+                    b.Property<Dictionary<string, string>>("Tags")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("tags");
+
+                    b.Property<Guid?>("TeamAgentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("team_agent_id");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name");
+
+                    b.HasIndex("Status");
+
+                    b.ToTable("alert_rules", (string)null);
+                });
+
             modelBuilder.Entity("CoreSRE.Domain.Entities.Conversation", b =>
                 {
                     b.Property<Guid>("Id")
@@ -234,6 +316,118 @@ namespace CoreSRE.Infrastructure.Migrations
                     b.HasIndex("Status");
 
                     b.ToTable("data_source_registrations", (string)null);
+                });
+
+            modelBuilder.Entity("CoreSRE.Domain.Entities.Incident", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("AlertFingerprint")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("alert_fingerprint");
+
+                    b.Property<Dictionary<string, string>>("AlertLabels")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("alert_labels");
+
+                    b.Property<JsonDocument>("AlertPayload")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("alert_payload");
+
+                    b.Property<Guid?>("AlertRuleId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("alert_rule_id");
+
+                    b.Property<Guid?>("ConversationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("conversation_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("GeneratedSopId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("generated_sop_id");
+
+                    b.Property<string>("Resolution")
+                        .HasColumnType("text")
+                        .HasColumnName("resolution");
+
+                    b.Property<DateTime?>("ResolvedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("resolved_at");
+
+                    b.Property<string>("RootCause")
+                        .HasColumnType("text")
+                        .HasColumnName("root_cause");
+
+                    b.Property<string>("Route")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("route");
+
+                    b.Property<string>("Severity")
+                        .IsRequired()
+                        .HasMaxLength(8)
+                        .HasColumnType("character varying(8)")
+                        .HasColumnName("severity");
+
+                    b.Property<Guid?>("SopId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("sop_id");
+
+                    b.Property<DateTime>("StartedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("started_at");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("status");
+
+                    b.Property<long?>("TimeToDetectMs")
+                        .HasColumnType("bigint")
+                        .HasColumnName("time_to_detect_ms");
+
+                    b.Property<long?>("TimeToResolveMs")
+                        .HasColumnType("bigint")
+                        .HasColumnName("time_to_resolve_ms");
+
+                    b.Property<List<IncidentTimelineVO>>("Timeline")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("timeline");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)")
+                        .HasColumnName("title");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AlertRuleId");
+
+                    b.HasIndex("Severity");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("AlertRuleId", "AlertFingerprint");
+
+                    b.ToTable("incidents", (string)null);
                 });
 
             modelBuilder.Entity("CoreSRE.Domain.Entities.LlmProvider", b =>

@@ -17,3 +17,16 @@ export function createWorkflowHubConnection(
     .configureLogging(LogLevel.Information)
     .build();
 }
+
+/**
+ * 创建 Incident Hub 连接实例。
+ */
+export function createIncidentHubConnection(
+  url: string = "/hubs/incident"
+): HubConnection {
+  return new HubConnectionBuilder()
+    .withUrl(url)
+    .withAutomaticReconnect([0, 1000, 3000, 5000, 10000, 30000])
+    .configureLogging(LogLevel.Information)
+    .build();
+}

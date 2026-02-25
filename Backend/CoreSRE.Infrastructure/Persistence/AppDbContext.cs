@@ -22,6 +22,8 @@ public class AppDbContext : DbContext, IUnitOfWork
     public DbSet<SandboxInstance> SandboxInstances => Set<SandboxInstance>();
     public DbSet<SkillRegistration> SkillRegistrations => Set<SkillRegistration>();
     public DbSet<DataSourceRegistration> DataSourceRegistrations => Set<DataSourceRegistration>();
+    public DbSet<AlertRule> AlertRules => Set<AlertRule>();
+    public DbSet<Incident> Incidents => Set<Incident>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
