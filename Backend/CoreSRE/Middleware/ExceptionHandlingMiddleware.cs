@@ -27,6 +27,13 @@ public class ExceptionHandlingMiddleware
         {
             await _next(context);
         }
+        catch (Exception) when (context.Response.HasStarted)
+        {
+            // Response already started (e.g., SSE streaming) — cannot write error response.
+            // Just log and let the connection close naturally.
+            _logger.LogWarning("Exception after response started for {Path} — cannot write error body", context.Request.Path);
+            throw; // Re-throw to let Kestrel handle connection cleanup
+        }
         catch (ValidationException ex)
         {
             _logger.LogWarning(ex, "Validation failed for request {Path}", context.Request.Path);

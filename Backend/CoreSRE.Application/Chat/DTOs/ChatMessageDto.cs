@@ -22,6 +22,12 @@ public class ChatMessageDto
     /// 仅在 user 消息上出现，前端可据此显示"已使用记忆"提示。
     /// </summary>
     public string? MemoryContext { get; set; }
+
+    /// <summary>Team 模式下，发出此消息的参与者 Agent ID（GUID 字符串）</summary>
+    public string? ParticipantAgentId { get; set; }
+
+    /// <summary>Team 模式下，发出此消息的参与者 Agent 名称</summary>
+    public string? ParticipantAgentName { get; set; }
 }
 
 /// <summary>

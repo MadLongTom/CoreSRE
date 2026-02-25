@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { MessageBubble } from "@/components/chat/MessageBubble";
+import { HandoffNotification } from "@/components/chat/HandoffNotification";
 import type { ChatMessage } from "@/types/chat";
 import { Loader2, MessageSquare } from "lucide-react";
 
@@ -31,9 +32,13 @@ export function MessageArea({ messages, isStreaming }: MessageAreaProps) {
 
   return (
     <div className="flex flex-1 flex-col gap-4 overflow-y-auto p-4">
-      {messages.map((msg, i) => (
-        <MessageBubble key={i} message={msg} />
-      ))}
+      {messages.map((msg, i) =>
+        msg.teamHandoff ? (
+          <HandoffNotification key={i} handoff={msg.teamHandoff} />
+        ) : (
+          <MessageBubble key={i} message={msg} />
+        ),
+      )}
 
       {/* 流式加载指示器 */}
       {isStreaming && (

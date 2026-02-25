@@ -32,6 +32,8 @@ Auto-generated from all feature plans. Last updated: 2026-02-09
 - PostgreSQL with JSONB columns (graph_snapshot, node_executions) — no SQL migration needed; new fields use C# defaults that serialize transparently (016-workflow-dataflow-engine)
 - C# / .NET 10, TypeScript 5.9 / React 19.2 + ASP.NET Core SignalR (framework-included), `@microsoft/signalr` (npm), MediatR, AutoMapper (017-workflow-signalr-push)
 - PostgreSQL (EF Core 10) — 不涉及新表或 migration，节点执行状态已持久化在 `WorkflowExecution.NodeExecutions` (017-workflow-signalr-push)
+- C# / .NET 10 (backend), TypeScript ~5.9 (frontend) + `Microsoft.Agents.AI.Workflows 1.0.0-preview.260209.1` (already referenced, unused), `Microsoft.Extensions.AI.Abstractions 10.2.0`, React 19, AG-UI Client `@ag-ui/client ^0.0.44`, shadcn/radix (021-team-agent-chat)
+- PostgreSQL via Npgsql EF Core 10 + JSONB for session data, pgvector for semantic memory (021-team-agent-chat)
 
 - C# / .NET 10.0 (`net10.0`) (001-aspire-apphost-setup)
 
@@ -52,9 +54,9 @@ tests/
 C# / .NET 10.0 (`net10.0`): Follow standard conventions
 
 ## Recent Changes
+- 021-team-agent-chat: Added C# / .NET 10 (backend), TypeScript ~5.9 (frontend) + `Microsoft.Agents.AI.Workflows 1.0.0-preview.260209.1` (already referenced, unused), `Microsoft.Extensions.AI.Abstractions 10.2.0`, React 19, AG-UI Client `@ag-ui/client ^0.0.44`, shadcn/radix
 - 017-workflow-signalr-push: Added C# / .NET 10, TypeScript 5.9 / React 19.2 + ASP.NET Core SignalR (framework-included), `@microsoft/signalr` (npm), MediatR, AutoMapper
 - 016-workflow-dataflow-engine: Added C# / .NET 10 (net10.0) + Microsoft.Extensions.AI (MEAI), AutoMapper, System.Text.Json, EF Core 10
-- 015-workflow-engine-fix: Added C# / .NET 10 (`net10.0`) + MediatR 12.4.1, AutoMapper 13.0.1, FluentValidation 11.11.0, Microsoft.Extensions.AI.Abstractions 10.2.0, Microsoft.Agents.AI.* 1.0.0-preview, EF Core 10.0.2
 
 
 <!-- MANUAL ADDITIONS START -->

@@ -1,12 +1,20 @@
+using CoreSRE.Application.Chat.DTOs;
 using CoreSRE.Domain.ValueObjects;
 using Microsoft.Agents.AI;
+using System.Collections.Concurrent;
 
 namespace CoreSRE.Application.Interfaces;
 
 /// <summary>
-/// 解析结果 — 包含就绪的 AIAgent 实例和关联的 LlmConfig（可空，A2A Agent 无 LlmConfig）。
+/// 解析结果 — 包含就绪的 AIAgent 实例和关联的 LlmConfig（可空，A2A/Team Agent 无 LlmConfig）。
+/// IsTeam 标识是否为 Team 类型 Agent（需要使用 Team 流式处理路径）。
+/// TeamEventQueue 用于 MagneticOne 模式的 Ledger 更新事件推送。
 /// </summary>
-public record ResolvedAgent(AIAgent Agent, LlmConfigVO? LlmConfig);
+public record ResolvedAgent(
+    AIAgent Agent,
+    LlmConfigVO? LlmConfig,
+    bool IsTeam = false,
+    ConcurrentQueue<TeamChatEventDto>? TeamEventQueue = null);
 
 /// <summary>
 /// 解析 AgentRegistration ID 为可运行的 AIAgent 实例。

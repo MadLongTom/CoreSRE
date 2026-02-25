@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef } from "react";
-import type { ChatMessage, ToolCall } from "@/types/chat";
+import type { ChatMessage, ToolCall, TeamHandoff, TeamProgress, OuterLedger, InnerLedgerEntry, OrchestratorMessage, OrchestratorThought } from "@/types/chat";
 
 interface UseAgentChatOptions {
   /** Agent registration ID */
@@ -12,6 +12,16 @@ interface UseAgentChatReturn {
   messages: ChatMessage[];
   isStreaming: boolean;
   error: string | null;
+  /** Team progress indicator — current participant agent step */
+  teamProgress: TeamProgress | null;
+  /** MagneticOne outer ledger — high-level plan/progress */
+  outerLedger: OuterLedger | null;
+  /** MagneticOne inner ledger — per-agent task entries */
+  innerLedgerEntries: InnerLedgerEntry[];
+  /** MagneticOne orchestrator messages — per-step reasoning */
+  orchestratorMessages: OrchestratorMessage[];
+  /** MagneticOne orchestrator thoughts — raw LLM responses */
+  orchestratorThoughts: OrchestratorThought[];
   /** Send a user message and get streaming response.
    *  @param content - The message text.
    *  @param overrideThreadId - Explicit thread/conversation ID to use (bypasses hook state to avoid React batching race). */
@@ -42,6 +52,11 @@ export function useAgentChat({
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [teamProgress, setTeamProgress] = useState<TeamProgress | null>(null);
+  const [outerLedger, setOuterLedger] = useState<OuterLedger | null>(null);
+  const [innerLedgerEntries, setInnerLedgerEntries] = useState<InnerLedgerEntry[]>([]);
+  const [orchestratorMessages, setOrchestratorMessages] = useState<OrchestratorMessage[]>([]);
+  const [orchestratorThoughts, setOrchestratorThoughts] = useState<OrchestratorThought[]>([]);
   const abortControllerRef = useRef<AbortController | null>(null);
 
   const sendMessage = useCallback(
@@ -80,7 +95,10 @@ export function useAgentChat({
 
         const res = await fetch("/api/chat/stream", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            "Accept": "text/event-stream",
+          },
           body: JSON.stringify({
             threadId,
             runId: crypto.randomUUID(),
@@ -98,19 +116,32 @@ export function useAgentChat({
           throw new Error(errBody || `HTTP ${res.status}`);
         }
 
+        console.log("[SSE] Stream connected, status:", res.status, "headers:", Object.fromEntries(res.headers.entries()));
+
         // Read SSE stream
         const reader = res.body?.getReader();
         if (!reader) throw new Error("No response body");
 
         const decoder = new TextDecoder();
         let buffer = "";
-        let accumulatedContent = "";
+
+        // Track messages by messageId for Team concurrent mode (multiple parallel bubbles)
+        const contentByMessageId = new Map<string, string>();
+        // Track current active messageId (last TEXT_MESSAGE_START)
+        let activeMessageId: string | null = null;
 
         while (true) {
           const { done, value } = await reader.read();
-          if (done) break;
+          if (done) {
+            console.log("[SSE] Stream ended (done=true)");
+            break;
+          }
 
-          buffer += decoder.decode(value, { stream: true });
+          const chunk = decoder.decode(value, { stream: true });
+          if (chunk.length > 0) {
+            console.log(`[SSE] Chunk received: ${chunk.length} bytes, first 200 chars:`, chunk.slice(0, 200));
+          }
+          buffer += chunk;
 
           // Parse SSE events (lines starting with "data: ")
           const lines = buffer.split("\n");
@@ -125,23 +156,79 @@ export function useAgentChat({
 
             try {
               const event = JSON.parse(jsonStr);
+              console.log("[SSE] Received event:", event.type, event);
 
               switch (event.type) {
-                case "TEXT_MESSAGE_CONTENT":
-                  accumulatedContent += event.delta ?? "";
-                  // Update assistant message in-place
-                  setMessages((prev) => {
-                    const copy = [...prev];
+                case "TEXT_MESSAGE_START": {
+                  const msgId = event.messageId as string | undefined;
+                  if (msgId) {
+                    activeMessageId = msgId;
+                    if (!contentByMessageId.has(msgId)) {
+                      contentByMessageId.set(msgId, "");
+                    }
+                  }
+
+                  if (event.participantAgentId) {
+                    // Team agent — create a new assistant message for this participant
+                    setMessages((prev) => {
+                      const copy = [...prev];
+                      // Check if the last message is an empty placeholder we can reuse
+                      const last = copy[copy.length - 1];
+                      if (last && last.role === "assistant" && !last.content && !last.participantAgentId) {
+                        // Reuse the empty placeholder
+                        copy[copy.length - 1] = {
+                          ...last,
+                          participantAgentId: event.participantAgentId,
+                          participantAgentName: event.participantAgentName,
+                        };
+                      } else {
+                        // Add a new assistant message for this participant
+                        copy.push({
+                          index: copy.length,
+                          role: "assistant",
+                          content: "",
+                          participantAgentId: event.participantAgentId,
+                          participantAgentName: event.participantAgentName,
+                        });
+                      }
+                      return copy;
+                    });
+                  }
+                  break;
+                }
+
+                case "TEXT_MESSAGE_CONTENT": {
+                  const msgId = (event.messageId as string | undefined) ?? activeMessageId;
+                  const delta = (event.delta as string) ?? "";
+
+                  if (msgId) {
+                    const prev = contentByMessageId.get(msgId) ?? "";
+                    contentByMessageId.set(msgId, prev + delta);
+                  }
+
+                  const accumulated = msgId ? (contentByMessageId.get(msgId) ?? delta) : delta;
+
+                  // Update the correct assistant message
+                  setMessages((prevMsgs) => {
+                    const copy = [...prevMsgs];
+                    // Find matching message by participantAgentId for Team concurrent bubbles
+                    if (event.participantAgentId) {
+                      for (let i = copy.length - 1; i >= 0; i--) {
+                        if (copy[i].role === "assistant" && copy[i].participantAgentId === event.participantAgentId) {
+                          copy[i] = { ...copy[i], content: accumulated };
+                          return copy;
+                        }
+                      }
+                    }
+                    // Fallback: update last assistant message (non-team mode)
                     const last = copy[copy.length - 1];
                     if (last && last.role === "assistant") {
-                      copy[copy.length - 1] = {
-                        ...last,
-                        content: accumulatedContent,
-                      };
+                      copy[copy.length - 1] = { ...last, content: accumulated };
                     }
                     return copy;
                   });
                   break;
+                }
 
                 case "TOOL_CALL_START": {
                   const tc: ToolCall = {
@@ -195,15 +282,98 @@ export function useAgentChat({
                   });
                   break;
 
-                case "RUN_ERROR":
-                  setError(event.message ?? "Agent 运行出错");
+                case "TEAM_HANDOFF":
+                  // Insert a handoff notification as a system message
+                  setMessages((prev) => [
+                    ...prev,
+                    {
+                      index: prev.length,
+                      role: "system" as const,
+                      content: "",
+                      teamHandoff: {
+                        fromAgentId: event.fromAgentId,
+                        fromAgentName: event.fromAgentName,
+                        toAgentId: event.toAgentId,
+                        toAgentName: event.toAgentName,
+                      },
+                    },
+                  ]);
                   break;
 
-                case "RUN_FINISHED":
-                  // Stream complete
+                case "RUN_ERROR": {
+                  // Team-specific error attribution
+                  const errMsg = event.message ?? "Agent 运行出错";
+                  setError(errMsg);
+                  // Clear progress indicator on error
+                  setTeamProgress(null);
                   break;
+                }
+
+                case "RUN_FINISHED":
+                  // Stream complete — clear team progress indicator
+                  setTeamProgress(null);
+                  break;
+
+                case "TEAM_PROGRESS":
+                  setTeamProgress({
+                    currentAgentId: event.currentAgentId,
+                    currentAgentName: event.currentAgentName,
+                    step: event.step,
+                    totalSteps: event.totalSteps,
+                    mode: event.mode ?? "",
+                  });
+                  break;
+
+                case "TEAM_LEDGER_UPDATE": {
+                  const ledgerType = event.ledgerType as string;
+                  if (ledgerType === "outer") {
+                    try {
+                      const parsed = JSON.parse(event.content as string) as OuterLedger;
+                      setOuterLedger(parsed);
+                    } catch {
+                      // Ignore malformed outer ledger JSON
+                    }
+                  } else if (ledgerType === "inner") {
+                    try {
+                      const entry = JSON.parse(event.content as string) as InnerLedgerEntry;
+                      if (entry.status === "completed") {
+                        // Update the most recent running entry for this agent
+                        setInnerLedgerEntries((prev) => {
+                          const copy = [...prev];
+                          for (let i = copy.length - 1; i >= 0; i--) {
+                            if (copy[i].agentName === entry.agentName && copy[i].status === "running") {
+                              copy[i] = { ...copy[i], status: "completed", summary: entry.summary ?? copy[i].summary };
+                              break;
+                            }
+                          }
+                          return copy;
+                        });
+                      } else {
+                        setInnerLedgerEntries((prev) => [...prev, entry]);
+                      }
+                    } catch {
+                      // Ignore malformed inner ledger JSON
+                    }
+                  } else if (ledgerType === "orchestrator") {
+                    try {
+                      const msg = JSON.parse(event.content as string) as OrchestratorMessage;
+                      setOrchestratorMessages((prev) => [...prev, msg]);
+                    } catch {
+                      // Ignore malformed orchestrator message JSON
+                    }
+                  } else if (ledgerType === "thought") {
+                    try {
+                      const thought = JSON.parse(event.content as string) as OrchestratorThought;
+                      setOrchestratorThoughts((prev) => [...prev, thought]);
+                    } catch {
+                      // Ignore malformed thought JSON
+                    }
+                  }
+                  break;
+                }
               }
             } catch {
+              console.warn("[SSE] Malformed JSON line:", jsonStr.slice(0, 200));
               // Ignore malformed JSON lines
             }
           }
@@ -239,12 +409,22 @@ export function useAgentChat({
     setMessages([]);
     setIsStreaming(false);
     setError(null);
+    setTeamProgress(null);
+    setOuterLedger(null);
+    setInnerLedgerEntries([]);
+    setOrchestratorMessages([]);
+    setOrchestratorThoughts([]);
   }, []);
 
   return {
     messages,
     isStreaming,
     error,
+    teamProgress,
+    outerLedger,
+    innerLedgerEntries,
+    orchestratorMessages,
+    orchestratorThoughts,
     sendMessage,
     abortRun,
     reset,

@@ -33,6 +33,7 @@ public class AgentResolverService : IAgentResolver
     private readonly ISandboxToolProvider _sandboxToolProvider;
     private readonly ISkillRegistrationRepository _skillRepo;
     private readonly IFileStorageService _fileStorage;
+    private readonly ITeamOrchestrator _teamOrchestrator;
     private readonly IConfiguration _configuration;
     private readonly ILogger<AgentResolverService> _logger;
     private readonly ILoggerFactory _loggerFactory;
@@ -47,6 +48,7 @@ public class AgentResolverService : IAgentResolver
         ISandboxToolProvider sandboxToolProvider,
         ISkillRegistrationRepository skillRepo,
         IFileStorageService fileStorage,
+        ITeamOrchestrator teamOrchestrator,
         IConfiguration configuration,
         ILogger<AgentResolverService> logger,
         ILoggerFactory loggerFactory)
@@ -59,6 +61,7 @@ public class AgentResolverService : IAgentResolver
         _sandboxToolProvider = sandboxToolProvider;
         _skillRepo = skillRepo;
         _fileStorage = fileStorage;
+        _teamOrchestrator = teamOrchestrator;
         _configuration = configuration;
         _logger = logger;
         _loggerFactory = loggerFactory;
@@ -87,6 +90,7 @@ public class AgentResolverService : IAgentResolver
         {
             Domain.Enums.AgentType.ChatClient => await ResolveChatClientAgent(agent, conversationId),
             Domain.Enums.AgentType.A2A => ResolveA2AAgent(agent),
+            Domain.Enums.AgentType.Team => await ResolveTeamAgent(agent, conversationId, cancellationToken),
             _ => throw new NotSupportedException($"Agent type '{agent.AgentType}' is not supported for chat.")
         };
     }
@@ -445,5 +449,105 @@ public class AgentResolverService : IAgentResolver
         return new ResolvedAgent(
             a2aClient.AsAIAgent(name: agent.Name, description: agent.Description),
             null);
+    }
+
+    /// <summary>
+    /// Team Agent resolution — resolves each participant recursively, then composes
+    /// into a Workflow-backed AIAgent via ITeamOrchestrator.
+    /// </summary>
+    private async Task<ResolvedAgent> ResolveTeamAgent(
+        Domain.Entities.AgentRegistration agent,
+        string conversationId,
+        CancellationToken cancellationToken)
+    {
+        var teamConfig = agent.TeamConfig
+            ?? throw new InvalidOperationException($"Team Agent '{agent.Name}' has no TeamConfig.");
+
+        _logger.LogInformation(
+            "Resolving Team Agent '{AgentName}' with mode {Mode} and {Count} participants",
+            agent.Name, teamConfig.Mode, teamConfig.ParticipantIds.Count);
+
+        // Resolve each participant agent (ChatClient or A2A — no Team nesting allowed)
+        var participants = new List<ResolvedAgent>();
+        foreach (var participantId in teamConfig.ParticipantIds)
+        {
+            var participantReg = await _agentRepo.GetByIdAsync(participantId, cancellationToken)
+                ?? throw new InvalidOperationException(
+                    $"Participant agent '{participantId}' not found for Team '{agent.Name}'.");
+
+            if (participantReg.AgentType == Domain.Enums.AgentType.Team)
+                throw new InvalidOperationException(
+                    $"Team nesting is not allowed: participant '{participantReg.Name}' is itself a Team agent.");
+
+            if (participantReg.Status != Domain.Enums.AgentStatus.Active &&
+                participantReg.Status != Domain.Enums.AgentStatus.Registered)
+            {
+                throw new InvalidOperationException(
+                    $"Participant agent '{participantReg.Name}' is not active (status: {participantReg.Status}).");
+            }
+
+            var resolved = await ResolveAsync(participantId, conversationId, cancellationToken);
+            participants.Add(resolved);
+        }
+
+        // Build the composite team agent via ITeamOrchestrator
+        // For MagneticOne mode, create an event queue for ledger updates
+        var eventQueue = teamConfig.Mode == Domain.Enums.TeamMode.MagneticOne
+            ? new System.Collections.Concurrent.ConcurrentQueue<Application.Chat.DTOs.TeamChatEventDto>()
+            : null;
+
+        // Build the manager IChatClient for LLM-based modes (Selector / MagneticOne)
+        IChatClient? managerClient = null;
+        if (teamConfig.Mode == Domain.Enums.TeamMode.Selector
+            && teamConfig.SelectorProviderId.HasValue
+            && !string.IsNullOrWhiteSpace(teamConfig.SelectorModelId))
+        {
+            managerClient = await BuildChatClientAsync(
+                teamConfig.SelectorProviderId.Value, teamConfig.SelectorModelId, agent.Name);
+        }
+        else if (teamConfig.Mode == Domain.Enums.TeamMode.MagneticOne
+            && teamConfig.OrchestratorProviderId.HasValue
+            && !string.IsNullOrWhiteSpace(teamConfig.OrchestratorModelId))
+        {
+            managerClient = await BuildChatClientAsync(
+                teamConfig.OrchestratorProviderId.Value, teamConfig.OrchestratorModelId, agent.Name);
+        }
+
+        var teamAgent = _teamOrchestrator.BuildTeamAgent(agent, participants, cancellationToken, eventQueue, managerClient);
+
+        return new ResolvedAgent(teamAgent, null, IsTeam: true, TeamEventQueue: eventQueue);
+    }
+
+    /// <summary>
+    /// Build an IChatClient from a LLM provider ID and model ID.
+    /// Reusable helper extracted from ResolveChatClientAgent for team manager LLMs.
+    /// </summary>
+    private async Task<IChatClient?> BuildChatClientAsync(Guid providerId, string modelId, string contextName)
+    {
+        var provider = await _providerRepo.GetByIdAsync(providerId);
+        if (provider is null)
+        {
+            _logger.LogWarning(
+                "LlmProvider '{ProviderId}' not found for team manager '{Context}' — manager LLM unavailable.",
+                providerId, contextName);
+            return null;
+        }
+
+        var openAiClient = new OpenAIClient(
+            new ApiKeyCredential(provider.ApiKey),
+            new OpenAIClientOptions { Endpoint = new Uri(provider.BaseUrl) });
+
+        IChatClient chatClient = openAiClient
+            .GetChatClient(modelId)
+            .AsIChatClient();
+
+        // Apply the same normalization used for agent chat clients
+        chatClient = new ToolCallNormalizingChatClient(chatClient);
+
+        _logger.LogInformation(
+            "Built manager IChatClient for '{Context}' using provider '{ProviderName}' model '{ModelId}'",
+            contextName, provider.Name, modelId);
+
+        return chatClient;
     }
 }

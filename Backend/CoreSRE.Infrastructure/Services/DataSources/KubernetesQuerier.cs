@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using System.Net.Security;
+using System.Security.Authentication;
 using System.Text.Json;
 using CoreSRE.Application.Interfaces;
 using CoreSRE.Domain.Entities;
@@ -450,22 +452,40 @@ public class KubernetesQuerier : IDataSourceQuerier
             config = KubernetesClientConfiguration.BuildConfigFromConfigFile(stream);
         }
         else if (!string.IsNullOrEmpty(registration.ConnectionConfig.BaseUrl)
-                 && registration.ConnectionConfig.BaseUrl != "https://kubernetes.default.svc"
-                 && !string.IsNullOrEmpty(registration.ConnectionConfig.EncryptedCredential))
+                 && registration.ConnectionConfig.BaseUrl != "https://kubernetes.default.svc")
         {
-            // Use BaseUrl + explicit token auth (remote clusters)
-            config = new KubernetesClientConfiguration
+            if (!string.IsNullOrEmpty(registration.ConnectionConfig.EncryptedCredential))
             {
-                Host = registration.ConnectionConfig.BaseUrl,
-                AccessToken = registration.ConnectionConfig.EncryptedCredential,
-                SkipTlsVerify = registration.ConnectionConfig.TlsSkipVerify
-            };
+                // BaseUrl + explicit token auth (remote clusters)
+                config = new KubernetesClientConfiguration
+                {
+                    Host = registration.ConnectionConfig.BaseUrl,
+                    AccessToken = registration.ConnectionConfig.EncryptedCredential,
+                };
+            }
+            else
+            {
+                // BaseUrl provided but no token — load default kubeconfig and override host
+                // (e.g. Docker Desktop with client-cert auth)
+                config = KubernetesClientConfiguration.BuildDefaultConfig();
+                config.Host = registration.ConnectionConfig.BaseUrl;
+            }
         }
         else
         {
             // Use default (in-cluster or local kubeconfig)
             config = KubernetesClientConfiguration.BuildDefaultConfig();
-            config.SkipTlsVerify = registration.ConnectionConfig.TlsSkipVerify;
+        }
+
+        // Apply TLS settings from registration
+        config.SkipTlsVerify = registration.ConnectionConfig.TlsSkipVerify;
+        
+        if (registration.ConnectionConfig.TlsSkipVerify)
+        {
+            config.FirstMessageHandlerSetup = handler =>
+            {
+                handler.SslOptions.RemoteCertificateValidationCallback = (_, _, _, _) => true;
+            };
         }
 
         return new k8s.Kubernetes(config);

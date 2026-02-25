@@ -175,6 +175,7 @@ public class MockAgentTests
             new Mock<ISandboxToolProvider>().Object,
             new Mock<ISkillRegistrationRepository>().Object,
             new Mock<IFileStorageService>().Object,
+            new Mock<ITeamOrchestrator>().Object,
             configuration,
             new Mock<ILogger<AgentResolverService>>().Object,
             new Mock<ILoggerFactory>().Object);

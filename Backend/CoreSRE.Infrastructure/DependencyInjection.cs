@@ -52,6 +52,9 @@ public static class DependencyInjection
         // Agent resolver — resolves AgentRegistration → AIAgent for AG-UI chat
         services.AddScoped<IAgentResolver, AgentResolverService>();
 
+        // Team orchestrator — builds multi-agent workflow pipelines for Team-type agents
+        services.AddScoped<ITeamOrchestrator, TeamOrchestratorService>();
+
         // Chat history reader — reads messages from AgentSessionRecord.SessionData
         services.AddScoped<IChatHistoryReader, ChatHistoryReader>();
 
@@ -93,9 +96,6 @@ public static class DependencyInjection
         services.AddSingleton<k8s.Kubernetes>(sp =>
         {
             var config = KubernetesClientConfiguration.BuildDefaultConfig();
-            // Docker Desktop 使用自签名证书，WebSocket exec 时 .NET 证书链验证会
-            // 触发 NullReferenceException (StorePal.LinkFromCertificateCollection)。
-            // 跳过 TLS 验证以兼容本地开发环境；生产环境应使用受信任证书。
             config.SkipTlsVerify = true;
             return new k8s.Kubernetes(config);
         });

@@ -22,6 +22,7 @@ public class AgentResolverServiceTests
     private readonly Mock<IHttpClientFactory> _httpClientFactoryMock = new();
     private readonly Mock<IToolFunctionFactory> _toolFunctionFactoryMock = new();
     private readonly Mock<ISandboxToolProvider> _sandboxToolProviderMock = new();
+    private readonly Mock<ITeamOrchestrator> _teamOrchestratorMock = new();
     private readonly Mock<IConfiguration> _configurationMock = new();
     private readonly Mock<ILogger<AgentResolverService>> _loggerMock = new();
     private readonly Mock<ILoggerFactory> _loggerFactoryMock = new();
@@ -42,6 +43,7 @@ public class AgentResolverServiceTests
             _sandboxToolProviderMock.Object,
             new Mock<ISkillRegistrationRepository>().Object,
             new Mock<IFileStorageService>().Object,
+            _teamOrchestratorMock.Object,
             _configurationMock.Object,
             _loggerMock.Object,
             _loggerFactoryMock.Object);
@@ -474,6 +476,165 @@ public class AgentResolverServiceTests
         options.Should().NotBeNull();
         options!.AIContextProviderFactory.Should().BeNull(
             "when EnableSemanticMemory is null (default false), no AIContextProviderFactory");
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // US1-TeamChat: Team Type Resolution — T020-T021
+    // ═══════════════════════════════════════════════════════════════════
+
+    private static AgentRegistration CreateTeamAgent(
+        Guid id,
+        string name,
+        TeamConfigVO teamConfig)
+    {
+        var agent = AgentRegistration.CreateTeam(name, $"{name} description", teamConfig);
+        typeof(BaseEntity).GetProperty("Id")!.SetValue(agent, id);
+        // Ensure status is Active for resolution
+        typeof(AgentRegistration).GetProperty("Status")!.SetValue(agent, AgentStatus.Active);
+        return agent;
+    }
+
+    [Fact]
+    public async Task ResolveAsync_TeamAgent_ResolvesParticipantsAndCallsOrchestrator()
+    {
+        // Arrange
+        var participantId1 = Guid.NewGuid();
+        var participantId2 = Guid.NewGuid();
+        var providerId = Guid.NewGuid();
+
+        var participant1 = CreateChatClientAgent(participantId1, "Agent1", providerId: providerId);
+        typeof(AgentRegistration).GetProperty("Status")!.SetValue(participant1, AgentStatus.Active);
+        var participant2 = CreateChatClientAgent(participantId2, "Agent2", providerId: providerId);
+        typeof(AgentRegistration).GetProperty("Status")!.SetValue(participant2, AgentStatus.Active);
+
+        var teamConfig = TeamConfigVO.Create(
+            TeamMode.Sequential,
+            [participantId1, participantId2]);
+
+        var teamId = Guid.NewGuid();
+        var teamAgent = CreateTeamAgent(teamId, "TestTeam", teamConfig);
+
+        var provider = CreateProvider(providerId);
+
+        // Setup repo to return team agent, then participant agents
+        _agentRepoMock.Setup(r => r.GetByIdAsync(teamId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(teamAgent);
+        _agentRepoMock.Setup(r => r.GetByIdAsync(participantId1, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(participant1);
+        _agentRepoMock.Setup(r => r.GetByIdAsync(participantId2, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(participant2);
+        _providerRepoMock.Setup(r => r.GetByIdAsync(providerId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(provider);
+
+        var mockAiAgent = new Mock<AIAgent>().Object;
+        _teamOrchestratorMock.Setup(o => o.BuildTeamAgent(
+                It.Is<AgentRegistration>(a => a.Id == teamId),
+                It.Is<IReadOnlyList<ResolvedAgent>>(list => list.Count == 2),
+                It.IsAny<CancellationToken>()))
+            .Returns(mockAiAgent);
+
+        var service = CreateService();
+
+        // Act
+        var result = await service.ResolveAsync(teamId, "conv-team-1");
+
+        // Assert
+        result.Agent.Should().Be(mockAiAgent);
+        result.LlmConfig.Should().BeNull("Team agents don't have their own LlmConfig");
+        _teamOrchestratorMock.Verify(o => o.BuildTeamAgent(
+            It.IsAny<AgentRegistration>(),
+            It.Is<IReadOnlyList<ResolvedAgent>>(list => list.Count == 2),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task ResolveAsync_TeamAgent_ParticipantNotFound_Throws()
+    {
+        // Arrange
+        var missingId = Guid.NewGuid();
+        var existingId = Guid.NewGuid();
+
+        var teamConfig = TeamConfigVO.Create(
+            TeamMode.Sequential,
+            [existingId, missingId]);
+
+        var teamId = Guid.NewGuid();
+        var teamAgent = CreateTeamAgent(teamId, "TestTeam", teamConfig);
+
+        _agentRepoMock.Setup(r => r.GetByIdAsync(teamId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(teamAgent);
+        _agentRepoMock.Setup(r => r.GetByIdAsync(existingId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(CreateChatClientAgent(existingId, "Existing", providerId: Guid.NewGuid()));
+        _agentRepoMock.Setup(r => r.GetByIdAsync(missingId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((AgentRegistration?)null);
+
+        var service = CreateService();
+
+        // Act & Assert
+        var act = () => service.ResolveAsync(teamId, "conv-team-err");
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage($"*'{missingId}'*not found*");
+    }
+
+    [Fact]
+    public async Task ResolveAsync_TeamAgent_InactiveParticipant_Throws()
+    {
+        // Arrange
+        var participantId1 = Guid.NewGuid();
+        var participantId2 = Guid.NewGuid();
+
+        var teamConfig = TeamConfigVO.Create(
+            TeamMode.Sequential,
+            [participantId1, participantId2]);
+
+        var teamId = Guid.NewGuid();
+        var teamAgent = CreateTeamAgent(teamId, "TestTeam", teamConfig);
+
+        var inactiveAgent = CreateChatClientAgent(participantId1, "Inactive");
+        typeof(AgentRegistration).GetProperty("Status")!.SetValue(inactiveAgent, AgentStatus.Inactive);
+
+        _agentRepoMock.Setup(r => r.GetByIdAsync(teamId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(teamAgent);
+        _agentRepoMock.Setup(r => r.GetByIdAsync(participantId1, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(inactiveAgent);
+
+        var service = CreateService();
+
+        // Act & Assert
+        var act = () => service.ResolveAsync(teamId, "conv-team-err");
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*not active*");
+    }
+
+    [Fact]
+    public async Task ResolveAsync_TeamAgent_NestedTeamParticipant_Throws()
+    {
+        // Arrange — create a participant that is itself a Team agent
+        var nestedTeamId = Guid.NewGuid();
+        var otherId = Guid.NewGuid();
+
+        var teamConfig = TeamConfigVO.Create(
+            TeamMode.Sequential,
+            [nestedTeamId, otherId]);
+
+        var teamId = Guid.NewGuid();
+        var teamAgent = CreateTeamAgent(teamId, "OuterTeam", teamConfig);
+
+        // Create the nested team agent registration
+        var nestedConfig = TeamConfigVO.Create(TeamMode.Sequential, [Guid.NewGuid(), Guid.NewGuid()]);
+        var nestedAgent = CreateTeamAgent(nestedTeamId, "InnerTeam", nestedConfig);
+
+        _agentRepoMock.Setup(r => r.GetByIdAsync(teamId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(teamAgent);
+        _agentRepoMock.Setup(r => r.GetByIdAsync(nestedTeamId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(nestedAgent);
+
+        var service = CreateService();
+
+        // Act & Assert
+        var act = () => service.ResolveAsync(teamId, "conv-team-err");
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*nesting*not allowed*");
     }
 
     // ═══════════════════════════════════════════════════════════════════

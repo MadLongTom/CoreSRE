@@ -3,6 +3,8 @@ import { AgentSelector } from "@/components/chat/AgentSelector";
 import { ConversationList } from "@/components/chat/ConversationList";
 import { MessageArea } from "@/components/chat/MessageArea";
 import { MessageInput } from "@/components/chat/MessageInput";
+import { TeamProgressIndicator } from "@/components/chat/TeamProgressIndicator";
+import { MagneticOneLedger } from "@/components/chat/MagneticOneLedger";
 import { useAgentChat } from "@/hooks/use-agent-chat";
 import { getAgents, type ApiError } from "@/lib/api/agents";
 import {
@@ -49,6 +51,11 @@ export default function ChatPage() {
     messages,
     isStreaming,
     error,
+    teamProgress,
+    outerLedger,
+    innerLedgerEntries,
+    orchestratorMessages,
+    orchestratorThoughts,
     sendMessage,
     abortRun,
     reset,
@@ -225,16 +232,36 @@ export default function ChatPage() {
             </div>
           )}
 
-          {/* Messages */}
-          <MessageArea messages={messages} isStreaming={isStreaming} />
+          <div className="flex flex-1 overflow-hidden">
+            {/* Messages column */}
+            <div className="flex flex-1 flex-col overflow-hidden">
+              {/* Messages */}
+              <MessageArea messages={messages} isStreaming={isStreaming} />
 
-          {/* Input */}
-          <MessageInput
-            onSend={handleSend}
-            disabled={!selectedAgentId}
-            isStreaming={isStreaming}
-            onAbort={abortRun}
-          />
+              {/* Team progress indicator — shown during Team streaming */}
+              {isStreaming && teamProgress && (
+                <TeamProgressIndicator progress={teamProgress} />
+              )}
+
+              {/* Input */}
+              <MessageInput
+                onSend={handleSend}
+                disabled={!selectedAgentId}
+                isStreaming={isStreaming}
+                onAbort={abortRun}
+              />
+            </div>
+
+            {/* MagneticOne ledger side panel — shown when ledger data exists */}
+            {(outerLedger || innerLedgerEntries.length > 0 || orchestratorMessages.length > 0 || orchestratorThoughts.length > 0) && (
+              <MagneticOneLedger
+                outerLedger={outerLedger}
+                innerLedgerEntries={innerLedgerEntries}
+                orchestratorMessages={orchestratorMessages}
+                orchestratorThoughts={orchestratorThoughts}
+              />
+            )}
+          </div>
         </div>
       </div>
     </div>

@@ -55,3 +55,8 @@ coverage/
 
 # ===== Sandbox working directories =====
 sandboxes/
+
+# ===== Reflector / decompiled source (local-only) =====
+Backend/_reflect.csx
+Backend/_reflector/
+Backend/decompiled-*.cs

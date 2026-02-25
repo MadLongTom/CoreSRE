@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import type { ChatMessage } from "@/types/chat";
-import { Bot, User, Brain, Sparkles } from "lucide-react";
+import { Bot, User, Brain, Sparkles, Users } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { ToolCallCard } from "@/components/chat/ToolCallCard";
@@ -71,6 +71,16 @@ export function MessageBubble({ message }: MessageBubbleProps) {
 
       {/* Content */}
       <div className="max-w-[75%] space-y-1">
+        {/* Participant agent name label — shown for Team agent responses */}
+        {!isUser && message.participantAgentName && (
+          <div className="flex items-center gap-1 text-xs text-muted-foreground mb-0.5">
+            <Users className="h-3 w-3" />
+            <span className="font-medium text-purple-600 dark:text-purple-400">
+              {message.participantAgentName}
+            </span>
+          </div>
+        )}
+
         {/* Text bubble — render before tool calls */}
         {message.content && (
           <div

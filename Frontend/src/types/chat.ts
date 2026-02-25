@@ -62,11 +62,81 @@ export interface ToolCall {
 /** Maps to backend ChatMessageDto — NOT a DB entity, extracted from SessionData JSONB */
 export interface ChatMessage {
   index: number;
-  role: "user" | "assistant" | "tool";
+  role: "user" | "assistant" | "tool" | "system";
   content: string;
   toolCalls?: ToolCall[];  // present on assistant messages with tool usage
   /** Semantic memory context injected for this user turn (system role, not shown directly) */
   memoryContext?: string | null;
+  /** Originating participant agent GUID — present only in Team mode conversations */
+  participantAgentId?: string;
+  /** Originating participant agent name — present only in Team mode conversations */
+  participantAgentName?: string;
+  /** Team handoff notification data — present on system messages for handoff events */
+  teamHandoff?: TeamHandoff;
+}
+
+// ---------------------------------------------------------------------------
+// Team Mode Types (MagneticOne ledger, progress indicator)
+// ---------------------------------------------------------------------------
+
+/** Outer ledger maintained by MagneticOne orchestrator — high-level plan/progress */
+export interface OuterLedger {
+  facts: string;
+  plan: string;
+  nextStep: string;
+  progress: string;
+  isComplete: boolean;
+  /** Synthesized final answer from MagneticOne orchestrator. */
+  finalAnswer?: string;
+  /** Current orchestrator iteration (1-based). */
+  iteration: number;
+  /** Consecutive stall count. */
+  nStalls: number;
+  /** Max stalls before replanning. */
+  maxStalls: number;
+}
+
+/** Inner ledger entry — per-agent task execution log in MagneticOne mode */
+export interface InnerLedgerEntry {
+  agentName: string;
+  task: string;
+  status: "running" | "completed" | "failed";
+  summary?: string;
+  timestamp: string;
+}
+
+/** Orchestrator instruction — emitted per-step showing the orchestrator's decision */
+export interface OrchestratorMessage {
+  iteration: number;
+  targetAgent: string;
+  instruction: string;
+  isRequestSatisfied: boolean;
+  isProgressBeingMade: boolean;
+  isInLoop: boolean;
+  reason: string;
+}
+
+/** Orchestrator thought — raw LLM response from each orchestrator call */
+export interface OrchestratorThought {
+  category: "facts" | "plan" | "facts_update" | "plan_update" | "progress_ledger" | "final_answer";
+  content: string;
+}
+
+/** Team orchestration progress indicator state */
+export interface TeamProgress {
+  currentAgentId: string;
+  currentAgentName: string;
+  step?: number;
+  totalSteps?: number;
+  mode: string;
+}
+
+/** Handoff notification — displayed as a system message in Handoffs mode */
+export interface TeamHandoff {
+  fromAgentId: string;
+  fromAgentName: string;
+  toAgentId: string;
+  toAgentName: string;
 }
 
 // ---------------------------------------------------------------------------

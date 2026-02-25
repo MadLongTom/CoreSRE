@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { MessageSquare, Loader2, Trash2 } from "lucide-react";
+import { MessageSquare, Loader2, Trash2, Users } from "lucide-react";
 import { DeleteConversationDialog } from "@/components/chat/DeleteConversationDialog";
 import type { ConversationSummary } from "@/types/chat";
 
@@ -91,10 +91,23 @@ export function ConversationList({
                 onClick={() => onSelect(conv)}
                 className="flex w-full flex-col gap-0.5 text-left"
               >
-                {/* Agent name + time */}
+                {/* Agent name + type badge + time */}
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-medium text-muted-foreground">
+                  <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
+                    {conv.agentType === "Team" && (
+                      <Users className="h-3 w-3 text-purple-500" />
+                    )}
                     {conv.agentName}
+                    {conv.agentType === "A2A" && (
+                      <span className="rounded bg-blue-100 px-1 py-0.5 text-[9px] font-medium text-blue-700 dark:bg-blue-900 dark:text-blue-300">
+                        A2A
+                      </span>
+                    )}
+                    {conv.agentType === "Team" && (
+                      <span className="rounded bg-purple-100 px-1 py-0.5 text-[9px] font-medium text-purple-700 dark:bg-purple-900 dark:text-purple-300">
+                        Team
+                      </span>
+                    )}
                   </span>
                   <span className="text-xs text-muted-foreground">
                     {timeStr}
