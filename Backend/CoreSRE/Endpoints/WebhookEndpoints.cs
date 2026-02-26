@@ -76,10 +76,16 @@ public static class WebhookEndpoints
         var matches = matchResult.Data;
         var ignoredCount = alerts.Count - matches.Count;
         var incidentIds = new List<Guid>();
+        var errors = new List<string>();
+
+        logger.LogWarning("Webhook: {MatchCount} matches, {IgnoredCount} ignored", matches.Count, ignoredCount);
 
         // 5. 对每条匹配的告警：去重 → 派发
         foreach (var match in matches)
         {
+            logger.LogWarning("Webhook: Processing match AlertRule={AlertRuleId}, Alert={AlertName}, Status={Status}, SopId={SopId}",
+                match.AlertRuleId, match.Alert.AlertName, match.Alert.Status, match.SopId);
+
             // 5a. resolved 状态处理：自动关闭关联 Incident
             if (string.Equals(match.Alert.Status, "resolved", StringComparison.OrdinalIgnoreCase))
             {
@@ -104,52 +110,82 @@ public static class WebhookEndpoints
                     }));
                 await incidentRepository.UpdateAsync(existing);
 
-                logger.LogInformation(
-                    "Duplicate alert '{AlertName}' (fingerprint: {Fingerprint}) within cooldown window. Appended to Incident {IncidentId}.",
+                logger.LogWarning(
+                    "Webhook: Duplicate alert '{AlertName}' (fingerprint: {Fingerprint}) within cooldown. Appended to Incident {IncidentId}.",
                     match.Alert.AlertName, match.Alert.Fingerprint, existing.Id);
                 continue;
             }
 
             // 5c. 派发 Command（创建 Incident 由 Handler 负责）
-            if (match.SopId.HasValue)
+            try
             {
-                // 链路 A：SOP 自动执行
-                var result = await sender.Send(new DispatchSopExecutionCommand
+                if (match.SopId.HasValue)
                 {
-                    AlertRuleId = match.AlertRuleId,
-                    SopId = match.SopId.Value,
-                    ResponderAgentId = match.ResponderAgentId,
-                    Fingerprint = match.Alert.Fingerprint,
-                    AlertName = match.Alert.AlertName,
-                    Severity = match.Severity,
-                    AlertLabels = match.Alert.Labels,
-                    AlertAnnotations = match.Alert.Annotations,
-                    AlertPayload = match.Alert.RawJson,
-                    NotificationChannels = match.NotificationChannels
-                });
+                    // 链路 A：SOP 自动执行
+                    logger.LogWarning("Webhook: Dispatching SOP command for {AlertName}", match.Alert.AlertName);
+                    var result = await sender.Send(new DispatchSopExecutionCommand
+                    {
+                        AlertRuleId = match.AlertRuleId,
+                        SopId = match.SopId.Value,
+                        ResponderAgentId = match.ResponderAgentId,
+                        Fingerprint = match.Alert.Fingerprint,
+                        AlertName = match.Alert.AlertName,
+                        Severity = match.Severity,
+                        AlertLabels = match.Alert.Labels,
+                        AlertAnnotations = match.Alert.Annotations,
+                        AlertPayload = match.Alert.RawJson,
+                        NotificationChannels = match.NotificationChannels
+                    });
 
-                if (result.Success)
-                    incidentIds.Add(result.Data);
+                    logger.LogWarning("Webhook: SOP dispatch result: Success={Success}, Data={Data}, Message={Message}",
+                        result.Success, result.Data, result.Message);
+
+                    if (result.Success)
+                        incidentIds.Add(result.Data);
+                    else
+                    {
+                        var msg = $"SOP dispatch failed for '{match.Alert.AlertName}': {result.Message}";
+                        logger.LogWarning(msg);
+                        errors.Add(msg);
+                    }
+                }
+                else
+                {
+                    // 链路 B：根因分析
+                    logger.LogWarning("Webhook: Dispatching RCA command for {AlertName}", match.Alert.AlertName);
+                    var result = await sender.Send(new DispatchRootCauseAnalysisCommand
+                    {
+                        AlertRuleId = match.AlertRuleId,
+                        TeamAgentId = match.TeamAgentId,
+                        SummarizerAgentId = match.SummarizerAgentId,
+                        Fingerprint = match.Alert.Fingerprint,
+                        AlertName = match.Alert.AlertName,
+                        Severity = match.Severity,
+                        AlertLabels = match.Alert.Labels,
+                        AlertAnnotations = match.Alert.Annotations,
+                        AlertPayload = match.Alert.RawJson,
+                        NotificationChannels = match.NotificationChannels
+                    });
+
+                    logger.LogWarning("Webhook: RCA dispatch result: Success={Success}, Data={Data}, Message={Message}",
+                        result.Success, result.Data, result.Message);
+
+                    if (result.Success)
+                        incidentIds.Add(result.Data);
+                    else
+                    {
+                        var msg = $"RCA dispatch failed for '{match.Alert.AlertName}': {result.Message}";
+                        logger.LogWarning(msg);
+                        errors.Add(msg);
+                    }
+                }
             }
-            else
+            catch (Exception ex)
             {
-                // 链路 B：根因分析
-                var result = await sender.Send(new DispatchRootCauseAnalysisCommand
-                {
-                    AlertRuleId = match.AlertRuleId,
-                    TeamAgentId = match.TeamAgentId,
-                    SummarizerAgentId = match.SummarizerAgentId,
-                    Fingerprint = match.Alert.Fingerprint,
-                    AlertName = match.Alert.AlertName,
-                    Severity = match.Severity,
-                    AlertLabels = match.Alert.Labels,
-                    AlertAnnotations = match.Alert.Annotations,
-                    AlertPayload = match.Alert.RawJson,
-                    NotificationChannels = match.NotificationChannels
-                });
-
-                if (result.Success)
-                    incidentIds.Add(result.Data);
+                var msg = $"Exception dispatching '{match.Alert.AlertName}': {ex.GetType().Name}: {ex.Message}";
+                logger.LogError(ex, "Exception dispatching alert '{AlertName}' (fingerprint: {Fingerprint})",
+                    match.Alert.AlertName, match.Alert.Fingerprint);
+                errors.Add(msg);
             }
         }
 
@@ -157,7 +193,8 @@ public static class WebhookEndpoints
         {
             success = true,
             incidentIds,
-            ignoredCount
+            ignoredCount,
+            errors
         });
     }
 

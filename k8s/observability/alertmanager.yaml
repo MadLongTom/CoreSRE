@@ -25,8 +25,13 @@ data:
 
     receivers:
       - name: 'default'
-        # Webhook / 本地 dev 不做真正推送
+        webhook_configs:
+          - url: 'http://host.docker.internal:5156/api/datasources/webhook/b77a9e20-13a6-4931-ad63-141e67fcb331'
+            send_resolved: true
       - name: 'critical'
+        webhook_configs:
+          - url: 'http://host.docker.internal:5156/api/datasources/webhook/b77a9e20-13a6-4931-ad63-141e67fcb331'
+            send_resolved: true
 
     inhibit_rules:
       - source_match:

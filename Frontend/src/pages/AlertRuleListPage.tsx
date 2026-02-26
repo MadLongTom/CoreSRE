@@ -12,6 +12,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Loader2, Plus, Bell } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import type { AlertRuleDto } from "@/types/alert-rule";
 import type { ApiResult } from "@/types/agent";
 
@@ -44,6 +45,25 @@ export default function AlertRuleListPage() {
   useEffect(() => {
     fetchRules();
   }, [fetchRules]);
+
+  const toggleStatus = async (rule: AlertRuleDto) => {
+    const newStatus = rule.status === "Active" ? "Inactive" : "Active";
+    try {
+      const resp = await fetch(`${API}/${rule.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      const result: ApiResult<AlertRuleDto> = await resp.json();
+      if (result.success && result.data) {
+        setRules((prev) =>
+          prev.map((r) => (r.id === rule.id ? result.data! : r))
+        );
+      }
+    } catch {
+      // ignore
+    }
+  };
 
   return (
     <div className="flex h-full flex-col">
@@ -79,7 +99,7 @@ export default function AlertRuleListPage() {
                 <TableHead>名称</TableHead>
                 <TableHead>严重级</TableHead>
                 <TableHead>路由</TableHead>
-                <TableHead>状态</TableHead>
+                <TableHead>启用</TableHead>
                 <TableHead>匹配器</TableHead>
                 <TableHead>冷却 (分钟)</TableHead>
               </TableRow>
@@ -106,11 +126,12 @@ export default function AlertRuleListPage() {
                     {r.teamAgentId ? "根因分析" : "SOP 执行"}
                   </TableCell>
                   <TableCell>
-                    <Badge
-                      variant={r.status === "Active" ? "default" : "secondary"}
-                    >
-                      {r.status}
-                    </Badge>
+                    <Switch
+                      checked={r.status === "Active"}
+                      onCheckedChange={() => toggleStatus(r)}
+                      onClick={(e) => e.stopPropagation()}
+                      aria-label={`${r.status === "Active" ? "禁用" : "启用"} ${r.name}`}
+                    />
                   </TableCell>
                   <TableCell className="text-xs text-muted-foreground">
                     {r.matchers.length} 条件

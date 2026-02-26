@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Badge } from "@/components/ui/badge";
@@ -10,9 +10,11 @@ import {
   Loader2,
   Trash2,
 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import type { AlertRuleDto } from "@/types/alert-rule";
 import { MATCH_OP_LABELS } from "@/types/alert-rule";
-import type { ApiResult } from "@/types/agent";
+import type { ApiResult, AgentSummary } from "@/types/agent";
+import type { SkillRegistration } from "@/types/skill";
 
 const API = "/api/alert-rules";
 
@@ -22,6 +24,25 @@ export default function AlertRuleDetailPage() {
   const [rule, setRule] = useState<AlertRuleDto | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Name lookup maps
+  const [agents, setAgents] = useState<AgentSummary[]>([]);
+  const [skills, setSkills] = useState<SkillRegistration[]>([]);
+
+  const agentMap = useMemo(
+    () => new Map(agents.map((a) => [a.id, a.name])),
+    [agents],
+  );
+  const skillMap = useMemo(
+    () => new Map(skills.map((s) => [s.id, s.name])),
+    [skills],
+  );
+
+  const resolveName = (
+    map: Map<string, string>,
+    guid: string | null,
+    fallback = "未知",
+  ) => (guid ? map.get(guid) ?? fallback : "—");
 
   const fetchRule = useCallback(async () => {
     if (!id) return;
@@ -45,6 +66,30 @@ export default function AlertRuleDetailPage() {
     fetchRule();
   }, [fetchRule]);
 
+  // Fetch reference data for name resolution
+  useEffect(() => {
+    const fetchRefData = async () => {
+      try {
+        const [agentResp, skillResp] = await Promise.all([
+          fetch("/api/agents"),
+          fetch("/api/skills?pageSize=200"),
+        ]);
+        const agentResult: ApiResult<AgentSummary[]> = await agentResp.json();
+        const skillResult: ApiResult<{
+          items: SkillRegistration[];
+          totalCount: number;
+        }> = await skillResp.json();
+        if (agentResult.success && agentResult.data)
+          setAgents(agentResult.data);
+        if (skillResult.success && skillResult.data?.items)
+          setSkills(skillResult.data.items);
+      } catch {
+        // non-fatal
+      }
+    };
+    fetchRefData();
+  }, []);
+
   const handleDelete = async () => {
     if (!id || !confirm("确认删除此规则？")) return;
     try {
@@ -57,6 +102,24 @@ export default function AlertRuleDetailPage() {
       }
     } catch {
       setError("网络错误");
+    }
+  };
+
+  const toggleStatus = async () => {
+    if (!rule || !id) return;
+    const newStatus = rule.status === "Active" ? "Inactive" : "Active";
+    try {
+      const resp = await fetch(`${API}/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      const result: ApiResult<AlertRuleDto> = await resp.json();
+      if (result.success && result.data) {
+        setRule(result.data);
+      }
+    } catch {
+      // ignore
     }
   };
 
@@ -94,9 +157,16 @@ export default function AlertRuleDetailPage() {
         }
         actions={
           <div className="flex items-center gap-2">
-            <Badge variant={rule.status === "Active" ? "default" : "secondary"}>
-              {rule.status}
-            </Badge>
+            <div className="flex items-center gap-1.5 mr-2">
+              <Switch
+                checked={rule.status === "Active"}
+                onCheckedChange={toggleStatus}
+                aria-label="启用/禁用规则"
+              />
+              <span className="text-xs text-muted-foreground">
+                {rule.status === "Active" ? "已启用" : "已禁用"}
+              </span>
+            </div>
             <Button
               variant="outline"
               size="sm"
@@ -150,7 +220,7 @@ export default function AlertRuleDetailPage() {
                   >
                     <span className="font-mono">{m.label}</span>
                     <span className="text-muted-foreground">
-                      {MATCH_OP_LABELS[m.op]}
+                      {MATCH_OP_LABELS[m.operator]}
                     </span>
                     <span className="font-mono">{m.value}</span>
                   </div>
@@ -165,20 +235,28 @@ export default function AlertRuleDetailPage() {
           <div>
             <h3 className="mb-2 text-sm font-semibold">Agent / SOP 绑定</h3>
             <div className="grid grid-cols-2 gap-4">
-              {rule.sopId && <InfoItem label="SOP Skill ID" value={rule.sopId} />}
+              {rule.sopId && (
+                <InfoItem
+                  label="SOP Skill"
+                  value={resolveName(skillMap, rule.sopId)}
+                />
+              )}
               {rule.responderAgentId && (
                 <InfoItem
-                  label="Responder Agent ID"
-                  value={rule.responderAgentId}
+                  label="Responder Agent"
+                  value={resolveName(agentMap, rule.responderAgentId)}
                 />
               )}
               {rule.teamAgentId && (
-                <InfoItem label="Team Agent ID" value={rule.teamAgentId} />
+                <InfoItem
+                  label="Team Agent"
+                  value={resolveName(agentMap, rule.teamAgentId)}
+                />
               )}
               {rule.summarizerAgentId && (
                 <InfoItem
-                  label="Summarizer Agent ID"
-                  value={rule.summarizerAgentId}
+                  label="Summarizer Agent"
+                  value={resolveName(agentMap, rule.summarizerAgentId)}
                 />
               )}
             </div>

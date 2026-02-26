@@ -39,7 +39,7 @@ export const ROUTE_LABELS: Record<IncidentRoute, string> = {
 
 export interface AlertMatcher {
   label: string;
-  op: MatchOp;
+  operator: MatchOp;
   value: string;
 }
 

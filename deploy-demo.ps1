@@ -262,6 +262,75 @@ Write-Host "  Loki:          http://localhost:30100" -ForegroundColor White
 Write-Host "  Jaeger UI:     http://localhost:30686" -ForegroundColor White
 Write-Host "  Alertmanager:  http://localhost:30093" -ForegroundColor White
 Write-Host "  CoreSRE API:   $ApiBase/api/datasources" -ForegroundColor White
+
+# ──────────── Seed AlertRules ────────────
+Write-Host ""
+Write-Step "Seeding alert rules ..."
+
+# We need agent/skill IDs — fetch from API
+$agentsResp = try { Invoke-RestMethod -Uri "$ApiBase/api/agents" -TimeoutSec 5 } catch { $null }
+$skillsResp = try { Invoke-RestMethod -Uri "$ApiBase/api/skills?pageSize=100" -TimeoutSec 5 } catch { $null }
+
+$opsAgent      = ($agentsResp?.data | Where-Object { $_.name -eq "ops-agent" })?.id
+$teamAgent     = ($agentsResp?.data | Where-Object { $_.agentType -eq "Team" } | Select-Object -First 1)?.id
+$incidentSkill = ($skillsResp?.data?.items | Where-Object { $_.name -eq "incident-response" })?.id
+
+if (-not $opsAgent) { Write-Warn "ops-agent not found — skipping alert rule seeding. Register agents first." }
+else {
+    function Register-AlertRule {
+        param([hashtable]$Body)
+        $json = $Body | ConvertTo-Json -Depth 5
+        $bytes = [System.Text.Encoding]::UTF8.GetBytes($json)
+        try {
+            $resp = Invoke-RestMethod -Uri "$ApiBase/api/alert-rules" `
+                -Method Post -ContentType "application/json; charset=utf-8" -Body $bytes -TimeoutSec 10
+            if ($resp.success) { Write-Ok "$($Body.name) (id=$($resp.data.id))" }
+            else { Write-Warn "$($Body.name) — $($resp.errors -join ', ')" }
+        } catch {
+            $code = $_.Exception.Response.StatusCode.value__
+            if ($code -eq 409) { Write-Warn "$($Body.name) — already exists (409), skipping." }
+            else { Write-Err "$($Body.name) — $($_.Exception.Message)" }
+        }
+    }
+
+    # 1. HighErrorRate — SOP 自动执行
+    Register-AlertRule @{
+        name = "HighErrorRate"
+        description = "HTTP 5xx 错误率超过 5%，自动触发 incident-response SOP"
+        severity = "P2"
+        matchers = @( @{ label = "alertname"; operator = "Eq"; value = "HighErrorRate" } )
+        sopId = $incidentSkill
+        responderAgentId = $opsAgent
+        cooldownMinutes = 15
+    }
+
+    # 2. HighLatency — SOP 自动执行
+    Register-AlertRule @{
+        name = "HighLatency"
+        description = "P99 延迟超过 1s，自动触发 incident-response SOP"
+        severity = "P3"
+        matchers = @( @{ label = "alertname"; operator = "Eq"; value = "HighLatency" } )
+        sopId = $incidentSkill
+        responderAgentId = $opsAgent
+        cooldownMinutes = 30
+    }
+
+    # 3. ServiceDown — 根因分析 (Team Agent)
+    if ($teamAgent) {
+        Register-AlertRule @{
+            name = "ServiceDown"
+            description = "服务宕机，触发 Team Agent 根因分析"
+            severity = "P1"
+            matchers = @( @{ label = "alertname"; operator = "Eq"; value = "ServiceDown" } )
+            teamAgentId = $teamAgent
+            summarizerAgentId = $opsAgent
+            cooldownMinutes = 10
+        }
+    } else {
+        Write-Warn "No Team agent found — skipping ServiceDown rule."
+    }
+}
+
 Write-Host ""
 Write-Host "Useful commands:" -ForegroundColor Yellow
 Write-Host "  kubectl get pods -n observability     # 查看可观测性组件"

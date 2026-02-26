@@ -19,7 +19,7 @@ interface MatcherEditorProps {
 
 export function MatcherEditor({ matchers, onChange }: MatcherEditorProps) {
   const addMatcher = () => {
-    onChange([...matchers, { label: "", op: "Eq", value: "" }]);
+    onChange([...matchers, { label: "", operator: "Eq", value: "" }]);
   };
 
   const removeMatcher = (index: number) => {
@@ -62,8 +62,8 @@ export function MatcherEditor({ matchers, onChange }: MatcherEditorProps) {
             className="w-36"
           />
           <Select
-            value={m.op}
-            onValueChange={(v) => updateMatcher(idx, "op", v)}
+            value={m.operator}
+            onValueChange={(v) => updateMatcher(idx, "operator", v)}
           >
             <SelectTrigger className="w-32">
               <SelectValue />
