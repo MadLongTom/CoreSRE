@@ -17,10 +17,10 @@
 
   <ItemGroup>
     <PackageReference Include="A2A" Version="0.3.3-preview" />
-    <PackageReference Include="Microsoft.Agents.AI.A2A" Version="1.0.0-preview.260209.1" />
-    <PackageReference Include="Microsoft.Agents.AI.Hosting" Version="1.0.0-preview.260209.1" />
-    <PackageReference Include="Microsoft.Agents.AI.OpenAI" Version="1.0.0-preview.260209.1" />
-    <PackageReference Include="Microsoft.Agents.AI.Workflows" Version="1.0.0-preview.260209.1" />
+    <PackageReference Include="Microsoft.Agents.AI.A2A" Version="1.0.0-preview.260212.1" />
+    <PackageReference Include="Microsoft.Agents.AI.Hosting" Version="1.0.0-preview.260212.1" />
+    <PackageReference Include="Microsoft.Agents.AI.OpenAI" Version="1.0.0-preview.260212.1" />
+    <PackageReference Include="Microsoft.Agents.AI.Workflows" Version="1.0.0-preview.260212.1" />
     <PackageReference Include="Microsoft.ClearScript.Complete" Version="7.5.0" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.2" />
     <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.0" />

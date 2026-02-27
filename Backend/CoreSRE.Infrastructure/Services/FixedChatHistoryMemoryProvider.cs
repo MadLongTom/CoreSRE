@@ -188,7 +188,7 @@ public sealed class FixedChatHistoryMemoryProvider : AIContextProvider, IDisposa
         try
         {
             var requestText = string.Join("\n", context.RequestMessages
-                .Where(m => m.GetAgentRequestMessageSource() == AgentRequestMessageSourceType.External)
+                .Where(m => m.GetAgentRequestMessageSourceType() == AgentRequestMessageSourceType.External)
                 .Where(m => !string.IsNullOrWhiteSpace(m.Text))
                 .Select(m => m.Text));
 
@@ -233,7 +233,7 @@ public sealed class FixedChatHistoryMemoryProvider : AIContextProvider, IDisposa
             var collection = await EnsureCollectionAsync(cancellationToken).ConfigureAwait(false);
 
             var items = context.RequestMessages
-                .Where(m => m.GetAgentRequestMessageSource() == AgentRequestMessageSourceType.External)
+                .Where(m => m.GetAgentRequestMessageSourceType() == AgentRequestMessageSourceType.External)
                 .Concat(context.ResponseMessages ?? [])
                 .Where(msg => !string.IsNullOrWhiteSpace(msg.Text)) // skip tool-calls / empty messages
                 .Select(msg => new Dictionary<string, object?>

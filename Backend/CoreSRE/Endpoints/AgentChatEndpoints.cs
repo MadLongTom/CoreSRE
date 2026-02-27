@@ -139,29 +139,11 @@ public static class AgentChatEndpoints
             session = await aiAgent.CreateSessionAsync(cancellationToken);
         }
 
-        // Log session state after load
-        var historyProvider = session?.GetService(typeof(ChatHistoryProvider)) as IReadOnlyList<ChatMessage>;
-        logger?.LogInformation(
-            "[SessionDebug] Session loaded — fromStore={FromStore}, sessionType={SessionType}, historyCount={HistoryCount}",
-            sessionLoadedFromStore, session?.GetType().Name, historyProvider?.Count ?? -1);
-
-        // 3. Build full message list = session history + new user message.
-        //    WORKAROUND: Microsoft.Agents.AI 1.0.0-preview.260209.1 has a bug where
-        //    RunCoreStreamingAsync passes inputMessagesForProviders (which excludes session history)
-        //    to chatClient.GetStreamingResponseAsync instead of inputMessagesForChatClient.
-        //    By passing the full history as input messages ourselves, inputMessagesForProviders
-        //    will contain all messages that need to reach the LLM.
+        // 3. Build user message
         var lastMessage = input.Messages?.LastOrDefault();
         var newUserMessage = new ChatMessage(
             ChatRole.User,
             lastMessage?.Content ?? string.Empty);
-
-        var allMessages = new List<ChatMessage>();
-        if (historyProvider is { Count: > 0 })
-        {
-            allMessages.AddRange(historyProvider);
-        }
-        allMessages.Add(newUserMessage);
 
         // 4. Send SSE events: RUN_STARTED
         await WriteSseEventAsync(context.Response, new
@@ -182,10 +164,7 @@ public static class AgentChatEndpoints
         }, cancellationToken);
 
         // 5. Stream via agent pipeline
-        //    Pass the full message list (history + new) directly — see WORKAROUND note above.
-        logger?.LogInformation("[SessionDebug] Starting RunStreamingAsync — historyCount={HistoryCount}, totalMessages={TotalMessages}",
-            historyProvider?.Count ?? 0, allMessages.Count);
-        await foreach (var update in aiAgent.RunStreamingAsync(allMessages, session, cancellationToken: cancellationToken))
+        await foreach (var update in aiAgent.RunStreamingAsync(newUserMessage, session, cancellationToken: cancellationToken))
         {
             foreach (var content in update.Contents)
             {
@@ -222,10 +201,6 @@ public static class AgentChatEndpoints
             }
         }
 
-        // Re-check history count after streaming
-        var historyAfter = session?.GetService(typeof(ChatHistoryProvider)) as IReadOnlyList<ChatMessage>;
-        logger?.LogInformation("[SessionDebug] RunStreamingAsync done — historyCountAfter={Count}", historyAfter?.Count ?? -1);
-
         // TEXT_MESSAGE_END
         await WriteSseEventAsync(context.Response, new
         {
@@ -244,7 +219,7 @@ public static class AgentChatEndpoints
         // 6. Persist session (best-effort — don't block chat on persistence failure)
         try
         {
-            var serializedPreview = aiAgent.SerializeSession(session);
+            var serializedPreview = await aiAgent.SerializeSessionAsync(session, cancellationToken: cancellationToken);
             logger?.LogInformation(
                 "[SessionDebug] About to save session — threadId={ThreadId}, agentId={AgentId}, serializedLength={Len}",
                 threadId, aiAgent.Id, serializedPreview.GetRawText().Length);

@@ -63,32 +63,9 @@ public sealed class PostgresChatHistoryProvider : ChatHistoryProvider, IList<Cha
         if (context.InvokeException is not null)
             return ValueTask.CompletedTask;
 
-        // WORKAROUND for Microsoft.Agents.AI 1.0.0-preview.260209.1 bug:
-        // The endpoint passes full history + new message as inputMessages to work around
-        // the framework sending inputMessagesForProviders (without history) to the LLM.
-        // As a result, requestMessages here contains the full history + new message.
-        // We must avoid re-appending messages that are already in _messages.
-        //
-        // Strategy: only append messages whose reference is NOT already in _messages.
-        // This works because the framework passes the same ChatMessage object references.
-        var existingSet = new HashSet<ChatMessage>(ReferenceEqualityComparer.Instance);
-        foreach (var msg in _messages)
-            existingSet.Add(msg);
-
-        foreach (var msg in context.RequestMessages)
-        {
-            if (!existingSet.Contains(msg))
-                _messages.Add(msg);
-        }
-
+        _messages.AddRange(context.RequestMessages);
         if (context.ResponseMessages is not null)
-        {
-            foreach (var msg in context.ResponseMessages)
-            {
-                if (!existingSet.Contains(msg))
-                    _messages.Add(msg);
-            }
-        }
+            _messages.AddRange(context.ResponseMessages);
 
         return ValueTask.CompletedTask;
     }

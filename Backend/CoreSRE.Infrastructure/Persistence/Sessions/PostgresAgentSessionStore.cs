@@ -38,7 +38,7 @@ public class PostgresAgentSessionStore : AgentSessionStore
     {
         // Serialize session to JsonElement — Npgsql maps JsonElement directly to jsonb,
         // avoiding GetRawText() string intermediary that loses JsonElement fidelity.
-        var sessionData = agent.SerializeSession(session, AgentAbstractionsJsonUtilities.DefaultOptions);
+        var sessionData = await agent.SerializeSessionAsync(session, AgentAbstractionsJsonUtilities.DefaultOptions, cancellationToken);
         var agentId = agent.Id;
         var sessionType = session.GetType().Name;
         var now = DateTime.UtcNow;
