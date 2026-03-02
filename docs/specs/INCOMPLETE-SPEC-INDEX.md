@@ -22,10 +22,10 @@
 | 020-021 | M3: Workflow Engine | SPEC-INDEX | ✅ 已完成 |
 | 022-026 | M3: 工作流高级特性（原） | SPEC-INDEX | ⚠️ 已被替代（见下方） |
 | 030-033 | M4: AIOps（原） | SPEC-INDEX | ⚠️ 已被替代（见下方） |
-| 040-041 | M5: Observability | SPEC-INDEX | ❌ 未完成 |
+| 040-041 | M5: Observability | SPEC-INDEX | ✅ 040 完成，❌ 041 |
 | 049-052 | M6: Security | SPEC-INDEX | ❌ 未完成 |
 | 059-065 | M7: Frontend | SPEC-INDEX | ❌ 大部分未完成 |
-| 080-085 | 工作流引擎升级 | WORKFLOW-UPGRADE-SPEC-INDEX | ✅ 080-082 完成，❌ 083-085 |
+| 080-085 | 工作流引擎升级 | WORKFLOW-UPGRADE-SPEC-INDEX | ✅ 080-083 完成，❌ 084-085 |
 | 090-094 | Agent Skills & 沙箱 | SKILLS-SANDBOX-SPEC-INDEX | ✅ 全部完成 |
 | 100-103 | Team Agent | TEAM-AGENT-SPEC-INDEX | ✅ 全部完成 |
 | 110-118 | Alert Incident Response | Alert-Incident-Response-SPEC-INDEX | ❌ 全部未完成 |
@@ -83,17 +83,17 @@
 
 | SPEC | 标题 | 来源 | 依赖 | 预估工作量 |
 |------|------|------|------|-----------|
-| **SPEC-083** | 表达式引擎与错误处理 | WORKFLOW-UPGRADE-SPEC-INDEX | SPEC-081 ✅ | 5-7 天 |
+| ~~SPEC-083~~ | ~~表达式引擎与错误处理~~ | WORKFLOW-UPGRADE-SPEC-INDEX | SPEC-081 ✅ | ✅ 已完成 |
 
-**P1-B 说明**: SPEC-083 是工作流引擎升级的最后一块 P1 拼图。依赖的 SPEC-081（数据流引擎）已完成，可立即启动。修复条件分支仅支持 `==` 和错误处理一刀切的问题。
+**P1-B 说明**: ~~SPEC-083 是工作流引擎升级的最后一块 P1 拼图。~~ ✅ 已完成。条件默认分支（else）、节点级错误策略（onError: stop/continueWithEmpty/continueWithError）、节点重试机制（maxRetries + 线性退避）均已实现。
 
 #### P1-C: 可观测性
 
 | SPEC | 标题 | 来源 | 依赖 | 预估工作量 |
 |------|------|------|------|-----------|
-| **SPEC-040** | Agent 调用全链路追踪 | SPEC-INDEX M5 | 无（OTel 基础已就绪） | 3-4 天 |
+| ~~SPEC-040~~ | ~~Agent 调用全链路追踪~~ | SPEC-INDEX M5 | 无（OTel 基础已就绪） | ✅ 已完成 |
 
-**P1-C 说明**: Aspire Dashboard + OTel 基础设施已在 SPEC-000 中配置，SPEC-040 主要是添加 ActivitySource 和 Span 层级。
+**P1-C 说明**: ~~Aspire Dashboard + OTel 基础设施已在 SPEC-000 中配置。~~ ✅ 已完成。CoreSRETelemetry ActivitySource 注册，工作流/节点/Agent/LLM/Tool 全链路 Span 层级，TraceId 持久化。
 
 #### P1-D: 安全与治理
 

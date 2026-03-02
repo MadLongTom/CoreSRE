@@ -1,9 +1,11 @@
+using System.Diagnostics;
 using System.Text.Json;
 using CoreSRE.Application.Interfaces;
 using CoreSRE.Domain.Entities;
 using CoreSRE.Domain.Enums;
 using CoreSRE.Domain.Interfaces;
 using CoreSRE.Domain.ValueObjects;
+using CoreSRE.Infrastructure.Telemetry;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 
@@ -56,6 +58,13 @@ public class WorkflowEngine : IWorkflowEngine
     {
         _logger.LogInformation("开始执行工作流 {ExecutionId}, WorkflowDefinitionId={WorkflowDefinitionId}",
             execution.Id, execution.WorkflowDefinitionId);
+
+        // 创建工作流执行根 Span
+        using var workflowActivity = CoreSRETelemetry.StartWorkflowExecution(execution.Id, execution.WorkflowDefinitionId);
+
+        // 将 OTel TraceId 记录到执行实体
+        if (Activity.Current?.TraceId is { } traceId)
+            execution.SetTraceId(traceId.ToString());
 
         execution.Start();
         await _executionRepo.UpdateAsync(execution, cancellationToken);
@@ -147,6 +156,10 @@ public class WorkflowEngine : IWorkflowEngine
                 // 提取用于记录的输入字符串
                 var inputString = ExtractInputString(task.InputData);
 
+                // 创建节点执行 Span
+                using var nodeActivity = CoreSRETelemetry.StartNodeExecution(
+                    node.NodeId, node.NodeType.ToString(), node.DisplayName);
+
                 _logger.LogInformation("执行节点 {NodeId} (类型: {NodeType})", node.NodeId, node.NodeType);
 
                 execution.StartNode(node.NodeId, inputString);
@@ -156,12 +169,43 @@ public class WorkflowEngine : IWorkflowEngine
                 using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                 cts.CancelAfter(NodeTimeout);
 
-                try
-                {
-                    var exprCtx = BuildExpressionContext(execution, nodeOutputs, inputString);
-                    var outputData = await DispatchNodeAsync(execution, node, task.InputData, exprCtx, cts.Token);
+                // 解析节点级错误策略和重试配置
+                var (errorPolicy, maxRetries, retryDelayMs) = ParseErrorConfig(node.Config);
 
-                    // 提取输出字符串用于记录
+                NodeOutputData? outputData = null;
+                Exception? lastException = null;
+                var attempts = maxRetries + 1; // 首次执行 + 重试次数
+
+                for (var attempt = 1; attempt <= attempts; attempt++)
+                {
+                    try
+                    {
+                        var exprCtx = BuildExpressionContext(execution, nodeOutputs, inputString);
+                        outputData = await DispatchNodeAsync(execution, node, task.InputData, exprCtx, cts.Token);
+                        lastException = null;
+                        break; // 成功，跳出重试循环
+                    }
+                    catch (OperationCanceledException) when (cts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+                    {
+                        lastException = new TimeoutException($"节点执行超时（{NodeTimeout.TotalMinutes} 分钟）");
+                        break; // 超时不重试
+                    }
+                    catch (Exception ex)
+                    {
+                        lastException = ex;
+                        if (attempt < attempts)
+                        {
+                            var delay = retryDelayMs * attempt; // 线性退避
+                            _logger.LogWarning(ex, "节点 {NodeId} 第 {Attempt}/{MaxAttempts} 次执行失败，{Delay}ms 后重试",
+                                node.NodeId, attempt, attempts, delay);
+                            await Task.Delay(delay, cancellationToken);
+                        }
+                    }
+                }
+
+                if (lastException is null && outputData is not null)
+                {
+                    // 执行成功
                     var outputString = ExtractOutputString(outputData);
                     lastOutput = outputString;
                     nodeOutputs[node.NodeId] = outputString;
@@ -183,28 +227,38 @@ public class WorkflowEngine : IWorkflowEngine
                     // 将输出数据传播到下游节点
                     PropagateData(ctx, execution, node, outputData, nodeOutputs, cancellationToken);
                 }
-                catch (OperationCanceledException) when (cts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+                else
                 {
-                    var timeoutMsg = $"节点执行超时（{NodeTimeout.TotalMinutes} 分钟）";
-                    _logger.LogWarning("节点 {NodeId} {Error}", node.NodeId, timeoutMsg);
-                    execution.FailNode(node.NodeId, timeoutMsg);
+                    // 执行失败 — 按错误策略处理
+                    var errorMsg = lastException?.Message ?? "未知错误";
+                    _logger.LogError(lastException, "节点 {NodeId} 执行失败（策略: {ErrorPolicy}）", node.NodeId, errorPolicy);
+                    execution.FailNode(node.NodeId, errorMsg);
                     await _executionRepo.UpdateAsync(execution, cancellationToken);
-                    await _notifier.NodeExecutionFailedAsync(execution.Id, node.NodeId, timeoutMsg, cancellationToken);
-                    execution.Fail($"节点 {node.NodeId} 执行超时");
-                    await _executionRepo.UpdateAsync(execution, cancellationToken);
-                    await _notifier.ExecutionFailedAsync(execution.Id, $"节点 {node.NodeId} 执行超时", cancellationToken);
-                    return;
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "节点 {NodeId} 执行失败", node.NodeId);
-                    execution.FailNode(node.NodeId, ex.Message);
-                    await _executionRepo.UpdateAsync(execution, cancellationToken);
-                    await _notifier.NodeExecutionFailedAsync(execution.Id, node.NodeId, ex.Message, cancellationToken);
-                    execution.Fail($"节点 {node.NodeId} 执行失败: {ex.Message}");
-                    await _executionRepo.UpdateAsync(execution, cancellationToken);
-                    await _notifier.ExecutionFailedAsync(execution.Id, $"节点 {node.NodeId} 执行失败: {ex.Message}", cancellationToken);
-                    return;
+                    await _notifier.NodeExecutionFailedAsync(execution.Id, node.NodeId, errorMsg, cancellationToken);
+
+                    switch (errorPolicy)
+                    {
+                        case NodeErrorPolicy.ContinueWithEmpty:
+                            _logger.LogInformation("节点 {NodeId} 错误策略 continueWithEmpty，输出空数据继续", node.NodeId);
+                            var emptyOutput = WrapStringAsOutput("{}");
+                            nodeOutputs[node.NodeId] = "{}";
+                            PropagateData(ctx, execution, node, emptyOutput, nodeOutputs, cancellationToken);
+                            break;
+
+                        case NodeErrorPolicy.ContinueWithError:
+                            _logger.LogInformation("节点 {NodeId} 错误策略 continueWithError，输出错误信息继续", node.NodeId);
+                            var errorOutput = WrapStringAsOutput(JsonSerializer.Serialize(new { error = errorMsg }));
+                            nodeOutputs[node.NodeId] = JsonSerializer.Serialize(new { error = errorMsg });
+                            PropagateData(ctx, execution, node, errorOutput, nodeOutputs, cancellationToken);
+                            break;
+
+                        case NodeErrorPolicy.Stop:
+                        default:
+                            execution.Fail($"节点 {node.NodeId} 执行失败: {errorMsg}");
+                            await _executionRepo.UpdateAsync(execution, cancellationToken);
+                            await _notifier.ExecutionFailedAsync(execution.Id, $"节点 {node.NodeId} 执行失败: {errorMsg}", cancellationToken);
+                            return;
+                    }
                 }
             }
 
@@ -626,6 +680,8 @@ public class WorkflowEngine : IWorkflowEngine
         if (!node.ReferenceId.HasValue)
             throw new InvalidOperationException($"Agent 节点 {node.NodeId} 缺少 ReferenceId");
 
+        using var agentActivity = CoreSRETelemetry.StartAgentInvoke(node.ReferenceId.Value, node.DisplayName);
+
         var resolved = await _agentResolver.ResolveAsync(
             node.ReferenceId.Value,
             execution.Id.ToString(),
@@ -661,7 +717,11 @@ public class WorkflowEngine : IWorkflowEngine
 
         messages.Add(new ChatMessage(ChatRole.User, userPromptOverride ?? inputString ?? "{}"));
 
+        using var llmActivity = CoreSRETelemetry.StartLlmCall(chatOptions?.ModelId);
         var response = await chatClient.GetResponseAsync(messages, chatOptions, cancellationToken);
+        llmActivity?.SetTag("gen_ai.response.finish_reason", "stop");
+        llmActivity?.Dispose();
+
         var lastMessage = response.Messages.LastOrDefault(m => m.Role == ChatRole.Assistant);
         var outputText = lastMessage?.Text ?? "{}";
 
@@ -683,6 +743,8 @@ public class WorkflowEngine : IWorkflowEngine
 
         var tool = await _toolRepo.GetByIdAsync(node.ReferenceId.Value, cancellationToken)
             ?? throw new InvalidOperationException($"Tool 不存在: {node.ReferenceId.Value}");
+
+        using var toolActivity = CoreSRETelemetry.StartToolInvoke(tool.Name, tool.ToolType.ToString(), tool.Id);
 
         var invoker = _toolInvokerFactory.GetInvoker(tool.ToolType);
 
@@ -732,8 +794,12 @@ public class WorkflowEngine : IWorkflowEngine
         string? inputString,
         CancellationToken cancellationToken)
     {
-        var conditionalEdges = execution.GraphSnapshot.Edges
-            .Where(e => e.SourceNodeId == conditionNode.NodeId && e.EdgeType == WorkflowEdgeType.Conditional)
+        var allOutEdges = execution.GraphSnapshot.Edges
+            .Where(e => e.SourceNodeId == conditionNode.NodeId)
+            .ToList();
+
+        var conditionalEdges = allOutEdges
+            .Where(e => e.EdgeType == WorkflowEdgeType.Conditional)
             .ToList();
 
         if (conditionalEdges.Count == 0)
@@ -747,22 +813,31 @@ public class WorkflowEngine : IWorkflowEngine
         var jsonInput = inputString ?? "{}";
         var exprCtx = BuildExpressionContext(execution, nodeOutputs, jsonInput);
 
+        // 识别 else/default 边（条件为 null 或空的条件边）
+        WorkflowEdgeVO? elseEdge = null;
+        var evaluableEdges = new List<WorkflowEdgeVO>();
+        foreach (var edge in conditionalEdges)
+        {
+            if (string.IsNullOrWhiteSpace(edge.Condition))
+                elseEdge ??= edge; // 第一个无条件的条件边作为 else 分支
+            else
+                evaluableEdges.Add(edge);
+        }
+
         // 评估条件边
         string? matchedTargetNodeId = null;
         int? matchedSourcePortIndex = null;
 
-        foreach (var edge in conditionalEdges)
+        foreach (var edge in evaluableEdges)
         {
-            if (edge.Condition is null) continue;
-
             bool matched;
             try
             {
-                matched = _expressionEvaluator.EvaluateCondition(edge.Condition, exprCtx);
+                matched = _expressionEvaluator.EvaluateCondition(edge.Condition!, exprCtx);
             }
             catch (ExpressionEvaluationException)
             {
-                if (!_conditionEvaluator.TryEvaluate(edge.Condition, jsonInput, out matched))
+                if (!_conditionEvaluator.TryEvaluate(edge.Condition!, jsonInput, out matched))
                 {
                     var errorMsg = $"条件表达式解析失败: {edge.Condition}";
                     _logger.LogWarning("节点 {NodeId} {Error}", conditionNode.NodeId, errorMsg);
@@ -777,9 +852,40 @@ public class WorkflowEngine : IWorkflowEngine
             }
         }
 
+        // 无匹配 → 走 else/default 分支
+        if (matchedTargetNodeId is null && elseEdge is not null)
+        {
+            matchedTargetNodeId = elseEdge.TargetNodeId;
+            matchedSourcePortIndex = elseEdge.SourcePortIndex;
+            _logger.LogInformation("条件节点 {NodeId} 无匹配条件，路由到 else 分支 {TargetNodeId}",
+                conditionNode.NodeId, matchedTargetNodeId);
+        }
+
+        // 多端口 Condition 的隐式 else：无匹配且有多端口 → 路由到端口 0（默认）
+        if (matchedTargetNodeId is null && conditionNode.OutputCount > 1)
+        {
+            // 查找端口 0 对应的边
+            var defaultEdge = allOutEdges.FirstOrDefault(e => e.SourcePortIndex == 0);
+            if (defaultEdge is not null)
+            {
+                matchedTargetNodeId = defaultEdge.TargetNodeId;
+                matchedSourcePortIndex = 0;
+                _logger.LogInformation("条件节点 {NodeId} 无匹配条件，路由到默认端口 0 → {TargetNodeId}",
+                    conditionNode.NodeId, matchedTargetNodeId);
+            }
+        }
+
         if (matchedTargetNodeId is null)
         {
-            throw new InvalidOperationException("无匹配的条件分支");
+            _logger.LogWarning("条件节点 {NodeId} 无匹配分支且无 else 默认分支，跳过下游", conditionNode.NodeId);
+            // 跳过所有条件下游节点，不再抛异常
+            foreach (var edge in conditionalEdges)
+            {
+                execution.SkipNode(edge.TargetNodeId);
+                await _notifier.NodeExecutionSkippedAsync(execution.Id, edge.TargetNodeId, cancellationToken);
+            }
+            await _executionRepo.UpdateAsync(execution, cancellationToken);
+            return NodeOutputData.Empty;
         }
 
         // 跳过未匹配分支
@@ -985,5 +1091,64 @@ public class WorkflowEngine : IWorkflowEngine
             throw new InvalidOperationException("图中存在环，无法执行拓扑排序");
 
         return sorted;
+    }
+
+    // ======================== Error Policy ========================
+
+    /// <summary>
+    /// 节点级错误策略。
+    /// </summary>
+    internal enum NodeErrorPolicy
+    {
+        /// <summary>节点失败 → 工作流失败（默认）</summary>
+        Stop,
+        /// <summary>节点失败 → 输出空数据，下游继续</summary>
+        ContinueWithEmpty,
+        /// <summary>节点失败 → 输出错误信息，下游继续</summary>
+        ContinueWithError
+    }
+
+    /// <summary>
+    /// 从节点 Config JSON 中解析错误策略和重试配置。
+    /// Config 格式示例: { "onError": "continueWithEmpty", "maxRetries": 2, "retryDelayMs": 1000 }
+    /// </summary>
+    internal static (NodeErrorPolicy errorPolicy, int maxRetries, int retryDelayMs) ParseErrorConfig(string? config)
+    {
+        var errorPolicy = NodeErrorPolicy.Stop;
+        var maxRetries = 0;
+        var retryDelayMs = 1000;
+
+        if (string.IsNullOrWhiteSpace(config))
+            return (errorPolicy, maxRetries, retryDelayMs);
+
+        try
+        {
+            using var doc = JsonDocument.Parse(config);
+            var root = doc.RootElement;
+
+            if (root.TryGetProperty("onError", out var onErrorProp))
+            {
+                var onErrorStr = onErrorProp.GetString();
+                errorPolicy = onErrorStr switch
+                {
+                    "continueWithEmpty" => NodeErrorPolicy.ContinueWithEmpty,
+                    "continueWithError" => NodeErrorPolicy.ContinueWithError,
+                    "stop" => NodeErrorPolicy.Stop,
+                    _ => NodeErrorPolicy.Stop
+                };
+            }
+
+            if (root.TryGetProperty("maxRetries", out var maxRetriesProp) && maxRetriesProp.TryGetInt32(out var mr))
+                maxRetries = Math.Clamp(mr, 0, 10); // 最多重试 10 次
+
+            if (root.TryGetProperty("retryDelayMs", out var delayProp) && delayProp.TryGetInt32(out var rd))
+                retryDelayMs = Math.Clamp(rd, 100, 60_000); // 100ms ~ 60s
+        }
+        catch (JsonException)
+        {
+            // Config 不是合法 JSON 或没有相关字段 — 使用默认值
+        }
+
+        return (errorPolicy, maxRetries, retryDelayMs);
     }
 }

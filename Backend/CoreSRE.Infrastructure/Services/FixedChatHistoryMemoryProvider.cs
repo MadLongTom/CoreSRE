@@ -91,27 +91,7 @@ public sealed class FixedChatHistoryMemoryProvider : AIContextProvider, IDisposa
             minRelevanceScore)
     { }
 
-    /// <summary>
-    /// Creates a new instance from previously serialized state (session restore).
-    /// </summary>
-    public FixedChatHistoryMemoryProvider(
-        VectorStore vectorStore,
-        string collectionName,
-        int vectorDimensions,
-        JsonElement serializedState,
-        JsonSerializerOptions? jsonSerializerOptions = null,
-        ChatHistoryMemoryProviderOptions? options = null,
-        ILoggerFactory? loggerFactory = null,
-        double minRelevanceScore = 0.0)
-        : this(
-            vectorStore,
-            collectionName,
-            vectorDimensions,
-            DeserializeState(serializedState, jsonSerializerOptions),
-            options,
-            loggerFactory,
-            minRelevanceScore)
-    { }
+
 
     /// <summary>Internal canonical constructor.</summary>
     private FixedChatHistoryMemoryProvider(
@@ -187,7 +167,8 @@ public sealed class FixedChatHistoryMemoryProvider : AIContextProvider, IDisposa
 
         try
         {
-            var requestText = string.Join("\n", context.RequestMessages
+            var messages = context.AIContext.Messages ?? [];
+            var requestText = string.Join("\n", messages
                 .Where(m => m.GetAgentRequestMessageSourceType() == AgentRequestMessageSourceType.External)
                 .Where(m => !string.IsNullOrWhiteSpace(m.Text))
                 .Select(m => m.Text));
@@ -264,18 +245,6 @@ public sealed class FixedChatHistoryMemoryProvider : AIContextProvider, IDisposa
         }
     }
 
-    /// <inheritdoc />
-    public override JsonElement Serialize(JsonSerializerOptions? jsonSerializerOptions = null)
-    {
-        var state = new ProviderState
-        {
-            StorageScope = _storageScope,
-            SearchScope = _searchScope,
-        };
-
-        var jso = jsonSerializerOptions ?? JsonSerializerDefaults;
-        return JsonSerializer.SerializeToElement(state, jso);
-    }
 
     // ── Search implementation (FIXED) ────────────────────────────────────
 

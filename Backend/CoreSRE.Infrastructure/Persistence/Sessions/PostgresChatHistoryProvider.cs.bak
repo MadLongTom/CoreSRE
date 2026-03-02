@@ -1,5 +1,6 @@
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
+using System.Collections;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -14,69 +15,108 @@ namespace CoreSRE.Infrastructure.Persistence.Sessions;
 /// to be the FIRST property in an object for polymorphic deserialization. This mismatch
 /// causes deserialization to fail silently (0 messages) or throw.
 /// 
-/// Solution: This provider uses a ProviderSessionState with a flat DTO format using explicit
-/// "kind" field instead of STJ "$type" metadata. Key ordering is irrelevant for standard
-/// property deserialization, making it fully compatible with PostgreSQL JSONB.
-/// 
-/// Architecture (rc2): Uses ProviderSessionState&lt;State&gt; to store per-session message history
-/// in AgentSession.StateBag, following the new singleton-provider pattern. The provider instance
-/// is shared across sessions; state is per-session via StateBag.
+/// Solution: This provider uses its own flat DTO format with explicit "kind" field instead
+/// of STJ "$type" metadata. Key ordering is irrelevant for standard property deserialization,
+/// making it fully compatible with PostgreSQL JSONB.
 /// </summary>
-public sealed class PostgresChatHistoryProvider : ChatHistoryProvider
+public sealed class PostgresChatHistoryProvider : ChatHistoryProvider, IList<ChatMessage>, IReadOnlyList<ChatMessage>
 {
-    private readonly ProviderSessionState<ChatHistoryState> _sessionState;
+    private List<ChatMessage> _messages;
 
     /// <summary>Gets the chat reducer used to process or reduce chat messages.</summary>
     public IChatReducer? ChatReducer { get; }
 
-    /// <summary>Create a new provider instance (singleton per agent).</summary>
+    /// <summary>Create a new provider for a fresh session (no existing history).</summary>
     public PostgresChatHistoryProvider(IChatReducer? chatReducer = null)
     {
         ChatReducer = chatReducer;
-        _sessionState = new ProviderSessionState<ChatHistoryState>(
-            _ => new ChatHistoryState(),
-            nameof(PostgresChatHistoryProvider),
-            s_serializerOptions);
+        _messages = [];
     }
 
-    // ── ChatHistoryProvider overrides (new ProvideChatHistoryAsync / StoreChatHistoryAsync pattern) ──
+    /// <summary>Restore a provider from previously serialized state (JSONB-safe format).</summary>
+    public PostgresChatHistoryProvider(IChatReducer? chatReducer, JsonElement serializedState)
+    {
+        ChatReducer = chatReducer;
+        _messages = DeserializeMessages(serializedState);
+    }
+
+    // ── ChatHistoryProvider abstract members ─────────────────────────
 
     /// <inheritdoc />
-    protected override async ValueTask<IEnumerable<ChatMessage>> ProvideChatHistoryAsync(
+    protected override async ValueTask<IEnumerable<ChatMessage>> InvokingCoreAsync(
         InvokingContext context, CancellationToken cancellationToken = default)
     {
-        var state = _sessionState.GetOrInitializeState(context.Session);
-        var messages = state.Messages.Select(DtoToChatMessage).ToList();
-
         // Apply reducer before returning messages (limits history window for token control)
         if (ChatReducer is not null)
         {
-            messages = (await ChatReducer.ReduceAsync(messages, cancellationToken)
+            _messages = (await ChatReducer.ReduceAsync(_messages, cancellationToken)
                 .ConfigureAwait(false)).ToList();
-
-            // Sync reduced messages back to state
-            state.Messages = messages.Select(ChatMessageToDto).ToList();
-            _sessionState.SaveState(context.Session, state);
         }
 
-        return messages;
+        return _messages;
     }
 
     /// <inheritdoc />
-    protected override ValueTask StoreChatHistoryAsync(
+    protected override ValueTask InvokedCoreAsync(
         InvokedContext context, CancellationToken cancellationToken = default)
     {
-        var state = _sessionState.GetOrInitializeState(context.Session);
+        if (context.InvokeException is not null)
+            return ValueTask.CompletedTask;
 
-        var newDtos = context.RequestMessages
-            .Concat(context.ResponseMessages ?? [])
-            .Select(ChatMessageToDto);
-
-        state.Messages.AddRange(newDtos);
-        _sessionState.SaveState(context.Session, state);
+        _messages.AddRange(context.RequestMessages);
+        if (context.ResponseMessages is not null)
+            _messages.AddRange(context.ResponseMessages);
 
         return ValueTask.CompletedTask;
     }
+
+    /// <summary>
+    /// Serialize using our own JSONB-safe DTO format.
+    /// Uses explicit "kind" field instead of STJ "$type" discriminator.
+    /// Key ordering by PostgreSQL JSONB does not affect correctness.
+    /// </summary>
+    public override JsonElement Serialize(JsonSerializerOptions? jsonSerializerOptions = null)
+    {
+        var dtos = _messages.Select(ChatMessageToDto).ToList();
+        var state = new ProviderState { Messages = dtos };
+        return JsonSerializer.SerializeToElement(state, s_serializerOptions);
+    }
+
+    // ── IList<ChatMessage> / IReadOnlyList<ChatMessage> ──────────────
+
+    /// <inheritdoc />
+    public int Count => _messages.Count;
+
+    /// <inheritdoc />
+    public bool IsReadOnly => false;
+
+    /// <inheritdoc />
+    public ChatMessage this[int index]
+    {
+        get => _messages[index];
+        set => _messages[index] = value;
+    }
+
+    /// <inheritdoc />
+    public int IndexOf(ChatMessage item) => _messages.IndexOf(item);
+    /// <inheritdoc />
+    public void Insert(int index, ChatMessage item) => _messages.Insert(index, item);
+    /// <inheritdoc />
+    public void RemoveAt(int index) => _messages.RemoveAt(index);
+    /// <inheritdoc />
+    public void Add(ChatMessage item) => _messages.Add(item);
+    /// <inheritdoc />
+    public void Clear() => _messages.Clear();
+    /// <inheritdoc />
+    public bool Contains(ChatMessage item) => _messages.Contains(item);
+    /// <inheritdoc />
+    public void CopyTo(ChatMessage[] array, int arrayIndex) => _messages.CopyTo(array, arrayIndex);
+    /// <inheritdoc />
+    public bool Remove(ChatMessage item) => _messages.Remove(item);
+    /// <inheritdoc />
+    public IEnumerator<ChatMessage> GetEnumerator() => _messages.GetEnumerator();
+    /// <inheritdoc />
+    IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 
     // ── Serialization ────────────────────────────────────────────────
 
@@ -86,6 +126,28 @@ public sealed class PostgresChatHistoryProvider : ChatHistoryProvider
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
         WriteIndented = false,
     };
+
+    /// <summary>Deserialize from our JSONB-safe format back to ChatMessages.</summary>
+    private static List<ChatMessage> DeserializeMessages(JsonElement serializedState)
+    {
+        if (serializedState.ValueKind != JsonValueKind.Object)
+            return [];
+
+        try
+        {
+            var state = JsonSerializer.Deserialize<ProviderState>(serializedState, s_serializerOptions);
+            if (state?.Messages is not { Count: > 0 } dtos)
+                return [];
+
+            return dtos.Select(DtoToChatMessage).ToList();
+        }
+        catch
+        {
+            // Old format (InMemoryChatHistoryProvider with $type) or corrupted data — start fresh.
+            // The next save will persist in the new format.
+            return [];
+        }
+    }
 
     // ── ChatMessage ↔ DTO conversion ─────────────────────────────────
 
@@ -191,16 +253,15 @@ public sealed class PostgresChatHistoryProvider : ChatHistoryProvider
         };
     }
 
-    // ── State & DTO types (JSONB-safe, no $type discriminator) ────────
+    // ── DTO types (JSONB-safe, no $type discriminator) ────────────────
 
-    /// <summary>Per-session state stored in AgentSession.StateBag.</summary>
-    internal sealed class ChatHistoryState
+    private sealed class ProviderState
     {
         [JsonPropertyName("messages")]
         public List<MessageDto> Messages { get; set; } = [];
     }
 
-    internal sealed class MessageDto
+    private sealed class MessageDto
     {
         [JsonPropertyName("role")]
         public string? Role { get; set; }
@@ -222,7 +283,7 @@ public sealed class PostgresChatHistoryProvider : ChatHistoryProvider
         public List<ContentDto>? Contents { get; set; }
     }
 
-    internal sealed class ContentDto
+    private sealed class ContentDto
     {
         /// <summary>
         /// Explicit content type discriminator — replaces STJ "$type" metadata.

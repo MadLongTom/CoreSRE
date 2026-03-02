@@ -674,7 +674,7 @@ public class WorkflowEngineTests
     }
 
     [Fact]
-    public async Task ExecuteAsync_Conditional_NoBranchMatches_WorkflowFails()
+    public async Task ExecuteAsync_Conditional_NoBranchMatches_SkipsDownstream()
     {
         // Arrange — input severity is "medium", neither "high" nor "low"
         var graph = new WorkflowGraphVO
@@ -710,9 +710,14 @@ public class WorkflowEngineTests
         // Act
         await _engine.ExecuteAsync(execution, CancellationToken.None);
 
-        // Assert
-        execution.Status.Should().Be(ExecutionStatus.Failed);
-        execution.ErrorMessage.Should().Contain("无匹配的条件分支");
+        // Assert — 无匹配条件时跳过所有下游节点，工作流正常完成
+        execution.Status.Should().Be(ExecutionStatus.Completed);
+
+        var highNode = execution.NodeExecutions.First(n => n.NodeId == "agent-high");
+        highNode.Status.Should().Be(NodeExecutionStatus.Skipped);
+
+        var lowNode = execution.NodeExecutions.First(n => n.NodeId == "agent-low");
+        lowNode.Status.Should().Be(NodeExecutionStatus.Skipped);
     }
 
     [Fact]
@@ -751,5 +756,100 @@ public class WorkflowEngineTests
 
         var conditionNode = execution.NodeExecutions.First(n => n.NodeId == "condition");
         conditionNode.Status.Should().Be(NodeExecutionStatus.Failed);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_Conditional_ElseBranch_RoutesToElseWhenNoneMatch()
+    {
+        // Arrange — condition with explicit else branch (Condition = null)
+        var elseAgentId = Guid.NewGuid();
+        var graph = new WorkflowGraphVO
+        {
+            Nodes =
+            [
+                new WorkflowNodeVO { NodeId = "condition", NodeType = WorkflowNodeType.Condition, DisplayName = "Condition" },
+                new WorkflowNodeVO { NodeId = "agent-high", NodeType = WorkflowNodeType.Agent, ReferenceId = Guid.NewGuid(), DisplayName = "Agent High" },
+                new WorkflowNodeVO { NodeId = "agent-else", NodeType = WorkflowNodeType.Agent, ReferenceId = elseAgentId, DisplayName = "Agent Else" }
+            ],
+            Edges =
+            [
+                new WorkflowEdgeVO
+                {
+                    EdgeId = "e1", SourceNodeId = "condition", TargetNodeId = "agent-high",
+                    EdgeType = WorkflowEdgeType.Conditional, Condition = "$.severity == \"high\""
+                },
+                new WorkflowEdgeVO
+                {
+                    EdgeId = "e2", SourceNodeId = "condition", TargetNodeId = "agent-else",
+                    EdgeType = WorkflowEdgeType.Conditional, Condition = null // else branch
+                }
+            ]
+        };
+        var input = JsonDocument.Parse("{\"severity\":\"medium\"}").RootElement;
+        var execution = WorkflowExecution.Create(Guid.NewGuid(), input, graph);
+
+        // Condition for "high" returns false
+        _conditionEvaluatorMock
+            .Setup(e => e.TryEvaluate(It.IsAny<string>(), It.IsAny<string>(), out It.Ref<bool>.IsAny))
+            .Returns((string _, string _, out bool result) => { result = false; return true; });
+
+        // Setup agent for else branch
+        SetupAgentResponse(elseAgentId, "else result");
+
+        // Act
+        await _engine.ExecuteAsync(execution, CancellationToken.None);
+
+        // Assert — else 分支被执行，high 分支被跳过
+        execution.Status.Should().Be(ExecutionStatus.Completed);
+
+        var highNode = execution.NodeExecutions.First(n => n.NodeId == "agent-high");
+        highNode.Status.Should().Be(NodeExecutionStatus.Skipped);
+
+        var elseNode = execution.NodeExecutions.First(n => n.NodeId == "agent-else");
+        elseNode.Status.Should().Be(NodeExecutionStatus.Completed);
+    }
+
+    [Fact]
+    public void ParseErrorConfig_DefaultValues()
+    {
+        var (policy, maxRetries, retryDelay) = WorkflowEngine.ParseErrorConfig(null);
+        policy.Should().Be(WorkflowEngine.NodeErrorPolicy.Stop);
+        maxRetries.Should().Be(0);
+        retryDelay.Should().Be(1000);
+    }
+
+    [Fact]
+    public void ParseErrorConfig_ContinueWithEmpty()
+    {
+        var config = """{"onError":"continueWithEmpty","maxRetries":3,"retryDelayMs":2000}""";
+        var (policy, maxRetries, retryDelay) = WorkflowEngine.ParseErrorConfig(config);
+        policy.Should().Be(WorkflowEngine.NodeErrorPolicy.ContinueWithEmpty);
+        maxRetries.Should().Be(3);
+        retryDelay.Should().Be(2000);
+    }
+
+    [Fact]
+    public void ParseErrorConfig_ContinueWithError()
+    {
+        var config = """{"onError":"continueWithError"}""";
+        var (policy, _, _) = WorkflowEngine.ParseErrorConfig(config);
+        policy.Should().Be(WorkflowEngine.NodeErrorPolicy.ContinueWithError);
+    }
+
+    [Fact]
+    public void ParseErrorConfig_InvalidJson_ReturnsDefaults()
+    {
+        var (policy, maxRetries, retryDelay) = WorkflowEngine.ParseErrorConfig("not-json");
+        policy.Should().Be(WorkflowEngine.NodeErrorPolicy.Stop);
+        maxRetries.Should().Be(0);
+        retryDelay.Should().Be(1000);
+    }
+
+    [Fact]
+    public void ParseErrorConfig_ClampsRetries()
+    {
+        var config = """{"maxRetries":100}""";
+        var (_, maxRetries, _) = WorkflowEngine.ParseErrorConfig(config);
+        maxRetries.Should().Be(10); // clamped to max 10
     }
 }

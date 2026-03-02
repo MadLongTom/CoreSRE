@@ -3,6 +3,7 @@ using CoreSRE.Domain.Entities;
 using CoreSRE.Domain.Enums;
 using CoreSRE.Domain.Interfaces;
 using CoreSRE.Domain.ValueObjects;
+using CoreSRE.Infrastructure.Persistence.Sessions;
 using CoreSRE.Infrastructure.Services;
 using FluentAssertions;
 using Microsoft.Agents.AI;
@@ -205,7 +206,7 @@ public class AgentResolverServiceTests
     // ═══════════════════════════════════════════════════════════════════
 
     [Fact]
-    public async Task ResolveChatClientAgent_EnableChatHistoryTrue_ConfiguresChatHistoryProviderFactory()
+    public async Task ResolveChatClientAgent_EnableChatHistoryTrue_ConfiguresChatHistoryProvider()
     {
         // Arrange
         var agentId = Guid.NewGuid();
@@ -221,12 +222,12 @@ public class AgentResolverServiceTests
         // Assert
         var options = result.Agent.GetService<ChatClientAgentOptions>();
         options.Should().NotBeNull();
-        options!.ChatHistoryProviderFactory.Should().NotBeNull(
-            "when EnableChatHistory is true, the factory delegate must be configured");
+        options!.ChatHistoryProvider.Should().NotBeNull(
+            "when EnableChatHistory is true, the provider instance must be configured");
     }
 
     [Fact]
-    public async Task ResolveChatClientAgent_EnableChatHistoryNull_ConfiguresChatHistoryProviderFactory()
+    public async Task ResolveChatClientAgent_EnableChatHistoryNull_ConfiguresChatHistoryProvider()
     {
         // Arrange — null defaults to true
         var agentId = Guid.NewGuid();
@@ -242,12 +243,12 @@ public class AgentResolverServiceTests
         // Assert
         var options = result.Agent.GetService<ChatClientAgentOptions>();
         options.Should().NotBeNull();
-        options!.ChatHistoryProviderFactory.Should().NotBeNull(
+        options!.ChatHistoryProvider.Should().NotBeNull(
             "when EnableChatHistory is null (default), it should be treated as true");
     }
 
     [Fact]
-    public async Task ResolveChatClientAgent_EnableChatHistoryFalse_NoChatHistoryProviderFactory()
+    public async Task ResolveChatClientAgent_EnableChatHistoryFalse_NoChatHistoryProvider()
     {
         // Arrange
         var agentId = Guid.NewGuid();
@@ -263,12 +264,12 @@ public class AgentResolverServiceTests
         // Assert
         var options = result.Agent.GetService<ChatClientAgentOptions>();
         options.Should().NotBeNull();
-        options!.ChatHistoryProviderFactory.Should().BeNull(
-            "when EnableChatHistory is false, stateless mode — no factory configured");
+        options!.ChatHistoryProvider.Should().BeNull(
+            "when EnableChatHistory is false, stateless mode — no provider configured");
     }
 
     [Fact]
-    public async Task ChatHistoryProviderFactory_WithSerializedState_RestoresHistory()
+    public async Task ChatHistoryProvider_IsPostgresChatHistoryProvider()
     {
         // Arrange — create agent with history enabled
         var agentId = Guid.NewGuid();
@@ -281,32 +282,15 @@ public class AgentResolverServiceTests
         var result = await service.ResolveAsync(agentId, "conv-1");
         var options = result.Agent.GetService<ChatClientAgentOptions>();
         options.Should().NotBeNull();
-        options!.ChatHistoryProviderFactory.Should().NotBeNull();
 
-        // Simulate serialized state with messages
-        var serializedState = JsonSerializer.SerializeToElement(new
-        {
-            messages = new[]
-            {
-                new { role = "user", contents = new[] { new { text = "Hello", type = "text" } } },
-                new { role = "assistant", contents = new[] { new { text = "Hi there!", type = "text" } } },
-            }
-        });
-
-        var factoryContext = CreateChatHistoryProviderFactoryContext(serializedState);
-
-        // Act — invoke the factory delegate
-        var historyProvider = await options.ChatHistoryProviderFactory(factoryContext, CancellationToken.None);
-
-        // Assert
+        // Assert — provider is our JSONB-safe PostgresChatHistoryProvider (singleton instance)
+        var historyProvider = options!.ChatHistoryProvider;
         historyProvider.Should().NotBeNull();
-        historyProvider.Should().BeOfType<InMemoryChatHistoryProvider>();
-        var inMemory = (InMemoryChatHistoryProvider)historyProvider;
-        inMemory.Count.Should().Be(2, "serialized state had 2 messages");
+        historyProvider.Should().BeOfType<PostgresChatHistoryProvider>();
     }
 
     [Fact]
-    public async Task ChatHistoryProviderFactory_WithoutSerializedState_CreatesEmptyProvider()
+    public async Task ChatHistoryProvider_WithoutState_HasNoMessages()
     {
         // Arrange
         var agentId = Guid.NewGuid();
@@ -318,19 +302,11 @@ public class AgentResolverServiceTests
 
         var result = await service.ResolveAsync(agentId, "conv-1");
         var options = result.Agent.GetService<ChatClientAgentOptions>();
-        options!.ChatHistoryProviderFactory.Should().NotBeNull();
 
-        // Simulate empty/default serialized state
-        var factoryContext = CreateChatHistoryProviderFactoryContext(default);
-
-        // Act
-        var historyProvider = await options.ChatHistoryProviderFactory!(factoryContext, CancellationToken.None);
-
-        // Assert
+        // Assert — provider is a fresh instance with no session state
+        var historyProvider = options!.ChatHistoryProvider;
         historyProvider.Should().NotBeNull();
-        historyProvider.Should().BeOfType<InMemoryChatHistoryProvider>();
-        var inMemory = (InMemoryChatHistoryProvider)historyProvider;
-        inMemory.Count.Should().Be(0, "no prior state — empty provider");
+        historyProvider.Should().BeOfType<PostgresChatHistoryProvider>();
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -351,14 +327,13 @@ public class AgentResolverServiceTests
         // Act
         var result = await service.ResolveAsync(agentId, "conv-1");
         var options = result.Agent.GetService<ChatClientAgentOptions>();
-        var factoryContext = CreateChatHistoryProviderFactoryContext(default);
-        var historyProvider = await options!.ChatHistoryProviderFactory!(factoryContext, CancellationToken.None);
+        var historyProvider = options!.ChatHistoryProvider;
 
         // Assert
-        historyProvider.Should().BeOfType<InMemoryChatHistoryProvider>();
-        var inMemory = (InMemoryChatHistoryProvider)historyProvider;
-        inMemory.ChatReducer.Should().NotBeNull("MaxHistoryMessages = 20 should configure a reducer");
-        inMemory.ChatReducer.Should().BeOfType<MessageCountingChatReducer>();
+        historyProvider.Should().BeOfType<PostgresChatHistoryProvider>();
+        var pgProvider = (PostgresChatHistoryProvider)historyProvider!;
+        pgProvider.ChatReducer.Should().NotBeNull("MaxHistoryMessages = 20 should configure a reducer");
+        pgProvider.ChatReducer.Should().BeOfType<MessageCountingChatReducer>();
     }
 
     [Fact]
@@ -375,14 +350,13 @@ public class AgentResolverServiceTests
         // Act
         var result = await service.ResolveAsync(agentId, "conv-1");
         var options = result.Agent.GetService<ChatClientAgentOptions>();
-        var factoryContext = CreateChatHistoryProviderFactoryContext(default);
-        var historyProvider = await options!.ChatHistoryProviderFactory!(factoryContext, CancellationToken.None);
+        var historyProvider = options!.ChatHistoryProvider;
 
         // Assert
-        historyProvider.Should().BeOfType<InMemoryChatHistoryProvider>();
-        var inMemory = (InMemoryChatHistoryProvider)historyProvider;
-        inMemory.ChatReducer.Should().NotBeNull("null MaxHistoryMessages should still configure a default reducer (50)");
-        inMemory.ChatReducer.Should().BeOfType<MessageCountingChatReducer>();
+        historyProvider.Should().BeOfType<PostgresChatHistoryProvider>();
+        var pgProvider = (PostgresChatHistoryProvider)historyProvider!;
+        pgProvider.ChatReducer.Should().NotBeNull("null MaxHistoryMessages should still configure a default reducer (50)");
+        pgProvider.ChatReducer.Should().BeOfType<MessageCountingChatReducer>();
     }
 
     [Fact]
@@ -399,14 +373,13 @@ public class AgentResolverServiceTests
         // Act
         var result = await service.ResolveAsync(agentId, "conv-1");
         var options = result.Agent.GetService<ChatClientAgentOptions>();
-        var factoryContext = CreateChatHistoryProviderFactoryContext(default);
-        var historyProvider = await options!.ChatHistoryProviderFactory!(factoryContext, CancellationToken.None);
+        var historyProvider = options!.ChatHistoryProvider;
 
         // Assert
-        historyProvider.Should().BeOfType<InMemoryChatHistoryProvider>();
-        var inMemory = (InMemoryChatHistoryProvider)historyProvider;
-        inMemory.ChatReducer.Should().NotBeNull("zero MaxHistoryMessages should be treated as platform default");
-        inMemory.ChatReducer.Should().BeOfType<MessageCountingChatReducer>();
+        historyProvider.Should().BeOfType<PostgresChatHistoryProvider>();
+        var pgProvider = (PostgresChatHistoryProvider)historyProvider!;
+        pgProvider.ChatReducer.Should().NotBeNull("zero MaxHistoryMessages should be treated as platform default");
+        pgProvider.ChatReducer.Should().BeOfType<MessageCountingChatReducer>();
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -429,10 +402,10 @@ public class AgentResolverServiceTests
         // Act
         var result = await service.ResolveAsync(agentId, "conv-1");
 
-        // Assert — no AIContextProviderFactory because EmbeddingModelId not configured
+        // Assert — no AIContextProviders because EmbeddingModelId not configured
         var options = result.Agent.GetService<ChatClientAgentOptions>();
         options.Should().NotBeNull();
-        options!.AIContextProviderFactory.Should().BeNull(
+        options!.AIContextProviders.Should().BeNullOrEmpty(
             "when EnableSemanticMemory is true but EmbeddingModelId is not configured, memory should be skipped");
     }
 
@@ -453,8 +426,8 @@ public class AgentResolverServiceTests
         // Assert
         var options = result.Agent.GetService<ChatClientAgentOptions>();
         options.Should().NotBeNull();
-        options!.AIContextProviderFactory.Should().BeNull(
-            "when EnableSemanticMemory is false, no AIContextProviderFactory");
+        options!.AIContextProviders.Should().BeNullOrEmpty(
+            "when EnableSemanticMemory is false, no AIContextProviders");
     }
 
     [Fact]
@@ -474,8 +447,8 @@ public class AgentResolverServiceTests
         // Assert
         var options = result.Agent.GetService<ChatClientAgentOptions>();
         options.Should().NotBeNull();
-        options!.AIContextProviderFactory.Should().BeNull(
-            "when EnableSemanticMemory is null (default false), no AIContextProviderFactory");
+        options!.AIContextProviders.Should().BeNullOrEmpty(
+            "when EnableSemanticMemory is null (default false), no AIContextProviders");
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -640,53 +613,4 @@ public class AgentResolverServiceTests
     // ═══════════════════════════════════════════════════════════════════
     // Helpers
     // ═══════════════════════════════════════════════════════════════════
-
-    /// <summary>
-    /// Creates a ChatHistoryProviderFactoryContext via reflection (nested class with internal constructor).
-    /// </summary>
-    private static ChatClientAgentOptions.ChatHistoryProviderFactoryContext CreateChatHistoryProviderFactoryContext(
-        JsonElement serializedState)
-    {
-        var contextType = typeof(ChatClientAgentOptions.ChatHistoryProviderFactoryContext);
-        var ctor = contextType.GetConstructors(System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
-
-        if (ctor.Length > 0)
-        {
-            // Try constructors with parameters first
-            foreach (var c in ctor.OrderByDescending(c => c.GetParameters().Length))
-            {
-                var parameters = c.GetParameters();
-                if (parameters.Length == 2)
-                {
-                    return (ChatClientAgentOptions.ChatHistoryProviderFactoryContext)
-                        c.Invoke([serializedState, null]);
-                }
-                if (parameters.Length == 1)
-                {
-                    return (ChatClientAgentOptions.ChatHistoryProviderFactoryContext)
-                        c.Invoke([serializedState]);
-                }
-                if (parameters.Length == 0)
-                {
-                    var instance = (ChatClientAgentOptions.ChatHistoryProviderFactoryContext)c.Invoke(null);
-                    // Set SerializedState via reflection
-                    var prop = contextType.GetProperty("SerializedState");
-                    if (prop?.CanWrite == true)
-                    {
-                        prop.SetValue(instance, serializedState);
-                    }
-                    else
-                    {
-                        // Try backing field
-                        var field = contextType.GetField("<SerializedState>k__BackingField",
-                            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-                        field?.SetValue(instance, serializedState);
-                    }
-                    return instance;
-                }
-            }
-        }
-
-        throw new InvalidOperationException("Cannot create ChatHistoryProviderFactoryContext via reflection");
-    }
 }

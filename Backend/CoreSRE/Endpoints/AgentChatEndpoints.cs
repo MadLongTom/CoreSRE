@@ -1,5 +1,6 @@
 using CoreSRE.Application.Chat.DTOs;
 using CoreSRE.Application.Interfaces;
+using CoreSRE.Infrastructure.Telemetry;
 using Microsoft.Agents.AI;
 using Microsoft.Agents.AI.Hosting;
 using Microsoft.AspNetCore.Http.Features;
@@ -60,6 +61,9 @@ public static class AgentChatEndpoints
 
         // 关键：禁用 ASP.NET Core 响应缓冲，确保每次 FlushAsync 立即推送到客户端
         context.Features.Get<IHttpResponseBodyFeature>()?.DisableBuffering();
+
+        // 创建 Agent 聊天 Span
+        using var chatActivity = CoreSRETelemetry.StartAgentChat(agentId, threadId);
 
         try
         {

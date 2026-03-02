@@ -58,7 +58,7 @@ public class TeamOrchestratorService : ITeamOrchestrator
             _ => throw new NotSupportedException($"Team mode '{teamConfig.Mode}' is not supported.")
         };
 
-        return workflow.AsAgent(
+        return workflow.AsAIAgent(
             id: teamRegistration.Id.ToString(),
             name: teamRegistration.Name,
             description: teamRegistration.Description ?? $"{teamConfig.Mode} team agent");

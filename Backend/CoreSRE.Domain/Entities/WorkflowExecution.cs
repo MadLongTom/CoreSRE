@@ -75,6 +75,14 @@ public class WorkflowExecution : BaseEntity
     }
 
     /// <summary>
+    /// 设置 OpenTelemetry TraceId（由执行引擎在启动时调用）。
+    /// </summary>
+    public void SetTraceId(string traceId)
+    {
+        TraceId = traceId;
+    }
+
+    /// <summary>
     /// 标记节点开始执行，并记录节点输入数据。
     /// </summary>
     public void StartNode(string nodeId, string? input)

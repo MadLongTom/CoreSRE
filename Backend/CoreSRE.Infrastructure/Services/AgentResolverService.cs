@@ -167,9 +167,9 @@ public class AgentResolverService : IAgentResolver
                 agent.Name, sandboxTools.Count);
         }
 
-        // 3.7 如果绑定了 SkillRefs，注入渐进式披露工具（read_skill / read_skill_file）
+        // 3.7 如果绑定了 SkillRefs，构建 S3AgentSkillsProvider
         // 规则：HasFiles=true 的 Skill 需要沙箱支持，无沙箱时跳过这些 Skill 并警告
-        string? skillSummary = null;
+        S3AgentSkillsProvider? skillsProvider = null;
         var sandboxEnabled = agent.LlmConfig.EnableSandbox == true;
         var configuredSkillRefs = agent.LlmConfig.SkillRefs;
         if (configuredSkillRefs is not null && configuredSkillRefs.Count > 0)
@@ -198,25 +198,19 @@ public class AgentResolverService : IAgentResolver
 
                 if (skills.Count > 0)
                 {
-                    // Build name → entity map for tool lookups
-                    var skillMap = skills.ToDictionary(s => s.Name, s => s, StringComparer.OrdinalIgnoreCase);
+                    // Create S3-backed skills provider (follows same progressive disclosure
+                    // pattern as the framework's FileAgentSkillsProvider).
+                    // Tools (load_skill, read_skill_resource) and Instructions are injected
+                    // automatically via the AIContextProvider lifecycle — no manual wiring needed.
+                    skillsProvider = new S3AgentSkillsProvider(
+                        skills,
+                        _fileStorage,
+                        sandboxEnabled,
+                        loggerFactory: _loggerFactory);
 
-                    // Inject read_skill tool (always — reads Markdown content from DB, no sandbox needed)
-                    allTools.Add(new ReadSkillAIFunction(skillMap));
-
-                    // Inject read_skill_file tool only when sandbox is active AND at least one skill has files
-                    var hasFileSkills = sandboxEnabled && skills.Any(s => s.HasFiles);
-                    if (hasFileSkills)
-                    {
-                        allTools.Add(new ReadSkillFileAIFunction(skillMap, _fileStorage));
-                    }
-
-                    // Build skill summary for SystemPrompt injection (includes file availability hints)
-                    skillSummary = SkillPromptBuilder.BuildSkillSummary(skills, sandboxEnabled);
-                    var toolsSuffix = hasFileSkills ? " + read_skill_file" : "";
                     _logger.LogInformation(
-                        "Skills injected for Agent '{AgentName}': {SkillCount} skills, tools: read_skill{HasFilesTool}",
-                        agent.Name, skills.Count, toolsSuffix);
+                        "S3AgentSkillsProvider configured for Agent '{AgentName}': {SkillCount} skills",
+                        agent.Name, skills.Count);
                 }
             }
         }
@@ -242,12 +236,6 @@ public class AgentResolverService : IAgentResolver
         if (!string.IsNullOrWhiteSpace(agent.LlmConfig.Instructions))
         {
             chatOptions.Instructions = agent.LlmConfig.Instructions;
-        }
-
-        // Append skill summary to the end of Instructions (progressive disclosure)
-        if (!string.IsNullOrWhiteSpace(skillSummary))
-        {
-            chatOptions.Instructions = (chatOptions.Instructions ?? string.Empty) + skillSummary;
         }
 
         // 将所有 AIFunction（ToolRef + Sandbox）附加到 ChatOptions.Tools
@@ -309,21 +297,15 @@ public class AgentResolverService : IAgentResolver
             // Treat 0 or negative as null (platform default)
             var effectiveMax = maxMessages is > 0 ? maxMessages.Value : _defaultMaxMessages;
 
-            options.ChatHistoryProviderFactory = (ctx, ct) =>
-            {
-                IChatReducer reducer = new MessageCountingChatReducer(effectiveMax);
+            IChatReducer reducer = new MessageCountingChatReducer(effectiveMax);
 
-                // Use our JSONB-safe provider instead of InMemoryChatHistoryProvider.
-                // InMemoryChatHistoryProvider serializes with STJ $type discriminators;
-                // PostgreSQL JSONB reorders keys alphabetically, breaking $type positioning
-                // which must be first for STJ polymorphic deserialization.
-                // PostgresChatHistoryProvider uses explicit "kind" field — immune to key reordering.
-                ChatHistoryProvider provider = ctx.SerializedState.ValueKind == JsonValueKind.Object
-                    ? new PostgresChatHistoryProvider(reducer, ctx.SerializedState)
-                    : new PostgresChatHistoryProvider(reducer);
-
-                return ValueTask.FromResult(provider);
-            };
+            // Use our JSONB-safe provider instead of InMemoryChatHistoryProvider.
+            // InMemoryChatHistoryProvider serializes with STJ $type discriminators;
+            // PostgreSQL JSONB reorders keys alphabetically, breaking $type positioning
+            // which must be first for STJ polymorphic deserialization.
+            // PostgresChatHistoryProvider uses explicit "kind" field — immune to key reordering.
+            // Provider is a singleton instance; per-session state lives in AgentSession.StateBag.
+            options.ChatHistoryProvider = new PostgresChatHistoryProvider(reducer);
         }
 
         // ── Semantic Memory 配置 (AIContextProviderFactory) ──────────────
@@ -382,45 +364,25 @@ public class AgentResolverService : IAgentResolver
                     // are silently swallowed (catch block checks _logger?.IsEnabled which is null).
                     var memLoggerFactory = _loggerFactory;
 
-                    options.AIContextProviderFactory = (ctx, ct) =>
+                    var storageScope = new ChatHistoryMemoryProviderScope
                     {
-                        // When restoring a session from store, ctx.SerializedState contains
-                        // the previously serialized scope info.
-                        if (ctx.SerializedState.ValueKind == JsonValueKind.Object)
-                        {
-                            var memProvider = new FixedChatHistoryMemoryProvider(
-                                vectorStore,
-                                collectionName,
-                                vectorDimensions,
-                                ctx.SerializedState,
-                                ctx.JsonSerializerOptions,
-                                options: memoryOptions,
-                                loggerFactory: memLoggerFactory,
-                                minRelevanceScore: minRelevanceScore);
-
-                            return ValueTask.FromResult<AIContextProvider>(memProvider);
-                        }
-                        else
-                        {
-                            var storageScope = new ChatHistoryMemoryProviderScope
-                            {
-                                ApplicationId = "CoreSRE",
-                                AgentId = agent.Id.ToString(),
-                                SessionId = conversationId
-                            };
-
-                            var memProvider = new FixedChatHistoryMemoryProvider(
-                                vectorStore,
-                                collectionName,
-                                vectorDimensions,
-                                storageScope,
-                                options: memoryOptions,
-                                loggerFactory: memLoggerFactory,
-                                minRelevanceScore: minRelevanceScore);
-
-                            return ValueTask.FromResult<AIContextProvider>(memProvider);
-                        }
+                        ApplicationId = "CoreSRE",
+                        AgentId = agent.Id.ToString(),
+                        SessionId = conversationId
                     };
+
+                    // Provider is a singleton instance per agent;
+                    // per-session state lives in AgentSession.StateBag.
+                    var memProvider = new FixedChatHistoryMemoryProvider(
+                        vectorStore,
+                        collectionName,
+                        vectorDimensions,
+                        storageScope,
+                        options: memoryOptions,
+                        loggerFactory: memLoggerFactory,
+                        minRelevanceScore: minRelevanceScore);
+
+                    options.AIContextProviders = [memProvider];
 
                     _logger.LogInformation(
                         "Semantic memory configured for Agent '{AgentName}' using embedding model '{EmbeddingModel}' from provider '{ProviderName}'.",
@@ -432,6 +394,26 @@ public class AgentResolverService : IAgentResolver
                 _logger.LogWarning(ex,
                     "Failed to configure semantic memory for Agent '{AgentName}'. Agent will operate without cross-session memory.",
                     agent.Name);
+            }
+        }
+
+        // ── AIContextProviders 汇总 ── Skills + Memory ─────────────────
+        // Merge all configured AIContextProviders into a single list.
+        // The S3AgentSkillsProvider injects skill tools + instructions via the
+        // AIContextProvider lifecycle; the memory provider handles semantic search.
+        {
+            var aiContextProviders = new List<AIContextProvider>();
+            if (skillsProvider is not null)
+            {
+                aiContextProviders.Add(skillsProvider);
+            }
+            if (options.AIContextProviders is not null && options.AIContextProviders.Any())
+            {
+                aiContextProviders.AddRange(options.AIContextProviders);
+            }
+            if (aiContextProviders.Count > 0)
+            {
+                options.AIContextProviders = aiContextProviders;
             }
         }
 
