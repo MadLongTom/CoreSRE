@@ -24,6 +24,12 @@ public static class AlertRuleEndpoints
         group.MapPut("/{id:guid}", UpdateAlertRule);
         group.MapDelete("/{id:guid}", DeleteAlertRule);
 
+        // ── 金丝雀验证 & 健康评分（Spec 025）──
+        group.MapPost("/{id:guid}/canary/start", StartCanary);
+        group.MapPost("/{id:guid}/canary/stop", StopCanary);
+        group.MapGet("/{id:guid}/canary/report", GetCanaryReport);
+        group.MapGet("/{id:guid}/health", GetAlertRuleHealth);
+
         return app;
     }
 
@@ -147,4 +153,65 @@ public static class AlertRuleEndpoints
 
         return Results.NoContent();
     }
+
+    // ── 金丝雀验证 & 健康评分（Spec 025）──
+
+    /// <summary>POST /api/alert-rules/{id}/canary/start — 启动金丝雀模式</summary>
+    private static async Task<IResult> StartCanary(
+        Guid id, StartCanaryRequest body, ISender sender)
+    {
+        var result = await sender.Send(
+            new Application.Alerts.Commands.StartCanary.StartCanaryCommand(id, body.CanarySopId));
+        if (!result.Success)
+            return result.ErrorCode switch
+            {
+                404 => Results.NotFound(result),
+                _ => Results.BadRequest(result)
+            };
+        return Results.Ok(result);
+    }
+
+    /// <summary>POST /api/alert-rules/{id}/canary/stop — 停止金丝雀模式</summary>
+    private static async Task<IResult> StopCanary(Guid id, ISender sender)
+    {
+        var result = await sender.Send(
+            new Application.Alerts.Commands.StopCanary.StopCanaryCommand(id));
+        if (!result.Success)
+            return result.ErrorCode switch
+            {
+                404 => Results.NotFound(result),
+                _ => Results.BadRequest(result)
+            };
+        return Results.Ok(result);
+    }
+
+    /// <summary>GET /api/alert-rules/{id}/canary/report — 获取金丝雀报告</summary>
+    private static async Task<IResult> GetCanaryReport(Guid id, ISender sender)
+    {
+        var result = await sender.Send(
+            new Application.Alerts.Queries.GetCanaryReport.GetCanaryReportQuery(id));
+        if (!result.Success)
+            return result.ErrorCode switch
+            {
+                404 => Results.NotFound(result),
+                _ => Results.BadRequest(result)
+            };
+        return Results.Ok(result);
+    }
+
+    /// <summary>GET /api/alert-rules/{id}/health — 获取健康评分</summary>
+    private static async Task<IResult> GetAlertRuleHealth(Guid id, ISender sender)
+    {
+        var result = await sender.Send(
+            new Application.Alerts.Queries.GetAlertRuleHealth.GetAlertRuleHealthQuery(id));
+        if (!result.Success)
+            return result.ErrorCode switch
+            {
+                404 => Results.NotFound(result),
+                _ => Results.BadRequest(result)
+            };
+        return Results.Ok(result);
+    }
+
+    private record StartCanaryRequest(Guid CanarySopId);
 }

@@ -25,12 +25,13 @@ export const MATCH_OP_LABELS: Record<MatchOp, string> = {
   NotRegex: "正则不匹配 (!~)",
 };
 
-export const INCIDENT_ROUTES = ["SopExecution", "RootCauseAnalysis"] as const;
+export const INCIDENT_ROUTES = ["SopExecution", "RootCauseAnalysis", "FallbackRca"] as const;
 export type IncidentRoute = (typeof INCIDENT_ROUTES)[number];
 
 export const ROUTE_LABELS: Record<IncidentRoute, string> = {
   SopExecution: "SOP 自动执行",
   RootCauseAnalysis: "根因分析",
+  FallbackRca: "降级根因分析",
 };
 
 // ---------------------------------------------------------------------------
@@ -58,6 +59,49 @@ export interface AlertRuleDto {
   notificationChannels: string[];
   createdAt: string;
   updatedAt: string | null;
+
+  // Spec 025 — Canary & Health
+  canaryMode: boolean;
+  canarySopId: string | null;
+  maxConsecutiveFailures: number;
+  healthScore: number | null;
+  healthDetails: AlertRuleHealth | null;
+}
+
+// ---------------------------------------------------------------------------
+// Health & Canary DTOs (Spec 025)
+// ---------------------------------------------------------------------------
+
+export interface HealthFactor {
+  name: string;
+  weight: number;
+  earned: number;
+  detail: string;
+}
+
+export interface AlertRuleHealth {
+  score: number;
+  factors: HealthFactor[];
+  recommendations: string[];
+}
+
+export interface CanaryResultSummary {
+  incidentId: string;
+  isConsistent: boolean;
+  shadowRootCause: string | null;
+  actualRootCause: string | null;
+  shadowTokenConsumed: number;
+  shadowDurationMs: number;
+  createdAt: string;
+}
+
+export interface CanaryReport {
+  alertRuleId: string;
+  canarySopId: string | null;
+  totalResults: number;
+  consistencyRate: number;
+  averageTokenDifference: number;
+  results: CanaryResultSummary[];
 }
 
 // ---------------------------------------------------------------------------

@@ -1,8 +1,14 @@
 using CoreSRE.Application.Common.Models;
 using CoreSRE.Application.Interfaces;
+using CoreSRE.Application.Skills.Commands.ApproveSop;
+using CoreSRE.Application.Skills.Commands.ArchiveSop;
 using CoreSRE.Application.Skills.Commands.DeleteSkill;
+using CoreSRE.Application.Skills.Commands.DryRunSop;
+using CoreSRE.Application.Skills.Commands.PublishSop;
 using CoreSRE.Application.Skills.Commands.RegisterSkill;
+using CoreSRE.Application.Skills.Commands.RejectSop;
 using CoreSRE.Application.Skills.Commands.UpdateSkill;
+using CoreSRE.Application.Skills.Commands.ValidateSop;
 using CoreSRE.Application.Skills.Queries.GetSkillById;
 using CoreSRE.Application.Skills.Queries.GetSkills;
 using CoreSRE.Application.Tools.Queries.GetAvailableFunctions;
@@ -37,6 +43,14 @@ public static class SkillEndpoints
         group.MapGet("/{id:guid}/export", ExportSkillMd);
         group.MapGet("/{id:guid}/export/zip", ExportSkillZip);
         group.MapPost("/import", ImportSkillZip).DisableAntiforgery();
+
+        // SOP 生命周期管理（Spec 022）
+        group.MapPost("/{id:guid}/validate", ValidateSop);
+        group.MapPost("/{id:guid}/approve", ApproveSop);
+        group.MapPost("/{id:guid}/reject", RejectSop);
+        group.MapPost("/{id:guid}/publish", PublishSop);
+        group.MapPost("/{id:guid}/archive", ArchiveSop);
+        group.MapPost("/{id:guid}/dry-run", DryRunSop);
 
         return app;
     }
@@ -210,6 +224,67 @@ public static class SkillEndpoints
 
         return Results.NoContent();
     }
+
+    // ─────────── SOP Lifecycle Endpoints (Spec 022) ───────────
+
+    /// <summary>POST /api/skills/{id}/validate — 执行 SOP 结构化校验</summary>
+    private static async Task<IResult> ValidateSop(Guid id, ISender sender)
+    {
+        var result = await sender.Send(new ValidateSopCommand(id));
+        return result.Success ? Results.Ok(result) : ToErrorResult(result);
+    }
+
+    /// <summary>POST /api/skills/{id}/approve — 审核通过</summary>
+    private static async Task<IResult> ApproveSop(
+        Guid id, ApproveSopRequest body, ISender sender)
+    {
+        var result = await sender.Send(new ApproveSopCommand(id, body.ReviewedBy, body.Comment));
+        return result.Success ? Results.Ok(result) : ToErrorResult(result);
+    }
+
+    /// <summary>POST /api/skills/{id}/reject — 驳回</summary>
+    private static async Task<IResult> RejectSop(
+        Guid id, RejectSopRequest body, ISender sender)
+    {
+        var result = await sender.Send(new RejectSopCommand(id, body.ReviewedBy, body.Reason));
+        return result.Success ? Results.Ok(result) : ToErrorResult(result);
+    }
+
+    /// <summary>POST /api/skills/{id}/publish — 发布</summary>
+    private static async Task<IResult> PublishSop(
+        Guid id, PublishSopRequest? body, ISender sender)
+    {
+        var result = await sender.Send(new PublishSopCommand(id, body?.AlertRuleId));
+        return result.Success ? Results.Ok(result) : ToErrorResult(result);
+    }
+
+    /// <summary>POST /api/skills/{id}/archive — 归档</summary>
+    private static async Task<IResult> ArchiveSop(Guid id, ISender sender)
+    {
+        var result = await sender.Send(new ArchiveSopCommand(id));
+        return result.Success ? Results.Ok(result) : ToErrorResult(result);
+    }
+
+    /// <summary>POST /api/skills/{id}/dry-run — 干运行</summary>
+    private static async Task<IResult> DryRunSop(Guid id, ISender sender)
+    {
+        var result = await sender.Send(new DryRunSopCommand(id));
+        return result.Success ? Results.Ok(result) : ToErrorResult(result);
+    }
+
+    private static IResult ToErrorResult<T>(Result<T> result) =>
+        result.ErrorCode switch
+        {
+            404 => Results.NotFound(result),
+            409 => Results.Conflict(result),
+            _ => Results.BadRequest(result)
+        };
+
+    // ─────────── SOP Lifecycle Request DTOs ───────────
+
+    private record ApproveSopRequest(string ReviewedBy, string? Comment = null);
+    private record RejectSopRequest(string ReviewedBy, string Reason);
+    private record PublishSopRequest(Guid? AlertRuleId = null);
 
     private static string GuessContentType(string key)
     {

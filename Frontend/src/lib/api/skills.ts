@@ -9,6 +9,7 @@ import type {
   SkillFileEntry,
   SkillPagedResponse,
   SkillRegistration,
+  SopValidationResult,
   UpdateSkillRequest,
 } from "@/types/skill";
 
@@ -207,4 +208,73 @@ export async function importSkillZip(
     body: formData,
   });
   return res.json();
+}
+
+// ---------------------------------------------------------------------------
+// SOP Lifecycle (Spec 022)
+// ---------------------------------------------------------------------------
+
+/** POST /api/skills/:id/validate — validate SOP structure */
+export async function validateSop(
+  id: string,
+): Promise<ApiResult<SopValidationResult>> {
+  const res = await fetchWithTimeout(`/api/skills/${id}/validate`, {
+    method: "POST",
+  });
+  return handleResponse<SopValidationResult>(res);
+}
+
+/** POST /api/skills/:id/approve — approve SOP */
+export async function approveSop(
+  id: string,
+  data: { reviewedBy: string; comment?: string },
+): Promise<ApiResult<void>> {
+  const res = await fetchWithTimeout(`/api/skills/${id}/approve`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  return handleResponse<void>(res);
+}
+
+/** POST /api/skills/:id/reject — reject SOP */
+export async function rejectSop(
+  id: string,
+  data: { reviewedBy: string; reason: string },
+): Promise<ApiResult<void>> {
+  const res = await fetchWithTimeout(`/api/skills/${id}/reject`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  return handleResponse<void>(res);
+}
+
+/** POST /api/skills/:id/publish — publish SOP */
+export async function publishSop(
+  id: string,
+  data?: { alertRuleId?: string },
+): Promise<ApiResult<void>> {
+  const res = await fetchWithTimeout(`/api/skills/${id}/publish`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data ?? {}),
+  });
+  return handleResponse<void>(res);
+}
+
+/** POST /api/skills/:id/archive — archive SOP */
+export async function archiveSop(id: string): Promise<ApiResult<void>> {
+  const res = await fetchWithTimeout(`/api/skills/${id}/archive`, {
+    method: "POST",
+  });
+  return handleResponse<void>(res);
+}
+
+/** POST /api/skills/:id/dry-run — dry-run SOP */
+export async function dryRunSop(id: string): Promise<ApiResult<void>> {
+  const res = await fetchWithTimeout(`/api/skills/${id}/dry-run`, {
+    method: "POST",
+  });
+  return handleResponse<void>(res);
 }

@@ -1,5 +1,5 @@
 import { NavLink } from "react-router";
-import { List, Search, Bot, Server, MessageSquare, Wrench, GitBranch, Container, Sparkles, Database, ShieldAlert, Bell } from "lucide-react";
+import { List, Search, Bot, Server, MessageSquare, Wrench, GitBranch, Container, Sparkles, Database, ShieldAlert, Bell, BarChart3 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Separator } from "@/components/ui/separator";
 
@@ -15,6 +15,7 @@ const navItems = [
   { to: "/datasources", label: "数据源管理", icon: Database },
   { to: "/incidents", label: "事故管理", icon: ShieldAlert },
   { to: "/alert-rules", label: "告警规则", icon: Bell },
+  { to: "/evaluation", label: "评估仪表盘", icon: BarChart3 },
 ];
 
 export function Sidebar() {

@@ -92,6 +92,35 @@ public class IncidentConfiguration : IEntityTypeConfiguration<Incident>
             .HasColumnType("jsonb")
             .IsRequired();
 
+        // ── Post-mortem 标注（Spec 023）──
+        builder.Property(e => e.PostMortem)
+            .HasColumnName("post_mortem")
+            .HasColumnType("jsonb");
+
+        // ── SOP 步骤追踪（Spec 024）──
+        builder.Property(e => e.SopSteps)
+            .HasColumnName("sop_steps")
+            .HasColumnType("jsonb");
+
+        builder.Property(e => e.StepExecutions)
+            .HasColumnName("step_executions")
+            .HasColumnType("jsonb")
+            .IsRequired();
+
+        builder.Property(e => e.StepOutputs)
+            .HasColumnName("step_outputs")
+            .HasColumnType("jsonb");
+
+        // ── 降级信息（Spec 025）──
+        builder.Property(e => e.FallbackFrom)
+            .HasColumnName("fallback_from")
+            .HasConversion<string>()
+            .HasMaxLength(32);
+
+        builder.Property(e => e.FallbackReason)
+            .HasColumnName("fallback_reason")
+            .HasColumnType("text");
+
         builder.Property(e => e.CreatedAt)
             .HasColumnName("created_at")
             .IsRequired();

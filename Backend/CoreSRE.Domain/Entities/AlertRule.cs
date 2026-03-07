@@ -44,6 +44,23 @@ public class AlertRule : BaseEntity
     /// <summary>自定义标签</summary>
     public Dictionary<string, string>? Tags { get; private set; }
 
+    // ── 金丝雀验证 & 降级配置（Spec 025）──
+
+    /// <summary>是否处于金丝雀模式</summary>
+    public bool CanaryMode { get; private set; }
+
+    /// <summary>金丝雀验证中的新 SOP ID</summary>
+    public Guid? CanarySopId { get; private set; }
+
+    /// <summary>连续失败次数阈值（达到后自动解绑 SOP），默认 3</summary>
+    public int MaxConsecutiveFailures { get; private set; } = 3;
+
+    /// <summary>健康评分（0-100）</summary>
+    public int? HealthScore { get; private set; }
+
+    /// <summary>健康评分明细</summary>
+    public AlertRuleHealthVO? HealthDetails { get; private set; }
+
     private AlertRule() { } // EF Core
 
     /// <summary>创建告警路由规则</summary>
@@ -127,6 +144,41 @@ public class AlertRule : BaseEntity
     {
         SopId = null;
         ResponderAgentId = null;
+    }
+
+    // ── 金丝雀验证方法（Spec 025）──
+
+    /// <summary>进入金丝雀模式</summary>
+    public void StartCanary(Guid canarySopId)
+    {
+        CanaryMode = true;
+        CanarySopId = canarySopId;
+    }
+
+    /// <summary>退出金丝雀模式</summary>
+    public void StopCanary()
+    {
+        CanaryMode = false;
+        CanarySopId = null;
+    }
+
+    /// <summary>金丝雀验证通过：切换到新 SOP</summary>
+    public void PromoteCanary(Guid responderAgentId)
+    {
+        if (!CanaryMode || CanarySopId is null)
+            throw new InvalidOperationException("AlertRule is not in Canary mode.");
+
+        SopId = CanarySopId;
+        ResponderAgentId = responderAgentId;
+        CanaryMode = false;
+        CanarySopId = null;
+    }
+
+    /// <summary>设置健康评分</summary>
+    public void SetHealthScore(AlertRuleHealthVO health)
+    {
+        HealthScore = health.Score;
+        HealthDetails = health;
     }
 
     /// <summary>

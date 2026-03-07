@@ -35,6 +35,18 @@ public interface IIncidentClient
 
     /// <summary>处置超时，需人工介入</summary>
     Task IncidentTimeout(IncidentTimeoutEvent evt);
+
+    /// <summary>Agent 正在处理中状态变更（开始/结束）</summary>
+    Task AgentProcessingChanged(AgentProcessingChangedEvent evt);
+
+    /// <summary>人工消息已被 Agent 接收并继续执行</summary>
+    Task HumanInterventionAcknowledged(HumanInterventionAcknowledgedEvent evt);
+
+    /// <summary>Agent 发起结构化干预请求（工具审批 / 文本输入 / 选择）</summary>
+    Task InterventionRequestReceived(InterventionRequestPayload evt);
+
+    /// <summary>干预请求被人工回复（通知前端清除待处理请求）</summary>
+    Task InterventionRequestResolved(InterventionRequestResolvedPayload evt);
 }
 
 // ── Event DTOs ──
@@ -95,3 +107,33 @@ public record IncidentTimeoutEvent(
     Guid IncidentId,
     string Reason,
     DateTime Timestamp);
+
+public record AgentProcessingChangedEvent(
+    Guid IncidentId,
+    bool IsProcessing,
+    string? AgentName,
+    DateTime Timestamp);
+
+public record HumanInterventionAcknowledgedEvent(
+    Guid IncidentId,
+    DateTime Timestamp);
+
+public record InterventionRequestPayload(
+    Guid IncidentId,
+    string RequestId,
+    string Type,
+    string Prompt,
+    DateTime CreatedAt,
+    string? ToolName = null,
+    string? ToolCallId = null,
+    Dictionary<string, object?>? ToolArguments = null,
+    List<string>? Choices = null);
+
+public record InterventionRequestResolvedPayload(
+    Guid IncidentId,
+    string RequestId,
+    string ResponseType,
+    string? ResponseContent = null,
+    bool? Approved = null,
+    string? OperatorName = null,
+    DateTime? Timestamp = null);

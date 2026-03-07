@@ -109,6 +109,52 @@ public class SignalRIncidentNotifier(
                 new IncidentTimeoutEvent(incidentId, reason, timestamp)));
     }
 
+    public async Task AgentProcessingChangedAsync(
+        Guid incidentId, bool isProcessing, string? agentName, DateTime timestamp,
+        CancellationToken ct = default)
+    {
+        var group = $"incident:{incidentId}";
+        await SafeSendAsync(group, () =>
+            hubContext.Clients.Group(group).AgentProcessingChanged(
+                new AgentProcessingChangedEvent(incidentId, isProcessing, agentName, timestamp)));
+    }
+
+    public async Task HumanInterventionAcknowledgedAsync(
+        Guid incidentId, DateTime timestamp,
+        CancellationToken ct = default)
+    {
+        var group = $"incident:{incidentId}";
+        await SafeSendAsync(group, () =>
+            hubContext.Clients.Group(group).HumanInterventionAcknowledged(
+                new HumanInterventionAcknowledgedEvent(incidentId, timestamp)));
+    }
+
+    public async Task InterventionRequestReceivedAsync(
+        Guid incidentId, string requestId, string type, string prompt, DateTime createdAt,
+        string? toolName = null, string? toolCallId = null,
+        Dictionary<string, object?>? toolArguments = null, List<string>? choices = null,
+        CancellationToken ct = default)
+    {
+        var group = $"incident:{incidentId}";
+        await SafeSendAsync(group, () =>
+            hubContext.Clients.Group(group).InterventionRequestReceived(
+                new InterventionRequestPayload(incidentId, requestId, type, prompt, createdAt,
+                    toolName, toolCallId, toolArguments, choices)));
+    }
+
+    public async Task InterventionRequestResolvedAsync(
+        Guid incidentId, string requestId, string responseType,
+        string? responseContent = null, bool? approved = null,
+        string? operatorName = null, DateTime? timestamp = null,
+        CancellationToken ct = default)
+    {
+        var group = $"incident:{incidentId}";
+        await SafeSendAsync(group, () =>
+            hubContext.Clients.Group(group).InterventionRequestResolved(
+                new InterventionRequestResolvedPayload(incidentId, requestId, responseType,
+                    responseContent, approved, operatorName, timestamp)));
+    }
+
     private async Task SafeSendAsync(string group, Func<Task> sendAction)
     {
         try

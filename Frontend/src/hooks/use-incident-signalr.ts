@@ -10,6 +10,12 @@ import type {
   IncidentResolvedEvent,
   RcaCompletedEvent,
   SopGeneratedEvent,
+  AgentProcessingChangedEvent,
+  HumanInterventionAcknowledgedEvent,
+  IncidentTimeoutEvent,
+  IncidentEscalatedEvent,
+  InterventionRequestPayload,
+  InterventionRequestResolvedPayload,
 } from "@/types/incident";
 
 export type SignalRConnectionState =
@@ -28,6 +34,12 @@ export interface IncidentSignalRCallbacks {
   onIncidentResolved?: (evt: IncidentResolvedEvent) => void;
   onRcaCompleted?: (evt: RcaCompletedEvent) => void;
   onSopGenerated?: (evt: SopGeneratedEvent) => void;
+  onAgentProcessingChanged?: (evt: AgentProcessingChangedEvent) => void;
+  onHumanInterventionAcknowledged?: (evt: HumanInterventionAcknowledgedEvent) => void;
+  onIncidentTimeout?: (evt: IncidentTimeoutEvent) => void;
+  onIncidentEscalated?: (evt: IncidentEscalatedEvent) => void;
+  onInterventionRequestReceived?: (evt: InterventionRequestPayload) => void;
+  onInterventionRequestResolved?: (evt: InterventionRequestResolvedPayload) => void;
   // Lifecycle
   onReconnected?: () => void;
   onClose?: (error?: Error) => void;
@@ -98,6 +110,24 @@ export function useIncidentSignalR(
     });
     connection.on("SopGenerated", (evt: SopGeneratedEvent) => {
       callbacksRef.current.onSopGenerated?.(evt);
+    });
+    connection.on("AgentProcessingChanged", (evt: AgentProcessingChangedEvent) => {
+      callbacksRef.current.onAgentProcessingChanged?.(evt);
+    });
+    connection.on("HumanInterventionAcknowledged", (evt: HumanInterventionAcknowledgedEvent) => {
+      callbacksRef.current.onHumanInterventionAcknowledged?.(evt);
+    });
+    connection.on("IncidentTimeout", (evt: IncidentTimeoutEvent) => {
+      callbacksRef.current.onIncidentTimeout?.(evt);
+    });
+    connection.on("IncidentEscalated", (evt: IncidentEscalatedEvent) => {
+      callbacksRef.current.onIncidentEscalated?.(evt);
+    });
+    connection.on("InterventionRequestReceived", (evt: InterventionRequestPayload) => {
+      callbacksRef.current.onInterventionRequestReceived?.(evt);
+    });
+    connection.on("InterventionRequestResolved", (evt: InterventionRequestResolvedPayload) => {
+      callbacksRef.current.onInterventionRequestResolved?.(evt);
     });
 
     // Lifecycle

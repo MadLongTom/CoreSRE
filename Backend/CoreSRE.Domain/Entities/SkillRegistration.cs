@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using CoreSRE.Domain.Enums;
+using CoreSRE.Domain.ValueObjects;
 
 namespace CoreSRE.Domain.Entities;
 
@@ -47,6 +48,34 @@ public partial class SkillRegistration : BaseEntity
 
     /// <summary>是否有 S3 文件包</summary>
     public bool HasFiles { get; private set; }
+
+    // ── SOP 质量保证字段（Spec 022）──
+
+    /// <summary>版本号（同一 AlertRule 下的 SOP 从 1 递增）</summary>
+    public int Version { get; private set; } = 1;
+
+    /// <summary>生成该 SOP 的 Incident ID</summary>
+    public Guid? SourceIncidentId { get; private set; }
+
+    /// <summary>来源 AlertRule ID（用于版本关联）</summary>
+    public Guid? SourceAlertRuleId { get; private set; }
+
+    /// <summary>审核人</summary>
+    public string? ReviewedBy { get; private set; }
+
+    /// <summary>审核意见</summary>
+    public string? ReviewComment { get; private set; }
+
+    /// <summary>审核时间</summary>
+    public DateTime? ReviewedAt { get; private set; }
+
+    /// <summary>结构化校验结果</summary>
+    public SopValidationResultVO? ValidationResult { get; private set; }
+
+    // ── SOP 执行统计（Spec 025）──
+
+    /// <summary>SOP 滚动执行统计</summary>
+    public SopExecutionStatsVO? ExecutionStats { get; private set; }
 
     /// <summary>Agent Skills 规范 name 字段正则</summary>
     [GeneratedRegex(@"^[a-z0-9]([a-z0-9-]*[a-z0-9])?$")]
@@ -123,4 +152,111 @@ public partial class SkillRegistration : BaseEntity
     /// <summary>设置依赖工具</summary>
     public void SetRequiresTools(List<Guid> toolIds) =>
         RequiresTools = toolIds ?? [];
+
+    // ── SOP 生命周期方法（Spec 022）──
+
+    /// <summary>创建自动生成的 SOP（状态为 Draft）</summary>
+    public static SkillRegistration CreateSop(
+        string name,
+        string description,
+        string content,
+        Guid sourceIncidentId,
+        Guid sourceAlertRuleId,
+        int version = 1)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        ArgumentException.ThrowIfNullOrWhiteSpace(description);
+
+        return new SkillRegistration
+        {
+            Name = name.Trim(),
+            Description = description.Trim(),
+            Category = "sop",
+            Content = content ?? string.Empty,
+            Scope = SkillScope.User,
+            Status = SkillStatus.Draft,
+            Version = version,
+            SourceIncidentId = sourceIncidentId,
+            SourceAlertRuleId = sourceAlertRuleId,
+        };
+    }
+
+    /// <summary>设置校验结果</summary>
+    public void SetValidationResult(SopValidationResultVO result)
+    {
+        ValidationResult = result ?? throw new ArgumentNullException(nameof(result));
+        if (!result.IsValid)
+            Status = SkillStatus.Invalid;
+    }
+
+    /// <summary>审核通过</summary>
+    public void Approve(string reviewedBy, string? comment = null)
+    {
+        if (Status is not SkillStatus.Draft and not SkillStatus.Invalid)
+            throw new InvalidOperationException($"Cannot approve a Skill in '{Status}' status. Must be Draft or Invalid.");
+
+        if (ValidationResult is { IsValid: false })
+            throw new InvalidOperationException("Cannot approve a Skill with validation errors.");
+
+        ArgumentException.ThrowIfNullOrWhiteSpace(reviewedBy);
+        Status = SkillStatus.Reviewed;
+        ReviewedBy = reviewedBy;
+        ReviewComment = comment;
+        ReviewedAt = DateTime.UtcNow;
+    }
+
+    /// <summary>驳回</summary>
+    public void Reject(string reviewedBy, string reason)
+    {
+        if (Status is not SkillStatus.Draft and not SkillStatus.Invalid)
+            throw new InvalidOperationException($"Cannot reject a Skill in '{Status}' status.");
+
+        ArgumentException.ThrowIfNullOrWhiteSpace(reviewedBy);
+        ArgumentException.ThrowIfNullOrWhiteSpace(reason);
+        Status = SkillStatus.Rejected;
+        ReviewedBy = reviewedBy;
+        ReviewComment = reason;
+        ReviewedAt = DateTime.UtcNow;
+    }
+
+    /// <summary>发布（从 Reviewed 变为 Active）</summary>
+    public void Publish()
+    {
+        if (Status != SkillStatus.Reviewed)
+            throw new InvalidOperationException($"Cannot publish a Skill in '{Status}' status. Must be Reviewed.");
+
+        Status = SkillStatus.Active;
+    }
+
+    /// <summary>归档</summary>
+    public void Archive()
+    {
+        if (Status == SkillStatus.Archived)
+            return;
+        Status = SkillStatus.Archived;
+    }
+
+    /// <summary>标记为已被新版本取代</summary>
+    public void MarkSuperseded() => Status = SkillStatus.Superseded;
+
+    /// <summary>设置来源 Incident</summary>
+    public void SetSourceIncident(Guid incidentId) => SourceIncidentId = incidentId;
+
+    /// <summary>设置来源 AlertRule</summary>
+    public void SetSourceAlertRule(Guid alertRuleId) => SourceAlertRuleId = alertRuleId;
+
+    /// <summary>设置版本号</summary>
+    public void SetVersion(int version) => Version = version > 0 ? version : 1;
+
+    // ── SOP 执行统计方法（Spec 025）──
+
+    /// <summary>记录一次 SOP 执行结果</summary>
+    public void RecordExecution(bool success, bool timeout, long mttrMs)
+    {
+        ExecutionStats = (ExecutionStats ?? SopExecutionStatsVO.Empty())
+            .RecordExecution(success, timeout, mttrMs);
+    }
+
+    /// <summary>标记为效能降级</summary>
+    public void MarkDegraded() => Status = SkillStatus.Degraded;
 }

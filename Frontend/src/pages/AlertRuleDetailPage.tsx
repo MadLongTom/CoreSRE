@@ -15,6 +15,7 @@ import type { AlertRuleDto } from "@/types/alert-rule";
 import { MATCH_OP_LABELS } from "@/types/alert-rule";
 import type { ApiResult, AgentSummary } from "@/types/agent";
 import type { SkillRegistration } from "@/types/skill";
+import { CanaryHealthPanel } from "@/components/alert-rules/CanaryHealthPanel";
 
 const API = "/api/alert-rules";
 
@@ -261,6 +262,17 @@ export default function AlertRuleDetailPage() {
               )}
             </div>
           </div>
+
+          <Separator />
+
+          {/* Canary & Health (Spec 025) */}
+          <CanaryHealthPanel
+            alertRuleId={id!}
+            canaryMode={rule.canaryMode}
+            canarySopId={rule.canarySopId}
+            healthScore={rule.healthScore}
+            onRefresh={fetchRule}
+          />
         </div>
       </div>
     </div>

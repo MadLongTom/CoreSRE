@@ -69,6 +69,28 @@ public class AlertRuleConfiguration : IEntityTypeConfiguration<AlertRule>
             .HasColumnName("tags")
             .HasColumnType("jsonb");
 
+        // ── 金丝雀验证 & 降级配置（Spec 025）──
+
+        builder.Property(e => e.CanaryMode)
+            .HasColumnName("canary_mode")
+            .HasDefaultValue(false)
+            .IsRequired();
+
+        builder.Property(e => e.CanarySopId)
+            .HasColumnName("canary_sop_id");
+
+        builder.Property(e => e.MaxConsecutiveFailures)
+            .HasColumnName("max_consecutive_failures")
+            .HasDefaultValue(3)
+            .IsRequired();
+
+        builder.Property(e => e.HealthScore)
+            .HasColumnName("health_score");
+
+        builder.Property(e => e.HealthDetails)
+            .HasColumnName("health_details")
+            .HasColumnType("jsonb");
+
         builder.Property(e => e.CreatedAt)
             .HasColumnName("created_at")
             .IsRequired();

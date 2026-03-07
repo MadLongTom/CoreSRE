@@ -24,6 +24,8 @@ public class AppDbContext : DbContext, IUnitOfWork
     public DbSet<DataSourceRegistration> DataSourceRegistrations => Set<DataSourceRegistration>();
     public DbSet<AlertRule> AlertRules => Set<AlertRule>();
     public DbSet<Incident> Incidents => Set<Incident>();
+    public DbSet<CanaryResult> CanaryResults => Set<CanaryResult>();
+    public DbSet<PromptOptimizationSuggestion> PromptOptimizationSuggestions => Set<PromptOptimizationSuggestion>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

@@ -30,6 +30,7 @@ import IncidentDetailPage from "@/pages/IncidentDetailPage";
 import AlertRuleListPage from "@/pages/AlertRuleListPage";
 import AlertRuleFormPage from "@/pages/AlertRuleFormPage";
 import AlertRuleDetailPage from "@/pages/AlertRuleDetailPage";
+import EvaluationDashboardPage from "@/pages/EvaluationDashboardPage";
 import NotFoundPage from "@/pages/NotFoundPage";
 
 const router = createBrowserRouter([
@@ -68,6 +69,7 @@ const router = createBrowserRouter([
       { path: "alert-rules/new", element: <AlertRuleFormPage /> },
       { path: "alert-rules/:id", element: <AlertRuleDetailPage /> },
       { path: "alert-rules/:id/edit", element: <AlertRuleFormPage /> },
+      { path: "evaluation", element: <EvaluationDashboardPage /> },
       { path: "*", element: <NotFoundPage /> },
     ],
   },

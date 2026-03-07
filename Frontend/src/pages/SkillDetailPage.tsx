@@ -17,7 +17,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 
 import { PageHeader } from "@/components/layout/PageHeader";
 import { ApiError } from "@/lib/api/agents";
@@ -38,6 +37,8 @@ import {
   SKILL_BODY_RECOMMENDED_MAX_LINES,
 } from "@/types/skill";
 import { SkillScopeBadge } from "@/components/skills/SkillScopeBadge";
+import { SkillStatusBadge } from "@/components/skills/SkillStatusBadge";
+import { SopLifecyclePanel } from "@/components/skills/SopLifecyclePanel";
 import { SkillFileTree } from "@/components/skills/SkillFileTree";
 import { SkillFilePreview } from "@/components/skills/SkillFilePreview";
 import ToolRefsPicker from "@/components/agents/ToolRefsPicker";
@@ -238,9 +239,7 @@ export default function SkillDetailPage() {
         actions={
           <div className="flex items-center gap-2">
             <SkillScopeBadge scope={skill.scope} />
-            <Badge variant={skill.status === "Active" ? "default" : "secondary"}>
-              {skill.status === "Active" ? "启用" : "禁用"}
-            </Badge>
+            <SkillStatusBadge status={skill.status} />
             {!isBuiltin && (
               <>
                 <Button size="sm" onClick={handleSave} disabled={saving}>
@@ -322,6 +321,11 @@ export default function SkillDetailPage() {
               )}
             </div>
           </div>
+        )}
+
+        {/* SOP Lifecycle (Spec 022) */}
+        {!isBuiltin && (
+          <SopLifecyclePanel skill={skill} onRefresh={fetchSkill} />
         )}
       </div>
 

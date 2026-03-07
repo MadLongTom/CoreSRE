@@ -6,8 +6,9 @@ import { IncidentChatPanel } from "@/components/incidents/IncidentChatPanel";
 import { IncidentContextPanel } from "@/components/incidents/IncidentContextPanel";
 import { IncidentSeverityBadge } from "@/components/incidents/IncidentSeverityBadge";
 import { IncidentStatusBadge } from "@/components/incidents/IncidentStatusBadge";
+import { PostMortemPanel } from "@/components/incidents/PostMortemPanel";
+import { StepExecutionPanel } from "@/components/incidents/StepExecutionPanel";
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
 import { useIncidentSignalR } from "@/hooks/use-incident-signalr";
 import {
   ArrowLeft,
@@ -20,6 +21,7 @@ import type {
   IncidentTimelineItem,
   ChatMessagePayload,
   IncidentStatus,
+  InterventionRequestPayload,
 } from "@/types/incident";
 import type { ApiResult } from "@/types/agent";
 
@@ -30,6 +32,9 @@ export default function IncidentDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatMessagePayload[]>([]);
+  const [isAgentProcessing, setIsAgentProcessing] = useState(false);
+  const [processingAgentName, setProcessingAgentName] = useState<string | null>(null);
+  const [pendingRequests, setPendingRequests] = useState<InterventionRequestPayload[]>([]);
 
   const fetchIncident = useCallback(async () => {
     if (!id) return;
@@ -40,8 +45,8 @@ export default function IncidentDetailPage() {
       const result: ApiResult<IncidentDetail> = await resp.json();
       if (result.success && result.data) {
         setIncident(result.data);
-      } else {
-        setError(result.error ?? "事故未找到");
+      }  else {
+        setError(result.message ?? "事故未找到");
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Network error");
@@ -53,6 +58,27 @@ export default function IncidentDetailPage() {
   useEffect(() => {
     fetchIncident();
   }, [fetchIncident]);
+
+  // Check active agent processing status on load
+  useEffect(() => {
+    if (!id) return;
+    fetch(`/api/incidents/${id}/active`)
+      .then((r) => r.json())
+      .then((data: { isActive: boolean }) => {
+        setIsAgentProcessing(data.isActive);
+      })
+      .catch(() => {});
+
+    // Load existing chat history
+    fetch(`/api/incidents/${id}/chat`)
+      .then((r) => r.json())
+      .then((result: ApiResult<ChatMessagePayload[]>) => {
+        if (result.success && result.data && result.data.length > 0) {
+          setChatMessages(result.data);
+        }
+      })
+      .catch(() => {});
+  }, [id]);
 
   // SignalR: real-time updates for this incident
   const { connectionState } = useIncidentSignalR("detail", id, {
@@ -104,6 +130,21 @@ export default function IncidentDetailPage() {
       if (evt.incidentId !== id) return;
       setIncident((prev) =>
         prev ? { ...prev, generatedSopId: evt.skillId } : prev
+      );
+    },
+    onAgentProcessingChanged: (evt) => {
+      if (evt.incidentId !== id) return;
+      setIsAgentProcessing(evt.isProcessing);
+      setProcessingAgentName(evt.agentName);
+    },
+    onInterventionRequestReceived: (evt) => {
+      if (evt.incidentId !== id) return;
+      setPendingRequests((prev) => [...prev, evt]);
+    },
+    onInterventionRequestResolved: (evt) => {
+      if (evt.incidentId !== id) return;
+      setPendingRequests((prev) =>
+        prev.filter((r) => r.requestId !== evt.requestId)
       );
     },
   });
@@ -174,6 +215,12 @@ export default function IncidentDetailPage() {
             />
             <IncidentSeverityBadge severity={incident.severity} />
             <IncidentStatusBadge status={incident.status} />
+            {isAgentProcessing && (
+              <span className="flex items-center gap-1 rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                Agent 处理中
+              </span>
+            )}
             {incident.status !== "Resolved" &&
               incident.status !== "Closed" && (
                 <>
@@ -211,15 +258,61 @@ export default function IncidentDetailPage() {
         <div className="flex flex-1 flex-col overflow-hidden">
           <div className="border-b px-4 py-2 text-xs text-muted-foreground">
             Agent 对话
+            {isAgentProcessing && processingAgentName && (
+              <span className="ml-2 text-purple-600">
+                — {processingAgentName}
+              </span>
+            )}
           </div>
-          <div className="flex-1 overflow-y-auto">
-            <IncidentChatPanel messages={chatMessages} />
+          <div className="flex-1 overflow-hidden">
+            <IncidentChatPanel
+              messages={chatMessages}
+              incidentId={id!}
+              isAgentProcessing={isAgentProcessing}
+              agentName={processingAgentName}
+              isResolved={incident.status === "Resolved" || incident.status === "Closed"}
+              pendingRequests={pendingRequests}
+            />
           </div>
         </div>
 
         {/* Right: Context Panel */}
         <div className="w-80 shrink-0 overflow-y-auto border-l">
           <IncidentContextPanel incident={incident} />
+
+          {/* Spec 024 — Step Execution */}
+          {incident.sopSteps && incident.sopSteps.length > 0 && (
+            <div className="p-4">
+              <StepExecutionPanel
+                incidentId={id!}
+                steps={incident.sopSteps}
+                executions={incident.stepExecutions ?? []}
+                onRefresh={fetchIncident}
+              />
+            </div>
+          )}
+
+          {/* Spec 025 — Fallback indicator */}
+          {incident.route === "FallbackRca" && incident.fallbackReason && (
+            <div className="mx-4 mb-3 rounded-md border border-orange-200 bg-orange-50 p-2 text-xs text-orange-800">
+              <p className="font-medium">已降级为根因分析</p>
+              <p className="text-muted-foreground mt-0.5">
+                原因: {incident.fallbackReason}
+              </p>
+            </div>
+          )}
+
+          {/* Spec 023 — Post-mortem */}
+          {(incident.status === "Resolved" || incident.status === "Closed") && (
+            <div className="p-4">
+              <PostMortemPanel
+                incidentId={id!}
+                route={incident.route}
+                postMortem={incident.postMortem ?? null}
+                onRefresh={fetchIncident}
+              />
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -14,16 +14,18 @@ namespace CoreSRE.Application.Alerts.Commands.GenerateSopFromIncident;
 /// 链路 C Handler：从 RCA 结果自动生成 SOP。
 /// 1. 构造 SOP 生成 Prompt
 /// 2. 调用总结 Agent 生成 SOP Markdown
-/// 3. 解析 → 创建 SkillRegistration
-/// 4. 更新 AlertRule（SopId）
+/// 3. 解析 → 创建 SkillRegistration（状态为 Draft，不立即绑定 AlertRule）
+/// 4. 执行结构化校验
 /// 5. 更新 Incident（GeneratedSopId）
 /// </summary>
 public class GenerateSopFromIncidentCommandHandler(
     IIncidentRepository incidentRepository,
     IAlertRuleRepository alertRuleRepository,
     ISkillRegistrationRepository skillRepository,
+    IToolRegistrationRepository toolRepository,
     IAgentCaller agentCaller,
     ISopParserService sopParser,
+    ISopValidator sopValidator,
     ILogger<GenerateSopFromIncidentCommandHandler> logger)
     : IRequestHandler<GenerateSopFromIncidentCommand, Result<Guid?>>
 {
@@ -84,27 +86,42 @@ public class GenerateSopFromIncidentCommandHandler(
         // 3. 解析 SOP
         var parseResult = sopParser.Parse(sopMarkdown, request.AlertName);
 
-        // 4. 创建 SkillRegistration
-        var skill = SkillRegistration.Create(
+        // 4. 版本管理：检查是否已存在同 AlertRule 的 SOP
+        var (existingSkills, _) = await skillRepository.GetPagedAsync(
+            scope: null, status: null, category: "sop", search: null,
+            page: 1, pageSize: 100, cancellationToken);
+        var existingSops = existingSkills
+            .Where(s => s.SourceAlertRuleId == request.AlertRuleId)
+            .OrderByDescending(s => s.Version)
+            .ToList();
+        var nextVersion = existingSops.Count > 0 ? existingSops[0].Version + 1 : 1;
+
+        // 5. 创建 SkillRegistration（Draft 状态，不立即绑定 AlertRule）
+        var skill = SkillRegistration.CreateSop(
             name: parseResult.Name.Length > 64 ? parseResult.Name[..64] : parseResult.Name,
             description: parseResult.Description,
-            category: "sop",
-            content: parseResult.Content);
+            content: parseResult.Content,
+            sourceIncidentId: request.IncidentId,
+            sourceAlertRuleId: request.AlertRuleId,
+            version: nextVersion);
 
         await skillRepository.AddAsync(skill, cancellationToken);
 
-        // 5. 更新 AlertRule（SopId — ResponderAgentId 暂留空，待自动创建 Agent 后填充）
-        alertRule.BindSop(skill.Id, Guid.Empty);
+        // 6. 执行结构化校验
+        var allTools = await toolRepository.GetByTypeAsync(null, cancellationToken);
+        var toolNames = allTools.Select(t => t.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var validationResult = sopValidator.Validate(skill.Content, toolNames);
+        skill.SetValidationResult(validationResult);
+        await skillRepository.UpdateAsync(skill, cancellationToken);
 
-        // 6. 更新 Incident
+        // 7. 更新 Incident（不再更新 AlertRule — 等 Publish 时才绑定）
         incident.SetGeneratedSop(skill.Id);
         incident.AddTimelineEvent(IncidentTimelineVO.Create(
             TimelineEventType.SopGenerated,
-            $"SOP 已自动生成: {parseResult.Name}",
-            $"工具依赖: {string.Join(", ", parseResult.ReferencedToolNames)}"));
+            $"SOP 已自动生成 (v{nextVersion}, 状态: Draft): {parseResult.Name}",
+            $"校验结果: {(validationResult.IsValid ? "通过" : "未通过")}; 工具依赖: {string.Join(", ", parseResult.ReferencedToolNames)}"));
 
         await incidentRepository.UpdateAsync(incident, cancellationToken);
-        await alertRuleRepository.UpdateAsync(alertRule, cancellationToken);
 
         logger.LogInformation(
             "SOP generated for Incident {IncidentId}: Skill={SkillName}, Tools={ToolCount}",

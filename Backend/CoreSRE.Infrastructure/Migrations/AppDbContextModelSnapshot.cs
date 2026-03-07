@@ -130,6 +130,16 @@ namespace CoreSRE.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<bool>("CanaryMode")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("canary_mode");
+
+                    b.Property<Guid?>("CanarySopId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("canary_sop_id");
+
                     b.Property<int>("CooldownMinutes")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("integer")
@@ -144,10 +154,24 @@ namespace CoreSRE.Infrastructure.Migrations
                         .HasColumnType("text")
                         .HasColumnName("description");
 
+                    b.Property<AlertRuleHealthVO>("HealthDetails")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("health_details");
+
+                    b.Property<int?>("HealthScore")
+                        .HasColumnType("integer")
+                        .HasColumnName("health_score");
+
                     b.Property<List<AlertMatcherVO>>("Matchers")
                         .IsRequired()
                         .HasColumnType("jsonb")
                         .HasColumnName("matchers");
+
+                    b.Property<int>("MaxConsecutiveFailures")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(3)
+                        .HasColumnName("max_consecutive_failures");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -203,6 +227,67 @@ namespace CoreSRE.Infrastructure.Migrations
                     b.HasIndex("Status");
 
                     b.ToTable("alert_rules", (string)null);
+                });
+
+            modelBuilder.Entity("CoreSRE.Domain.Entities.CanaryResult", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("ActualRootCause")
+                        .HasColumnType("text")
+                        .HasColumnName("actual_root_cause");
+
+                    b.Property<Guid>("AlertRuleId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("alert_rule_id");
+
+                    b.Property<Guid>("CanarySopId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("canary_sop_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("IncidentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("incident_id");
+
+                    b.Property<bool>("IsConsistent")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_consistent");
+
+                    b.Property<long>("ShadowDurationMs")
+                        .HasColumnType("bigint")
+                        .HasColumnName("shadow_duration_ms");
+
+                    b.Property<string>("ShadowRootCause")
+                        .HasColumnType("text")
+                        .HasColumnName("shadow_root_cause");
+
+                    b.Property<int>("ShadowTokenConsumed")
+                        .HasColumnType("integer")
+                        .HasColumnName("shadow_token_consumed");
+
+                    b.PrimitiveCollection<string>("ShadowToolCalls")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("shadow_tool_calls");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AlertRuleId");
+
+                    b.HasIndex("CanarySopId");
+
+                    b.ToTable("canary_results", (string)null);
                 });
 
             modelBuilder.Entity("CoreSRE.Domain.Entities.Conversation", b =>
@@ -352,9 +437,22 @@ namespace CoreSRE.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
+                    b.Property<string>("FallbackFrom")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("fallback_from");
+
+                    b.Property<string>("FallbackReason")
+                        .HasColumnType("text")
+                        .HasColumnName("fallback_reason");
+
                     b.Property<Guid?>("GeneratedSopId")
                         .HasColumnType("uuid")
                         .HasColumnName("generated_sop_id");
+
+                    b.Property<PostMortemAnnotationVO>("PostMortem")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("post_mortem");
 
                     b.Property<string>("Resolution")
                         .HasColumnType("text")
@@ -384,6 +482,10 @@ namespace CoreSRE.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("sop_id");
 
+                    b.Property<List<SopStepDefinition>>("SopSteps")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("sop_steps");
+
                     b.Property<DateTime>("StartedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("started_at");
@@ -393,6 +495,15 @@ namespace CoreSRE.Infrastructure.Migrations
                         .HasMaxLength(32)
                         .HasColumnType("character varying(32)")
                         .HasColumnName("status");
+
+                    b.Property<List<SopStepExecutionVO>>("StepExecutions")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("step_executions");
+
+                    b.Property<Dictionary<int, JsonElement>>("StepOutputs")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("step_outputs");
 
                     b.Property<long?>("TimeToDetectMs")
                         .HasColumnType("bigint")
@@ -527,6 +638,69 @@ namespace CoreSRE.Infrastructure.Migrations
                     b.ToTable("mcp_tool_items", (string)null);
                 });
 
+            modelBuilder.Entity("CoreSRE.Domain.Entities.PromptOptimizationSuggestion", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("AgentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("agent_id");
+
+                    b.Property<DateTime?>("AppliedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("applied_at");
+
+                    b.PrimitiveCollection<string>("BasedOnIncidentIds")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("based_on_incident_ids");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("description");
+
+                    b.Property<string>("IssueType")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("issue_type");
+
+                    b.Property<string>("PreviousInstructionSnapshot")
+                        .HasColumnType("text")
+                        .HasColumnName("previous_instruction_snapshot");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("character varying(24)")
+                        .HasColumnName("status");
+
+                    b.Property<string>("SuggestedPromptPatch")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("suggested_prompt_patch");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AgentId");
+
+                    b.HasIndex("Status");
+
+                    b.ToTable("prompt_optimization_suggestions", (string)null);
+                });
+
             modelBuilder.Entity("CoreSRE.Domain.Entities.SandboxInstance", b =>
                 {
                     b.Property<Guid>("Id")
@@ -647,6 +821,10 @@ namespace CoreSRE.Infrastructure.Migrations
                         .HasColumnType("text")
                         .HasColumnName("description");
 
+                    b.Property<SopExecutionStatsVO>("ExecutionStats")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("execution_stats");
+
                     b.Property<bool>("HasFiles")
                         .HasColumnType("boolean")
                         .HasColumnName("has_files");
@@ -671,21 +849,52 @@ namespace CoreSRE.Infrastructure.Migrations
                         .HasColumnType("jsonb")
                         .HasColumnName("requires_tools");
 
+                    b.Property<string>("ReviewComment")
+                        .HasColumnType("text")
+                        .HasColumnName("review_comment");
+
+                    b.Property<DateTime?>("ReviewedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("reviewed_at");
+
+                    b.Property<string>("ReviewedBy")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("reviewed_by");
+
                     b.Property<string>("Scope")
                         .IsRequired()
                         .HasMaxLength(16)
                         .HasColumnType("character varying(16)")
                         .HasColumnName("scope");
 
+                    b.Property<Guid?>("SourceAlertRuleId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("source_alert_rule_id");
+
+                    b.Property<Guid?>("SourceIncidentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("source_incident_id");
+
                     b.Property<string>("Status")
                         .IsRequired()
-                        .HasMaxLength(16)
-                        .HasColumnType("character varying(16)")
+                        .HasMaxLength(24)
+                        .HasColumnType("character varying(24)")
                         .HasColumnName("status");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at");
+
+                    b.Property<SopValidationResultVO>("ValidationResult")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("validation_result");
+
+                    b.Property<int>("Version")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1)
+                        .HasColumnName("version");
 
                     b.HasKey("Id");
 
@@ -695,6 +904,8 @@ namespace CoreSRE.Infrastructure.Migrations
                         .IsUnique();
 
                     b.HasIndex("Scope");
+
+                    b.HasIndex("SourceAlertRuleId");
 
                     b.HasIndex("Status");
 
@@ -713,7 +924,8 @@ namespace CoreSRE.Infrastructure.Migrations
                             Name = "incident-response",
                             RequiresTools = "[]",
                             Scope = "Builtin",
-                            Status = "Active"
+                            Status = "Active",
+                            Version = 1
                         },
                         new
                         {
@@ -727,7 +939,8 @@ namespace CoreSRE.Infrastructure.Migrations
                             Name = "code-review",
                             RequiresTools = "[]",
                             Scope = "Builtin",
-                            Status = "Active"
+                            Status = "Active",
+                            Version = 1
                         },
                         new
                         {
@@ -741,7 +954,8 @@ namespace CoreSRE.Infrastructure.Migrations
                             Name = "database-ops",
                             RequiresTools = "[]",
                             Scope = "Builtin",
-                            Status = "Active"
+                            Status = "Active",
+                            Version = 1
                         },
                         new
                         {
@@ -755,7 +969,8 @@ namespace CoreSRE.Infrastructure.Migrations
                             Name = "kubernetes-ops",
                             RequiresTools = "[]",
                             Scope = "Builtin",
-                            Status = "Active"
+                            Status = "Active",
+                            Version = 1
                         },
                         new
                         {
@@ -769,7 +984,8 @@ namespace CoreSRE.Infrastructure.Migrations
                             Name = "monitoring-alerting",
                             RequiresTools = "[]",
                             Scope = "Builtin",
-                            Status = "Active"
+                            Status = "Active",
+                            Version = 1
                         });
                 });
 

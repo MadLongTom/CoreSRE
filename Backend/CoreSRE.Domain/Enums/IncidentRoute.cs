@@ -9,5 +9,8 @@ public enum IncidentRoute
     SopExecution,
 
     /// <summary>链路 B — 无 SOP，多 Agent 根因分析</summary>
-    RootCauseAnalysis
+    RootCauseAnalysis,
+
+    /// <summary>链路 A 失败后降级到链路 B（Spec 025）</summary>
+    FallbackRca
 }

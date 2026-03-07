@@ -66,7 +66,7 @@ public class SkillRegistrationConfiguration : IEntityTypeConfiguration<SkillRegi
 
         builder.Property(e => e.Status)
             .HasColumnName("status")
-            .HasMaxLength(16)
+            .HasMaxLength(24)
             .HasConversion<string>()
             .IsRequired();
 
@@ -78,6 +78,39 @@ public class SkillRegistrationConfiguration : IEntityTypeConfiguration<SkillRegi
         builder.Property(e => e.HasFiles)
             .HasColumnName("has_files")
             .IsRequired();
+
+        // ── SOP 质量保证字段（Spec 022）──
+
+        builder.Property(e => e.Version)
+            .HasColumnName("version")
+            .HasDefaultValue(1)
+            .IsRequired();
+
+        builder.Property(e => e.SourceIncidentId)
+            .HasColumnName("source_incident_id");
+
+        builder.Property(e => e.SourceAlertRuleId)
+            .HasColumnName("source_alert_rule_id");
+
+        builder.Property(e => e.ReviewedBy)
+            .HasColumnName("reviewed_by")
+            .HasMaxLength(128);
+
+        builder.Property(e => e.ReviewComment)
+            .HasColumnName("review_comment")
+            .HasColumnType("text");
+
+        builder.Property(e => e.ReviewedAt)
+            .HasColumnName("reviewed_at");
+
+        builder.Property(e => e.ValidationResult)
+            .HasColumnName("validation_result")
+            .HasColumnType("jsonb");
+
+        // ── SOP 执行统计（Spec 025）──
+        builder.Property(e => e.ExecutionStats)
+            .HasColumnName("execution_stats")
+            .HasColumnType("jsonb");
 
         builder.Property(e => e.CreatedAt)
             .HasColumnName("created_at")
@@ -91,6 +124,7 @@ public class SkillRegistrationConfiguration : IEntityTypeConfiguration<SkillRegi
         builder.HasIndex(e => e.Scope);
         builder.HasIndex(e => e.Status);
         builder.HasIndex(e => e.Category);
+        builder.HasIndex(e => e.SourceAlertRuleId);
 
         // ── Builtin Skill Seed Data ──────────────────────────────────────
         SeedBuiltinSkills(builder);
@@ -160,6 +194,12 @@ Always provide structured responses with:
                 Status = SkillStatus.Active,
                 RequiresTools = new List<Guid>(),
                 HasFiles = false,
+                Version = 1,
+                SourceIncidentId = (Guid?)null,
+                SourceAlertRuleId = (Guid?)null,
+                ReviewedBy = (string?)null,
+                ReviewComment = (string?)null,
+                ReviewedAt = (DateTime?)null,
                 CreatedAt = seedDate,
                 UpdatedAt = (DateTime?)null,
             },
@@ -216,6 +256,12 @@ Provide findings categorized by severity:
                 Status = SkillStatus.Active,
                 RequiresTools = new List<Guid>(),
                 HasFiles = false,
+                Version = 1,
+                SourceIncidentId = (Guid?)null,
+                SourceAlertRuleId = (Guid?)null,
+                ReviewedBy = (string?)null,
+                ReviewComment = (string?)null,
+                ReviewedAt = (DateTime?)null,
                 CreatedAt = seedDate,
                 UpdatedAt = (DateTime?)null,
             },
@@ -274,6 +320,12 @@ PostgreSQL (primary), MySQL, SQL Server, MongoDB
                 Status = SkillStatus.Active,
                 RequiresTools = new List<Guid>(),
                 HasFiles = false,
+                Version = 1,
+                SourceIncidentId = (Guid?)null,
+                SourceAlertRuleId = (Guid?)null,
+                ReviewedBy = (string?)null,
+                ReviewComment = (string?)null,
+                ReviewedAt = (DateTime?)null,
                 CreatedAt = seedDate,
                 UpdatedAt = (DateTime?)null,
             },
@@ -329,6 +381,12 @@ and infrastructure-as-code generation.
                 Status = SkillStatus.Active,
                 RequiresTools = new List<Guid>(),
                 HasFiles = false,
+                Version = 1,
+                SourceIncidentId = (Guid?)null,
+                SourceAlertRuleId = (Guid?)null,
+                ReviewedBy = (string?)null,
+                ReviewComment = (string?)null,
+                ReviewedAt = (DateTime?)null,
                 CreatedAt = seedDate,
                 UpdatedAt = (DateTime?)null,
             },
@@ -384,6 +442,12 @@ and define SLOs for service reliability.
                 Status = SkillStatus.Active,
                 RequiresTools = new List<Guid>(),
                 HasFiles = false,
+                Version = 1,
+                SourceIncidentId = (Guid?)null,
+                SourceAlertRuleId = (Guid?)null,
+                ReviewedBy = (string?)null,
+                ReviewComment = (string?)null,
+                ReviewedAt = (DateTime?)null,
                 CreatedAt = seedDate,
                 UpdatedAt = (DateTime?)null,
             }

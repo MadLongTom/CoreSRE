@@ -43,4 +43,24 @@ public interface IIncidentNotifier
     Task IncidentTimeoutAsync(
         Guid incidentId, string reason, DateTime timestamp,
         CancellationToken ct = default);
+
+    Task AgentProcessingChangedAsync(
+        Guid incidentId, bool isProcessing, string? agentName, DateTime timestamp,
+        CancellationToken ct = default);
+
+    Task HumanInterventionAcknowledgedAsync(
+        Guid incidentId, DateTime timestamp,
+        CancellationToken ct = default);
+
+    Task InterventionRequestReceivedAsync(
+        Guid incidentId, string requestId, string type, string prompt, DateTime createdAt,
+        string? toolName = null, string? toolCallId = null,
+        Dictionary<string, object?>? toolArguments = null, List<string>? choices = null,
+        CancellationToken ct = default);
+
+    Task InterventionRequestResolvedAsync(
+        Guid incidentId, string requestId, string responseType,
+        string? responseContent = null, bool? approved = null,
+        string? operatorName = null, DateTime? timestamp = null,
+        CancellationToken ct = default);
 }

@@ -48,5 +48,23 @@ public enum TimelineEventType
     StatusChanged,
 
     /// <summary>人工备注</summary>
-    ManualNote
+    ManualNote,
+
+    /// <summary>人工介入消息（操作员向 Agent 发送指令）</summary>
+    HumanIntervention,
+
+    /// <summary>Agent 请求人工介入（Agent 主动暂停等待人类输入）</summary>
+    InterventionRequested,
+
+    /// <summary>工具调用需要人工审批</summary>
+    ToolApprovalRequested,
+
+    /// <summary>工具调用审批结果（批准或拒绝）</summary>
+    ToolApprovalResponded,
+
+    /// <summary>SOP 执行失败后降级到 RCA（Spec 025）</summary>
+    SopFallbackToRca,
+
+    /// <summary>SOP 因连续失败被自动解绑（Spec 025）</summary>
+    SopAutoDisabled
 }

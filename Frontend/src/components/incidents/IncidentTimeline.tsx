@@ -10,6 +10,12 @@ import {
   Settings,
   Wrench,
   Zap,
+  UserCheck,
+  HandMetal,
+  ShieldCheck,
+  ShieldX,
+  ArrowDownRight,
+  ShieldOff,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -25,6 +31,13 @@ const EVENT_ICONS: Record<string, React.ElementType> = {
   Escalated: Zap,
   ManualNote: MessageSquare,
   Timeout: Clock,
+  HumanIntervention: UserCheck,
+  InterventionRequested: HandMetal,
+  ToolCall: Wrench,
+  ToolApprovalRequested: ShieldCheck,
+  ToolApprovalResponded: ShieldX,
+  SopFallbackToRca: ArrowDownRight,
+  SopAutoDisabled: ShieldOff,
 };
 
 const EVENT_COLORS: Record<string, string> = {
@@ -39,6 +52,13 @@ const EVENT_COLORS: Record<string, string> = {
   Escalated: "text-red-600",
   ManualNote: "text-gray-500",
   Timeout: "text-yellow-600",
+  HumanIntervention: "text-blue-600",
+  InterventionRequested: "text-amber-600",
+  ToolCall: "text-orange-500",
+  ToolApprovalRequested: "text-amber-500",
+  ToolApprovalResponded: "text-emerald-500",
+  SopFallbackToRca: "text-orange-600",
+  SopAutoDisabled: "text-red-700",
 };
 
 export function IncidentTimeline({

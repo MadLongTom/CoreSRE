@@ -143,14 +143,29 @@ public static class DependencyInjection
         services.AddScoped<IAlertRuleRepository, AlertRuleRepository>();
         services.AddScoped<IIncidentRepository, IncidentRepository>();
 
+        // ── Spec 025: Canary & Prompt Suggestion Repositories ──
+        services.AddScoped<ICanaryResultRepository, CanaryResultRepository>();
+        services.AddScoped<IPromptSuggestionRepository, PromptSuggestionRepository>();
+
         // ── Alert Payload Parser ──
         services.AddSingleton<Application.Alerts.Interfaces.IAlertmanagerPayloadParser, AlertmanagerPayloadParser>();
 
         // ── Incident Dispatcher ──
         services.AddScoped<Application.Alerts.Interfaces.IIncidentDispatcher, IncidentDispatcherService>();
 
+        // ── Active Incident Session Tracker (Singleton — shared across scopes) ──
+        services.AddSingleton<ActiveIncidentSessionTracker>();
+        services.AddSingleton<Application.Alerts.Interfaces.IActiveIncidentTracker>(sp =>
+            sp.GetRequiredService<ActiveIncidentSessionTracker>());
+
         // ── SOP Parser ──
         services.AddSingleton<Application.Alerts.Interfaces.ISopParserService, SopParserService>();
+
+        // ── SOP Validator (Spec 022) ──
+        services.AddScoped<Application.Alerts.Interfaces.ISopValidator, SopValidatorService>();
+
+        // ── SOP Structured Parser (Spec 024) ──
+        services.AddSingleton<Application.Alerts.Interfaces.ISopStructuredParser, SopStructuredParserService>();
 
         // ── Agent Caller (abstracts Agent framework for Application layer) ──
         services.AddScoped<Application.Alerts.Interfaces.IAgentCaller, AgentCallerService>();

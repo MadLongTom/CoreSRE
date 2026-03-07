@@ -13,9 +13,33 @@ export type SkillScope = "Builtin" | "User" | "Project";
 
 export const SKILL_SCOPES: SkillScope[] = ["Builtin", "User", "Project"];
 
-export type SkillStatus = "Active" | "Inactive";
+export type SkillStatus =
+  | "Active"
+  | "Inactive"
+  | "Draft"
+  | "Reviewed"
+  | "Rejected"
+  | "Archived"
+  | "Superseded"
+  | "Invalid"
+  | "Degraded";
 
-export const SKILL_STATUSES: SkillStatus[] = ["Active", "Inactive"];
+export const SKILL_STATUSES: SkillStatus[] = [
+  "Active", "Inactive", "Draft", "Reviewed", "Rejected",
+  "Archived", "Superseded", "Invalid", "Degraded",
+];
+
+export const SKILL_STATUS_LABELS: Record<SkillStatus, string> = {
+  Active: "已启用",
+  Inactive: "已禁用",
+  Draft: "草稿",
+  Reviewed: "已审核",
+  Rejected: "已驳回",
+  Archived: "已归档",
+  Superseded: "已替代",
+  Invalid: "校验失败",
+  Degraded: "效能下降",
+};
 
 // ---------------------------------------------------------------------------
 // Agent Skills Spec Constants
@@ -26,6 +50,34 @@ export const SKILL_NAME_PATTERN = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/;
 export const SKILL_NAME_MAX_LENGTH = 64;
 export const SKILL_DESCRIPTION_MAX_LENGTH = 1024;
 export const SKILL_BODY_RECOMMENDED_MAX_LINES = 500;
+
+// ---------------------------------------------------------------------------
+// Skill Registration (full detail)
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// SOP Validation Result (Spec 022)
+// ---------------------------------------------------------------------------
+
+export interface SopValidationResult {
+  isValid: boolean;
+  errors: string[];
+  warnings: string[];
+  dangerousSteps: number[];
+}
+
+// ---------------------------------------------------------------------------
+// SOP Execution Stats (Spec 025)
+// ---------------------------------------------------------------------------
+
+export interface SopExecutionStats {
+  totalExecutions: number;
+  successCount: number;
+  failureCount: number;
+  consecutiveFailures: number;
+  averageDurationMs: number;
+  lastExecutedAt: string | null;
+}
 
 // ---------------------------------------------------------------------------
 // Skill Registration (full detail)
@@ -50,6 +102,18 @@ export interface SkillRegistration {
   hasFiles: boolean;
   createdAt: string;
   updatedAt?: string | null;
+
+  // Spec 022 — SOP lifecycle
+  version?: number;
+  sourceIncidentId?: string | null;
+  sourceAlertRuleId?: string | null;
+  reviewedBy?: string | null;
+  reviewComment?: string | null;
+  reviewedAt?: string | null;
+  validationResult?: SopValidationResult | null;
+
+  // Spec 025 — execution stats
+  executionStats?: SopExecutionStats | null;
 }
 
 // ---------------------------------------------------------------------------

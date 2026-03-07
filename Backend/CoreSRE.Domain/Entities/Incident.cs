@@ -63,6 +63,24 @@ public class Incident : BaseEntity
     /// <summary>事件时间线</summary>
     public List<IncidentTimelineVO> Timeline { get; private set; } = [];
 
+    /// <summary>Post-mortem 标注（Spec 023）</summary>
+    public PostMortemAnnotationVO? PostMortem { get; private set; }
+
+    /// <summary>解析后的 SOP 步骤定义列表（Spec 024）</summary>
+    public List<SopStepDefinition>? SopSteps { get; private set; }
+
+    /// <summary>步骤执行记录（Spec 024）</summary>
+    public List<SopStepExecutionVO> StepExecutions { get; private set; } = [];
+
+    /// <summary>步骤间输出传递（Spec 024）</summary>
+    public Dictionary<int, JsonElement>? StepOutputs { get; private set; }
+
+    /// <summary>降级前的原始链路（Spec 025）</summary>
+    public IncidentRoute? FallbackFrom { get; private set; }
+
+    /// <summary>降级原因描述（Spec 025）</summary>
+    public string? FallbackReason { get; private set; }
+
     private Incident() { } // EF Core
 
     /// <summary>创建 SOP 执行链路的 Incident</summary>
@@ -187,6 +205,53 @@ public class Incident : BaseEntity
     public void Escalate(string reason)
     {
         AddTimelineEvent(TimelineEventType.Escalated, $"已上报: {reason}");
+    }
+
+    /// <summary>设置 Post-mortem 标注（Spec 023）</summary>
+    public void SetPostMortem(PostMortemAnnotationVO postMortem)
+    {
+        ArgumentNullException.ThrowIfNull(postMortem);
+
+        if (Status is not IncidentStatus.Resolved and not IncidentStatus.Closed)
+            throw new InvalidOperationException(
+                $"Cannot annotate post-mortem for an Incident in '{Status}' status. Must be Resolved or Closed.");
+
+        PostMortem = postMortem;
+        AddTimelineEvent(TimelineEventType.StatusChanged,
+            $"Post-mortem 标注已提交 (RCA: {postMortem.RcaAccuracy})",
+            postMortem.ActualRootCause);
+    }
+
+    /// <summary>设置 SOP 步骤定义列表（Spec 024）</summary>
+    public void SetSopSteps(List<SopStepDefinition> steps)
+    {
+        SopSteps = steps;
+        StepExecutions = steps.Select(s => SopStepExecutionVO.CreatePending(s.StepNumber)).ToList();
+        StepOutputs = new Dictionary<int, JsonElement>();
+    }
+
+    /// <summary>更新某步骤的执行记录（Spec 024）</summary>
+    public void UpdateStepExecution(int stepNumber, SopStepExecutionVO execution)
+    {
+        var index = StepExecutions.FindIndex(s => s.StepNumber == stepNumber);
+        if (index >= 0)
+            StepExecutions[index] = execution;
+    }
+
+    /// <summary>记录步骤输出（Spec 024）</summary>
+    public void SetStepOutput(int stepNumber, JsonElement output)
+    {
+        StepOutputs ??= new Dictionary<int, JsonElement>();
+        StepOutputs[stepNumber] = output;
+    }
+
+    /// <summary>SOP 执行失败后降级到 RCA（Spec 025）</summary>
+    public void FallbackToRca(string reason)
+    {
+        FallbackFrom = Route;
+        FallbackReason = reason;
+        Route = IncidentRoute.FallbackRca;
+        AddTimelineEvent(TimelineEventType.SopFallbackToRca, $"SOP 执行降级到 RCA: {reason}");
     }
 
     /// <summary>状态流转合法性校验</summary>
