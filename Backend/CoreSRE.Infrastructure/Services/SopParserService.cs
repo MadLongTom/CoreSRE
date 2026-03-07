@@ -1,12 +1,13 @@
 using System.Text.RegularExpressions;
 using CoreSRE.Application.Alerts.Interfaces;
+using CoreSRE.Domain.ValueObjects;
 using Microsoft.Extensions.Logging;
 
 namespace CoreSRE.Infrastructure.Services;
 
 /// <summary>
 /// 解析 LLM 生成的 SOP Markdown → SopParseResult。
-/// 提取 SOP 名称、描述、全文、引用的工具函数名。
+/// 提取 SOP 名称、描述、全文、引用的工具函数名、上下文初始化条目。
 /// </summary>
 public partial class SopParserService(ILogger<SopParserService> logger) : ISopParserService
 {
@@ -21,6 +22,14 @@ public partial class SopParserService(ILogger<SopParserService> logger) : ISopPa
     // 匹配 ## 适用条件 段
     [GeneratedRegex(@"##\s+适用条件\s*\n([\s\S]*?)(?=\n##\s|\z)", RegexOptions.None)]
     private static partial Regex ApplicabilityRegex();
+
+    // 匹配 ## 初始化上下文 段
+    [GeneratedRegex(@"##\s+初始化上下文\s*\n([\s\S]*?)(?=\n##\s|\z)", RegexOptions.None)]
+    private static partial Regex ContextInitSectionRegex();
+
+    // 匹配上下文初始化条目: - {category}: {expression} | {label} [| lookback={value}]
+    [GeneratedRegex(@"^-\s+(\w+):\s+(.+?)\s*\|\s*(.+?)(?:\s*\|\s*lookback=(\S+))?\s*$", RegexOptions.Multiline)]
+    private static partial Regex ContextInitItemRegex();
 
     public SopParseResult Parse(string sopMarkdown, string alertName)
     {
@@ -58,17 +67,48 @@ public partial class SopParserService(ILogger<SopParserService> logger) : ISopPa
             .Distinct()
             .ToList();
 
+        // 提取上下文初始化条目
+        var contextInitItems = ParseContextInitItems(sopMarkdown);
+
         logger.LogInformation(
-            "Parsed SOP '{Title}'. Found {ToolCount} tool references.",
-            title, toolRefs.Count);
+            "Parsed SOP '{Title}'. Found {ToolCount} tool references, {ContextCount} context init items.",
+            title, toolRefs.Count, contextInitItems.Count);
 
         return new SopParseResult
         {
             Name = ToKebabCase(title),
             Description = description,
             Content = sopMarkdown,
-            ReferencedToolNames = toolRefs
+            ReferencedToolNames = toolRefs,
+            ContextInitItems = contextInitItems
         };
+    }
+
+    /// <summary>
+    /// 从 SOP 的 ## 初始化上下文 段提取上下文初始化条目。
+    /// 格式: - {category}: {expression} | {label} [| lookback={value}]
+    /// </summary>
+    private static List<ContextInitItemVO> ParseContextInitItems(string sopMarkdown)
+    {
+        var sectionMatch = ContextInitSectionRegex().Match(sopMarkdown);
+        if (!sectionMatch.Success)
+            return [];
+
+        var sectionContent = sectionMatch.Groups[1].Value;
+        var items = new List<ContextInitItemVO>();
+
+        foreach (Match match in ContextInitItemRegex().Matches(sectionContent))
+        {
+            items.Add(new ContextInitItemVO
+            {
+                Category = match.Groups[1].Value,
+                Expression = match.Groups[2].Value.Trim(),
+                Label = match.Groups[3].Value.Trim(),
+                Lookback = match.Groups[4].Success ? match.Groups[4].Value : null
+            });
+        }
+
+        return items;
     }
 
     /// <summary>

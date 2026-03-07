@@ -176,6 +176,8 @@ public class MockAgentTests
             new Mock<ISkillRegistrationRepository>().Object,
             new Mock<IFileStorageService>().Object,
             new Mock<ITeamOrchestrator>().Object,
+            new Mock<IDataSourceQuerierFactory>().Object,
+            new Mock<IDataSourceRegistrationRepository>().Object,
             configuration,
             new Mock<ILogger<AgentResolverService>>().Object,
             new Mock<ILoggerFactory>().Object);

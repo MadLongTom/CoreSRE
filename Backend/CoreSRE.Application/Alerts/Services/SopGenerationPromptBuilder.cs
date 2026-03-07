@@ -16,19 +16,19 @@ public static class SopGenerationPromptBuilder
     {
         var labelsText = string.Join(", ", alertLabels.Select(kv => $"{kv.Key}={kv.Value}"));
 
-        return $"""
+        return $$"""
             ## 任务：根据团队故障分析对话，提炼 SOP
 
             以下是一次告警应急响应的完整对话记录。请从中提炼一份标准操作流程（SOP），
             使得未来再次发生相同告警时，单个 Agent 可以按此 SOP 独立执行故障处置。
 
             ### 告警信息
-            - 名称: {alertName}
-            - 标签: {labelsText}
-            - 根因: {rootCause ?? "未确定"}
+            - 名称: {{alertName}}
+            - 标签: {{labelsText}}
+            - 根因: {{rootCause ?? "未确定"}}
 
             ### 团队对话记录
-            {conversationHistory}
+            {{conversationHistory}}
 
             ---
 
@@ -36,7 +36,7 @@ public static class SopGenerationPromptBuilder
 
             请严格按以下 Markdown 格式输出 SOP：
 
-            # SOP: {alertName} 处置流程
+            # SOP: {{alertName}} 处置流程
 
             ## 适用条件
             - 告警标签匹配: (列出关键标签)
@@ -62,6 +62,14 @@ public static class SopGenerationPromptBuilder
 
             ## 回滚方案
             (如果修复操作导致更大问题，描述回滚步骤)
+
+            ## 初始化上下文
+            (列出执行此 SOP 前需要预查的数据源信息，每行格式: - {category}: {expression} | {label} [| lookback={value}])
+            (使用 ${alertLabel} 模板变量引用告警标签值，如 ${namespace}、${service})
+            举例:
+            - Metrics: up{namespace="${namespace}"} | 服务健康状态
+            - Logs: {namespace="${namespace}", service="${service}"} |= "error" | 最近错误日志 | lookback=30m
+            - Deployment: ${namespace} | 最近部署记录
             """;
     }
 }

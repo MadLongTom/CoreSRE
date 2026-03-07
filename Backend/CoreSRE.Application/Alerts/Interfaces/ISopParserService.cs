@@ -1,3 +1,5 @@
+using CoreSRE.Domain.ValueObjects;
+
 namespace CoreSRE.Application.Alerts.Interfaces;
 
 /// <summary>
@@ -16,6 +18,9 @@ public record SopParseResult
 
     /// <summary>SOP 中引用的工具/函数名列表</summary>
     public List<string> ReferencedToolNames { get; init; } = [];
+
+    /// <summary>SOP 中声明的上下文初始化条目（从 ## 初始化上下文 段提取）</summary>
+    public List<ContextInitItemVO> ContextInitItems { get; init; } = [];
 }
 
 /// <summary>

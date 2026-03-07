@@ -4,7 +4,7 @@
 
 import { ApiError } from "@/lib/api/agents";
 import type { ApiResult } from "@/types/agent";
-import type { AlertRuleHealth, CanaryReport } from "@/types/alert-rule";
+import type { AlertRuleHealth, CanaryReport, ContextInitItem, ContextInitResult } from "@/types/alert-rule";
 
 const TIMEOUT_MS = 15_000;
 
@@ -78,4 +78,21 @@ export async function getAlertRuleHealth(
 ): Promise<ApiResult<AlertRuleHealth>> {
   const res = await fetchWithTimeout(`/api/alert-rules/${id}/health`);
   return handleResponse<AlertRuleHealth>(res);
+}
+
+// ---------------------------------------------------------------------------
+// Context Preview (Spec 027)
+// ---------------------------------------------------------------------------
+
+/** POST /api/context/preview — preview context init query results */
+export async function previewContext(data: {
+  items: ContextInitItem[];
+  templateVariables?: Record<string, string>;
+}): Promise<ApiResult<ContextInitResult>> {
+  const res = await fetchWithTimeout("/api/context/preview", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  return handleResponse<ContextInitResult>(res);
 }

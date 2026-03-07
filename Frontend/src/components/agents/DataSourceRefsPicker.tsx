@@ -343,6 +343,28 @@ export default function DataSourceRefsPicker({
                             )}
                           </div>
                         )}
+
+                        {/* Enable mutations toggle (Spec 026) — for Deployment/Git datasources */}
+                        {isSelected &&
+                          (ds.category === "Deployment" || ds.category === "Git") && (
+                            <div className="pl-8 pr-2 pb-1">
+                              <button
+                                type="button"
+                                className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer px-1 py-0.5"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  toggleMutations(ds.id);
+                                }}
+                              >
+                                <div className="flex h-3.5 w-3.5 items-center justify-center">
+                                  {ref?.enableMutations && (
+                                    <Check className="h-3.5 w-3.5 text-primary" />
+                                  )}
+                                </div>
+                                ⚡ 启用变更操作（重启/扩容/回滚）
+                              </button>
+                            </div>
+                          )}
                       </div>
                     );
                   })}

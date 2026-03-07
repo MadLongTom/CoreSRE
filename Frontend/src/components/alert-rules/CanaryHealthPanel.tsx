@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Combobox, type ComboboxOption } from "@/components/ui/combobox";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -19,6 +19,8 @@ import {
   getAlertRuleHealth,
 } from "@/lib/api/alert-rules";
 import type { AlertRuleHealth, CanaryReport } from "@/types/alert-rule";
+import type { SkillRegistration } from "@/types/skill";
+import type { ApiResult } from "@/types/agent";
 
 interface Props {
   alertRuleId: string;
@@ -47,6 +49,27 @@ export function CanaryHealthPanel({
   const [report, setReport] = useState<CanaryReport | null>(null);
   const [health, setHealth] = useState<AlertRuleHealth | null>(null);
   const [loadingHealth, setLoadingHealth] = useState(false);
+  const [skills, setSkills] = useState<SkillRegistration[]>([]);
+
+  // Fetch skills for combobox
+  useEffect(() => {
+    fetch("/api/skills?pageSize=200")
+      .then((r) => r.json())
+      .then((result: ApiResult<{ items: SkillRegistration[]; totalCount: number }>) => {
+        if (result.success && result.data?.items) setSkills(result.data.items);
+      })
+      .catch(() => {});
+  }, []);
+
+  const skillOptions = useMemo<ComboboxOption[]>(
+    () =>
+      skills.map((s) => ({
+        value: s.id,
+        label: s.name,
+        description: s.category,
+      })),
+    [skills],
+  );
 
   // Fetch health on mount
   useEffect(() => {
@@ -247,12 +270,14 @@ export function CanaryHealthPanel({
         ) : (
           <div className="space-y-2">
             <div className="space-y-1">
-              <Label className="text-xs">新 SOP ID</Label>
-              <Input
-                className="h-8 text-sm font-mono"
+              <Label className="text-xs">新 SOP</Label>
+              <Combobox
+                options={skillOptions}
                 value={newCanarySopId}
-                onChange={(e) => setNewCanarySopId(e.target.value)}
-                placeholder="输入要测试的 SOP Skill ID"
+                onChange={setNewCanarySopId}
+                placeholder="选择要测试的 SOP"
+                searchPlaceholder="搜索 SOP…"
+                emptyText="未找到 SOP"
               />
             </div>
             <Button

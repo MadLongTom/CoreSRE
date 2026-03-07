@@ -143,6 +143,8 @@ export interface DataSourceRef {
   dataSourceId: string;
   /** Enabled function names. null/undefined = all functions */
   enabledFunctions?: string[] | null;
+  /** Spec 026: enable mutation tools (restart, scale, rollback) */
+  enableMutations?: boolean;
 }
 
 /** Maps to backend LlmConfigDto */

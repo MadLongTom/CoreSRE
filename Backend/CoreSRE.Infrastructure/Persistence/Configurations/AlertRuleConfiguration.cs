@@ -91,6 +91,11 @@ public class AlertRuleConfiguration : IEntityTypeConfiguration<AlertRule>
             .HasColumnName("health_details")
             .HasColumnType("jsonb");
 
+        builder.Property(e => e.ContextProviders)
+            .HasColumnName("context_providers")
+            .HasColumnType("jsonb")
+            .IsRequired();
+
         builder.Property(e => e.CreatedAt)
             .HasColumnName("created_at")
             .IsRequired();

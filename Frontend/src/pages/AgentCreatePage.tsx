@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router";
 import { ArrowLeft, Loader2, Plus, X, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -13,12 +13,14 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { Combobox, type ComboboxOption } from "@/components/ui/combobox";
 import LlmConfigSection from "@/components/agents/LlmConfigSection";
 import TeamConfigForm, {
   DEFAULT_TEAM_CONFIG,
 } from "@/components/agents/TeamConfigForm";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { createAgent, resolveAgentCard, ApiError } from "@/lib/api/agents";
+import { getWorkflows } from "@/lib/api/workflows";
 import type {
   AgentType,
   CreateAgentRequest,
@@ -29,6 +31,7 @@ import type {
   ResolvedAgentCard,
   TeamConfig,
 } from "@/types/agent";
+import type { WorkflowSummary } from "@/types/workflow";
 
 const TYPE_DESCRIPTIONS: Record<AgentType, string> = {
   A2A: "Agent-to-Agent 协议，通过 HTTP 端点暴露技能",
@@ -80,6 +83,26 @@ export default function AgentCreatePage() {
 
   // Workflow fields
   const [workflowRef, setWorkflowRef] = useState("");
+  const [workflows, setWorkflows] = useState<WorkflowSummary[]>([]);
+
+  // Fetch workflow list for combobox
+  useEffect(() => {
+    getWorkflows()
+      .then((result) => {
+        if (result.success && result.data) setWorkflows(result.data);
+      })
+      .catch(() => {});
+  }, []);
+
+  const workflowOptions = useMemo<ComboboxOption[]>(
+    () =>
+      workflows.map((w) => ({
+        value: w.id,
+        label: w.name,
+        description: w.status,
+      })),
+    [workflows],
+  );
 
   // Team fields
   const [teamConfig, setTeamConfig] = useState<TeamConfig>({
@@ -575,12 +598,14 @@ export default function AgentCreatePage() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="workflowRef">Workflow Ref</Label>
-                  <Input
-                    id="workflowRef"
+                  <Label htmlFor="workflowRef">Workflow</Label>
+                  <Combobox
+                    options={workflowOptions}
                     value={workflowRef}
-                    onChange={(e) => setWorkflowRef(e.target.value)}
-                    placeholder="Workflow GUID（可选）"
+                    onChange={setWorkflowRef}
+                    placeholder="选择 Workflow（可选）"
+                    searchPlaceholder="搜索 Workflow…"
+                    emptyText="未找到 Workflow"
                   />
                 </div>
               </CardContent>

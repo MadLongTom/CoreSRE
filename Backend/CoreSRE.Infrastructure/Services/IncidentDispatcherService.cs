@@ -92,6 +92,10 @@ public class IncidentDispatcherService(
                 session = await aiAgent.CreateSessionAsync(cancellationToken);
             }
 
+            // 3.5 设置 StateBag — SopContextInitProvider 读取
+            await PopulateContextInitStateBagAsync(
+                scope, session, sopId, alertLabels, incident.AlertRuleId, cancellationToken);
+
             // 4. 带超时执行 Agent（含人工介入循环）
             using var timeoutCts = new CancellationTokenSource(SopTimeout);
             using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
@@ -312,6 +316,59 @@ public class IncidentDispatcherService(
             await notifier.AgentProcessingChangedAsync(
                 incidentId, false, null, DateTime.UtcNow, cancellationToken);
             sessionTracker.UnregisterActive(incidentId);
+        }
+    }
+
+    /// <summary>
+    /// 将 AlertRule.ContextProviders 和 SOP.ContextInitItems 合并后写入 Session.StateBag，
+    /// 供 SopContextInitProvider 在 ProvideAIContextAsync 中读取并预查。
+    /// </summary>
+    private async Task PopulateContextInitStateBagAsync(
+        IServiceScope scope,
+        AgentSession session,
+        Guid sopId,
+        Dictionary<string, string> alertLabels,
+        Guid? alertRuleId,
+        CancellationToken ct)
+    {
+        try
+        {
+            var mergedItems = new List<ContextInitItemVO>();
+
+            // 从 AlertRule 加载 ContextProviders
+            if (alertRuleId.HasValue)
+            {
+                var alertRuleRepo = scope.ServiceProvider.GetRequiredService<IAlertRuleRepository>();
+                var alertRule = await alertRuleRepo.GetByIdAsync(alertRuleId.Value, ct);
+                if (alertRule?.ContextProviders is { Count: > 0 })
+                    mergedItems.AddRange(alertRule.ContextProviders);
+            }
+
+            // 从 SOP (SkillRegistration) 加载 ContextInitItems
+            var skillRepo = scope.ServiceProvider.GetRequiredService<ISkillRegistrationRepository>();
+            var sop = await skillRepo.GetByIdAsync(sopId, ct);
+            if (sop?.GetContextInitItems() is { Count: > 0 } sopItems)
+                mergedItems.AddRange(sopItems);
+
+            // 设置 StateBag
+            if (mergedItems.Count > 0)
+            {
+                session.StateBag.SetValue(
+                    SopContextInitProvider.ContextInitItemsKey,
+                    new SopContextInitProvider.ContextInitState { Items = mergedItems });
+            }
+
+            session.StateBag.SetValue(
+                SopContextInitProvider.AlertLabelsKey,
+                new SopContextInitProvider.AlertLabelsState { Labels = alertLabels });
+
+            logger.LogInformation(
+                "Populated StateBag with {ItemCount} context init items for SOP {SopId}",
+                mergedItems.Count, sopId);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to populate StateBag for SOP context init. Continuing without pre-query.");
         }
     }
 

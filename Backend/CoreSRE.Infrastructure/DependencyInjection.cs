@@ -188,6 +188,10 @@ public static class DependencyInjection
         services.AddScoped<IDataSourceQuerier, GitLabQuerier>();
         services.AddScoped<IDataSourceQuerierFactory, DataSourceQuerierFactory>();
 
+        // DataSource Mutator services + factory (Spec 026: mutation operations)
+        services.AddScoped<IDataSourceMutator, KubernetesDataSourceMutator>();
+        services.AddScoped<IDataSourceMutatorFactory, DataSourceMutatorFactory>();
+
         // DataSource-to-AIFunction conversion factory (for ChatClient datasource binding)
         services.AddScoped<IDataSourceFunctionFactory, DataSourceFunctionFactory>();
 

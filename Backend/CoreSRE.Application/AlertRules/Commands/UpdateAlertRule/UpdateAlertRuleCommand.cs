@@ -1,5 +1,6 @@
 using CoreSRE.Application.AlertRules.DTOs;
 using CoreSRE.Application.Common.Models;
+using CoreSRE.Domain.ValueObjects;
 using MediatR;
 
 namespace CoreSRE.Application.AlertRules.Commands.UpdateAlertRule;
@@ -19,4 +20,5 @@ public record UpdateAlertRuleCommand : IRequest<Result<AlertRuleDto>>
     public List<string>? NotificationChannels { get; init; }
     public int? CooldownMinutes { get; init; }
     public Dictionary<string, string>? Tags { get; init; }
+    public List<ContextInitItemVO>? ContextProviders { get; init; }
 }

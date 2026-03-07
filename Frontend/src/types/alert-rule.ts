@@ -66,6 +66,9 @@ export interface AlertRuleDto {
   maxConsecutiveFailures: number;
   healthScore: number | null;
   healthDetails: AlertRuleHealth | null;
+
+  // Spec 027 — Context Init Providers
+  contextProviders: ContextInitItem[];
 }
 
 // ---------------------------------------------------------------------------
@@ -105,6 +108,36 @@ export interface CanaryReport {
 }
 
 // ---------------------------------------------------------------------------
+// Context Init (Spec 027) — maps to backend ContextInitItemVO / ContextInitResultVO
+// ---------------------------------------------------------------------------
+
+export const CONTEXT_INIT_CATEGORIES = ["Metrics", "Logs", "Tracing", "Alerting", "Deployment", "Git"] as const;
+export type ContextInitCategory = (typeof CONTEXT_INIT_CATEGORIES)[number];
+
+export interface ContextInitItem {
+  category: string;
+  expression: string;
+  label?: string;
+  lookback?: string;
+  extraParams?: Record<string, string>;
+}
+
+export interface ContextInitEntry {
+  label: string;
+  category: string;
+  success: boolean;
+  result?: string;
+  errorMessage?: string;
+  duration: string; // TimeSpan serialized
+}
+
+export interface ContextInitResult {
+  entries: ContextInitEntry[];
+  totalDuration: string;
+  hasAnySuccess: boolean;
+}
+
+// ---------------------------------------------------------------------------
 // Request DTOs (mirror backend CreateAlertRuleRequest / UpdateAlertRuleRequest)
 // ---------------------------------------------------------------------------
 
@@ -119,6 +152,7 @@ export interface CreateAlertRuleRequest {
   summarizerAgentId?: string;
   cooldownMinutes?: number;
   notificationChannels?: string[];
+  contextProviders?: ContextInitItem[];
 }
 
 export interface UpdateAlertRuleRequest {
@@ -133,4 +167,5 @@ export interface UpdateAlertRuleRequest {
   summarizerAgentId?: string;
   cooldownMinutes?: number;
   notificationChannels?: string[];
+  contextProviders?: ContextInitItem[];
 }

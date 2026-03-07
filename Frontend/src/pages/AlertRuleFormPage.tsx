@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { MatcherEditor } from "@/components/alert-rules/MatcherEditor";
+import { ContextInitEditor } from "@/components/alert-rules/ContextInitEditor";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -18,6 +19,7 @@ import { ArrowLeft, Loader2, Save } from "lucide-react";
 import type {
   AlertMatcher,
   AlertRuleDto,
+  ContextInitItem,
   CreateAlertRuleRequest,
   UpdateAlertRuleRequest,
 } from "@/types/alert-rule";
@@ -51,6 +53,7 @@ export default function AlertRuleFormPage() {
   const [responderAgentId, setResponderAgentId] = useState("");
   const [teamAgentId, setTeamAgentId] = useState("");
   const [summarizerAgentId, setSummarizerAgentId] = useState("");
+  const [contextProviders, setContextProviders] = useState<ContextInitItem[]>([]);
 
   // Reference data for dropdowns
   const [agents, setAgents] = useState<AgentSummary[]>([]);
@@ -149,6 +152,7 @@ export default function AlertRuleFormPage() {
         setResponderAgentId(r.responderAgentId ?? "");
         setTeamAgentId(r.teamAgentId ?? "");
         setSummarizerAgentId(r.summarizerAgentId ?? "");
+        setContextProviders(r.contextProviders ?? []);
       } else {
         setError(result.error ?? "规则不存在");
       }
@@ -178,6 +182,7 @@ export default function AlertRuleFormPage() {
           responderAgentId: responderAgentId || undefined,
           teamAgentId: teamAgentId || undefined,
           summarizerAgentId: summarizerAgentId || undefined,
+          contextProviders: contextProviders.length > 0 ? contextProviders : undefined,
         };
         const resp = await fetch(`${API}/${id}`, {
           method: "PUT",
@@ -201,6 +206,7 @@ export default function AlertRuleFormPage() {
           responderAgentId: responderAgentId || undefined,
           teamAgentId: teamAgentId || undefined,
           summarizerAgentId: summarizerAgentId || undefined,
+          contextProviders: contextProviders.length > 0 ? contextProviders : undefined,
         };
         const resp = await fetch(API, {
           method: "POST",
@@ -387,6 +393,12 @@ export default function AlertRuleFormPage() {
               </>
             )}
           </div>
+
+          {/* Context Init Providers (Spec 027) */}
+          <ContextInitEditor
+            value={contextProviders}
+            onChange={setContextProviders}
+          />
         </div>
       </div>
     </div>

@@ -60,6 +60,9 @@ public class UpdateAlertRuleCommandHandler(
             cooldownMinutes: request.CooldownMinutes,
             tags: request.Tags);
 
+        if (request.ContextProviders is not null)
+            rule.SetContextProviders(request.ContextProviders);
+
         await repository.UpdateAsync(rule, cancellationToken);
 
         var dto = mapper.Map<AlertRuleDto>(rule);

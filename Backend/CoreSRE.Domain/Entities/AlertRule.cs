@@ -1,3 +1,4 @@
+using System.Text.Json;
 using CoreSRE.Domain.Enums;
 using CoreSRE.Domain.ValueObjects;
 
@@ -60,6 +61,9 @@ public class AlertRule : BaseEntity
 
     /// <summary>健康评分明细</summary>
     public AlertRuleHealthVO? HealthDetails { get; private set; }
+
+    /// <summary>上下文初始化 Provider 列表（告警触发时自动预查询的数据）</summary>
+    public List<ContextInitItemVO> ContextProviders { get; private set; } = [];
 
     private AlertRule() { } // EF Core
 
@@ -180,6 +184,10 @@ public class AlertRule : BaseEntity
         HealthScore = health.Score;
         HealthDetails = health;
     }
+
+    /// <summary>设置上下文初始化 Provider 列表</summary>
+    public void SetContextProviders(List<ContextInitItemVO> providers) =>
+        ContextProviders = providers ?? [];
 
     /// <summary>
     /// 判断给定告警标签是否匹配本规则的所有 Matchers（AND 逻辑）。

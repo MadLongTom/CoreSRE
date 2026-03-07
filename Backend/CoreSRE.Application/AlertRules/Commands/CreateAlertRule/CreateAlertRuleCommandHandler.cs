@@ -38,6 +38,9 @@ public class CreateAlertRuleCommandHandler(
             cooldownMinutes: request.CooldownMinutes,
             tags: request.Tags);
 
+        if (request.ContextProviders is { Count: > 0 })
+            rule.SetContextProviders(request.ContextProviders);
+
         await repository.AddAsync(rule, cancellationToken);
 
         var dto = mapper.Map<AlertRuleDto>(rule);

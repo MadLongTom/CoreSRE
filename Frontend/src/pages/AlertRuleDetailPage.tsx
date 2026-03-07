@@ -265,6 +265,43 @@ export default function AlertRuleDetailPage() {
 
           <Separator />
 
+          {/* Context Init Providers (Spec 027) */}
+          {rule.contextProviders && rule.contextProviders.length > 0 && (
+            <>
+              <div>
+                <h3 className="mb-2 text-sm font-semibold">
+                  初始化上下文 ({rule.contextProviders.length})
+                </h3>
+                <div className="space-y-1.5">
+                  {rule.contextProviders.map((item, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-start gap-2 rounded-md bg-muted px-3 py-2 text-sm"
+                    >
+                      <Badge variant="outline" className="text-[10px] shrink-0 mt-0.5">
+                        {item.category}
+                      </Badge>
+                      <div className="flex-1 min-w-0">
+                        {item.label && (
+                          <span className="font-medium mr-2">{item.label}</span>
+                        )}
+                        <code className="text-xs font-mono text-muted-foreground break-all">
+                          {item.expression}
+                        </code>
+                        {item.lookback && (
+                          <span className="ml-2 text-xs text-muted-foreground">
+                            lookback={item.lookback}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <Separator />
+            </>
+          )}
+
           {/* Canary & Health (Spec 025) */}
           <CanaryHealthPanel
             alertRuleId={id!}

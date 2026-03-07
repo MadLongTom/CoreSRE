@@ -36,6 +36,12 @@ public partial class SopValidatorService(ILogger<SopValidatorService> logger) : 
     [GeneratedRegex(@"超时|Timeout|timeout", RegexOptions.Multiline)]
     private static partial Regex TimeoutDecl();
 
+    [GeneratedRegex(@"^##\s+初始化上下文", RegexOptions.Multiline)]
+    private static partial Regex ContextInitSection();
+
+    private static readonly HashSet<string> ValidCategories = new(StringComparer.OrdinalIgnoreCase)
+        { "Metrics", "Logs", "Tracing", "Alerting", "Deployment", "Git" };
+
     public SopValidationResultVO Validate(string sopContent, IReadOnlySet<string> registeredToolNames)
     {
         if (string.IsNullOrWhiteSpace(sopContent))
@@ -108,6 +114,13 @@ public partial class SopValidatorService(ILogger<SopValidatorService> logger) : 
                 warnings.Add($"Step {i + 1} 缺少 '超时' 声明");
         }
 
+        // 6. 上下文初始化段落检查
+        if (!ContextInitSection().IsMatch(sopContent))
+            warnings.Add("缺少推荐段落: '## 初始化上下文'（添加后可实现 Agent 启动时自动预查数据源）");
+
+        // 7. 上下文初始化条目校验
+        ValidateContextInitItems(sopContent, warnings);
+
         logger.LogInformation(
             "SOP validation completed: Errors={ErrorCount}, Warnings={WarningCount}, DangerousSteps={DangerousCount}",
             errors.Count, warnings.Count, dangerousSteps.Count);
@@ -115,5 +128,27 @@ public partial class SopValidatorService(ILogger<SopValidatorService> logger) : 
         return errors.Count > 0
             ? SopValidationResultVO.WithErrors(errors, warnings, dangerousSteps)
             : SopValidationResultVO.Valid(warnings, dangerousSteps);
+    }
+
+    /// <summary>
+    /// 校验上下文初始化条目中的 category 和 expression 占位符。
+    /// </summary>
+    private static void ValidateContextInitItems(string sopContent, List<string> warnings)
+    {
+        // 使用 SopParserService 的格式: - {category}: {expression} | {label}
+        var itemRegex = new Regex(@"^-\s+(\w+):\s+(.+?)\s*\|\s*.+$", RegexOptions.Multiline);
+        var matches = itemRegex.Matches(sopContent);
+
+        foreach (Match m in matches)
+        {
+            var category = m.Groups[1].Value;
+            var expression = m.Groups[2].Value;
+
+            if (!ValidCategories.Contains(category))
+                warnings.Add($"初始化上下文条目使用无效 category: '{category}'。有效值: {string.Join(", ", ValidCategories)}");
+
+            if (!expression.Contains("${"))
+                warnings.Add($"初始化上下文条目 '{category}' 的表达式未包含模板变量 (${{key}})，建议使用 ${{namespace}} 等占位符提高通用性");
+        }
     }
 }

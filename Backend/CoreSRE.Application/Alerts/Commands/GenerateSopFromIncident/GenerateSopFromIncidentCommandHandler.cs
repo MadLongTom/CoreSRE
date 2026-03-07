@@ -105,6 +105,10 @@ public class GenerateSopFromIncidentCommandHandler(
             sourceAlertRuleId: request.AlertRuleId,
             version: nextVersion);
 
+        // 5.5 存储从 SOP 中解析出的上下文初始化条目
+        if (parseResult.ContextInitItems is { Count: > 0 })
+            skill.SetContextInitItems(parseResult.ContextInitItems);
+
         await skillRepository.AddAsync(skill, cancellationToken);
 
         // 6. 执行结构化校验

@@ -34,6 +34,8 @@ public class AgentResolverService : IAgentResolver
     private readonly ISkillRegistrationRepository _skillRepo;
     private readonly IFileStorageService _fileStorage;
     private readonly ITeamOrchestrator _teamOrchestrator;
+    private readonly IDataSourceQuerierFactory _dataSourceQuerierFactory;
+    private readonly IDataSourceRegistrationRepository _dsRegRepo;
     private readonly IConfiguration _configuration;
     private readonly ILogger<AgentResolverService> _logger;
     private readonly ILoggerFactory _loggerFactory;
@@ -49,6 +51,8 @@ public class AgentResolverService : IAgentResolver
         ISkillRegistrationRepository skillRepo,
         IFileStorageService fileStorage,
         ITeamOrchestrator teamOrchestrator,
+        IDataSourceQuerierFactory dataSourceQuerierFactory,
+        IDataSourceRegistrationRepository dsRegRepo,
         IConfiguration configuration,
         ILogger<AgentResolverService> logger,
         ILoggerFactory loggerFactory)
@@ -62,6 +66,8 @@ public class AgentResolverService : IAgentResolver
         _skillRepo = skillRepo;
         _fileStorage = fileStorage;
         _teamOrchestrator = teamOrchestrator;
+        _dataSourceQuerierFactory = dataSourceQuerierFactory;
+        _dsRegRepo = dsRegRepo;
         _configuration = configuration;
         _logger = logger;
         _loggerFactory = loggerFactory;
@@ -397,24 +403,27 @@ public class AgentResolverService : IAgentResolver
             }
         }
 
-        // ── AIContextProviders 汇总 ── Skills + Memory ─────────────────
+        // ── AIContextProviders 汇总 ── Skills + ContextInit + Memory ───
         // Merge all configured AIContextProviders into a single list.
         // The S3AgentSkillsProvider injects skill tools + instructions via the
-        // AIContextProvider lifecycle; the memory provider handles semantic search.
+        // AIContextProvider lifecycle; SopContextInitProvider pre-queries data
+        // sources; the memory provider handles semantic search.
         {
             var aiContextProviders = new List<AIContextProvider>();
             if (skillsProvider is not null)
             {
                 aiContextProviders.Add(skillsProvider);
             }
+
+            // SopContextInitProvider — 始终注入，通过 StateBag 有无 key 决定是否执行
+            aiContextProviders.Add(new SopContextInitProvider(
+                _dataSourceQuerierFactory, _dsRegRepo, _loggerFactory));
+
             if (options.AIContextProviders is not null && options.AIContextProviders.Any())
             {
                 aiContextProviders.AddRange(options.AIContextProviders);
             }
-            if (aiContextProviders.Count > 0)
-            {
-                options.AIContextProviders = aiContextProviders;
-            }
+            options.AIContextProviders = aiContextProviders;
         }
 
         return new ResolvedAgent(chatClient.AsAIAgent(options), agent.LlmConfig);

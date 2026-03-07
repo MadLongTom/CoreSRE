@@ -1,4 +1,5 @@
 using CoreSRE.Domain.Enums;
+using CoreSRE.Domain.ValueObjects;
 
 namespace CoreSRE.Application.AlertRules.DTOs;
 
@@ -17,6 +18,7 @@ public class AlertRuleDto
     public List<string> NotificationChannels { get; set; } = [];
     public int CooldownMinutes { get; set; }
     public Dictionary<string, string>? Tags { get; set; }
+    public List<ContextInitItemVO>? ContextProviders { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
 }
@@ -41,6 +43,7 @@ public class CreateAlertRuleRequest
     public List<string>? NotificationChannels { get; set; }
     public int CooldownMinutes { get; set; } = 15;
     public Dictionary<string, string>? Tags { get; set; }
+    public List<ContextInitItemVO>? ContextProviders { get; set; }
 }
 
 public class UpdateAlertRuleRequest
@@ -57,4 +60,5 @@ public class UpdateAlertRuleRequest
     public List<string>? NotificationChannels { get; set; }
     public int? CooldownMinutes { get; set; }
     public Dictionary<string, string>? Tags { get; set; }
+    public List<ContextInitItemVO>? ContextProviders { get; set; }
 }

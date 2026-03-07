@@ -259,4 +259,34 @@ public partial class SkillRegistration : BaseEntity
 
     /// <summary>标记为效能降级</summary>
     public void MarkDegraded() => Status = SkillStatus.Degraded;
+
+    // ── 上下文初始化条目（Spec 027）──
+
+    private const string ContextInitMetadataKey = "contextInitItems";
+
+    /// <summary>从 Metadata 中读取上下文初始化条目（SOP 用）</summary>
+    public List<ContextInitItemVO>? GetContextInitItems()
+    {
+        if (Metadata is null || !Metadata.TryGetValue(ContextInitMetadataKey, out var json))
+            return null;
+
+        try
+        {
+            return System.Text.Json.JsonSerializer.Deserialize<List<ContextInitItemVO>>(json);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>将上下文初始化条目存入 Metadata（由 SopParserService 提取后调用）</summary>
+    public void SetContextInitItems(List<ContextInitItemVO> items)
+    {
+        Metadata ??= new();
+        if (items is { Count: > 0 })
+            Metadata[ContextInitMetadataKey] = System.Text.Json.JsonSerializer.Serialize(items);
+        else
+            Metadata.Remove(ContextInitMetadataKey);
+    }
 }

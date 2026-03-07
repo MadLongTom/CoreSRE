@@ -19,15 +19,18 @@ public sealed class DataSourceFunctionFactory : IDataSourceFunctionFactory
 {
     private readonly IDataSourceRegistrationRepository _repository;
     private readonly IDataSourceQuerierFactory _querierFactory;
+    private readonly IDataSourceMutatorFactory _mutatorFactory;
     private readonly ILogger<DataSourceFunctionFactory> _logger;
 
     public DataSourceFunctionFactory(
         IDataSourceRegistrationRepository repository,
         IDataSourceQuerierFactory querierFactory,
+        IDataSourceMutatorFactory mutatorFactory,
         ILogger<DataSourceFunctionFactory> logger)
     {
         _repository = repository;
         _querierFactory = querierFactory;
+        _mutatorFactory = mutatorFactory;
         _logger = logger;
     }
 
@@ -57,11 +60,28 @@ public sealed class DataSourceFunctionFactory : IDataSourceFunctionFactory
                 var querier = _querierFactory.GetQuerier(ds.Product);
                 var generatedFunctions = GenerateFunctionsForDataSource(ds, querier, dsRef.EnabledFunctions);
                 functions.AddRange(generatedFunctions);
+
+                // Generate mutation tools if enabled
+                if (dsRef.EnableMutations)
+                {
+                    var mutator = _mutatorFactory.GetMutator(ds.Product);
+                    if (mutator is not null)
+                    {
+                        var mutationFunctions = GenerateMutationFunctions(ds, mutator, dsRef.EnabledFunctions);
+                        functions.AddRange(mutationFunctions);
+                    }
+                }
             }
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "Failed to create AIFunctions for DataSource '{Name}' (ID: {Id})", ds.Name, ds.Id);
             }
+        }
+
+        // Add correlated context tool when multiple data sources are bound
+        if (dataSources.Count >= 2)
+        {
+            functions.Add(CreateCorrelatedContextFunction(dataSources));
         }
 
         return functions;
@@ -113,7 +133,9 @@ public sealed class DataSourceFunctionFactory : IDataSourceFunctionFactory
                 {
                     var query = BuildTimeRangeQuery(expression, start, end, step);
                     var result = await querier.QueryAsync(ds, query);
-                    return JsonSerializer.Serialize(result.TimeSeries ?? []);
+                    return ResultTruncator.TruncateJsonArray(
+                        JsonSerializer.Serialize(result.TimeSeries ?? []),
+                        dataType: "samples");
                 },
                 new AIFunctionFactoryOptions
                 {
@@ -171,7 +193,9 @@ public sealed class DataSourceFunctionFactory : IDataSourceFunctionFactory
                         Pagination = limit.HasValue ? new PaginationVO { Limit = limit.Value } : null
                     };
                     var result = await querier.QueryAsync(ds, query);
-                    return JsonSerializer.Serialize(result.LogEntries ?? []);
+                    return ResultTruncator.TruncateJsonArray(
+                        JsonSerializer.Serialize(result.LogEntries ?? []),
+                        dataType: "log entries");
                 },
                 new AIFunctionFactoryOptions
                 {
@@ -208,7 +232,9 @@ public sealed class DataSourceFunctionFactory : IDataSourceFunctionFactory
                 {
                     var query = new DataSourceQueryVO { Expression = trace_id };
                     var result = await querier.QueryAsync(ds, query);
-                    return JsonSerializer.Serialize(result.Spans ?? []);
+                    return ResultTruncator.TruncateJsonArray(
+                        JsonSerializer.Serialize(result.Spans ?? []),
+                        dataType: "spans");
                 },
                 new AIFunctionFactoryOptions
                 {
@@ -240,7 +266,9 @@ public sealed class DataSourceFunctionFactory : IDataSourceFunctionFactory
                         Pagination = limit.HasValue ? new PaginationVO { Limit = limit.Value } : null
                     };
                     var result = await querier.QueryAsync(ds, query);
-                    return JsonSerializer.Serialize(result.Spans ?? []);
+                    return ResultTruncator.TruncateJsonArray(
+                        JsonSerializer.Serialize(result.Spans ?? []),
+                        dataType: "traces");
                 },
                 new AIFunctionFactoryOptions
                 {
@@ -450,6 +478,216 @@ public sealed class DataSourceFunctionFactory : IDataSourceFunctionFactory
         ];
     }
 
+    // ─── Mutation Tools ────────────────────────────────────────────────────
+
+    private List<AIFunction> GenerateMutationFunctions(
+        DataSourceRegistration ds, IDataSourceMutator mutator, List<string>? enabledFunctions)
+    {
+        var safeName = ds.Name.Replace(" ", "_").Replace("-", "_").ToLowerInvariant();
+        var functions = new List<AIFunction>();
+
+        if (ds.Category == DataSourceCategory.Deployment)
+        {
+            functions.AddRange(GenerateK8sMutationFunctions(ds, mutator, safeName));
+        }
+
+        // Apply EnabledFunctions filter to mutation tools too
+        if (enabledFunctions is { Count: > 0 })
+        {
+            var enabledSet = new HashSet<string>(enabledFunctions, StringComparer.OrdinalIgnoreCase);
+            functions = functions.Where(f => enabledSet.Contains(f.Name)).ToList();
+        }
+
+        return functions;
+    }
+
+    private List<AIFunction> GenerateK8sMutationFunctions(
+        DataSourceRegistration ds, IDataSourceMutator mutator, string safeName)
+    {
+        return
+        [
+            AIFunctionFactory.Create(
+                async (
+                    [Description("Kubernetes namespace (e.g. 'demo-app', 'default').")] string ns,
+                    [Description("Pod name to restart (e.g. 'order-service-6bb647cc8-2mxvj').")] string pod
+                ) =>
+                {
+                    var mutation = new DataSourceMutationVO
+                    {
+                        Operation = "restart_pod",
+                        Namespace = ns,
+                        ResourceName = pod,
+                        ResourceKind = "Pod"
+                    };
+                    var result = await mutator.ExecuteAsync(ds, mutation);
+                    return JsonSerializer.Serialize(result);
+                },
+                new AIFunctionFactoryOptions
+                {
+                    Name = $"restart_pod_{safeName}",
+                    Description = $"[REQUIRES APPROVAL] Restart a Pod in {ds.Name} by deleting it (controller will recreate). This is a DESTRUCTIVE operation that requires human approval.",
+                }),
+
+            AIFunctionFactory.Create(
+                async (
+                    [Description("Kubernetes namespace (e.g. 'demo-app', 'default').")] string ns,
+                    [Description("Deployment name to scale (e.g. 'order-service').")] string deployment,
+                    [Description("Target replica count (e.g. 3).")] int replicas
+                ) =>
+                {
+                    var mutation = new DataSourceMutationVO
+                    {
+                        Operation = "scale_deployment",
+                        Namespace = ns,
+                        ResourceName = deployment,
+                        ResourceKind = "Deployment",
+                        Parameters = new() { ["replicas"] = replicas.ToString() }
+                    };
+                    var result = await mutator.ExecuteAsync(ds, mutation);
+                    return JsonSerializer.Serialize(result);
+                },
+                new AIFunctionFactoryOptions
+                {
+                    Name = $"scale_deployment_{safeName}",
+                    Description = $"[REQUIRES APPROVAL] Scale a Deployment in {ds.Name} to the specified replica count. This is a DESTRUCTIVE operation that requires human approval.",
+                }),
+
+            AIFunctionFactory.Create(
+                async (
+                    [Description("Kubernetes namespace (e.g. 'demo-app', 'default').")] string ns,
+                    [Description("Deployment name to rollback (e.g. 'order-service').")] string deployment,
+                    [Description("Target revision number to rollback to. Use 0 for the previous revision.")] int revision
+                ) =>
+                {
+                    var mutation = new DataSourceMutationVO
+                    {
+                        Operation = "rollback_deployment",
+                        Namespace = ns,
+                        ResourceName = deployment,
+                        ResourceKind = "Deployment",
+                        Parameters = new() { ["revision"] = revision.ToString() }
+                    };
+                    var result = await mutator.ExecuteAsync(ds, mutation);
+                    return JsonSerializer.Serialize(result);
+                },
+                new AIFunctionFactoryOptions
+                {
+                    Name = $"rollback_deployment_{safeName}",
+                    Description = $"[REQUIRES APPROVAL] Rollback a Deployment in {ds.Name} to a previous revision. This is a DESTRUCTIVE operation that requires human approval.",
+                })
+        ];
+    }
+
+    // ─── Correlated Context Query ───────────────────────────────────────────
+
+    /// <summary>
+    /// 生成关联上下文查询工具 — 根据 namespace/service/时间范围从多个数据源并行查询诊断信息。
+    /// </summary>
+    public AIFunction CreateCorrelatedContextFunction(
+        IReadOnlyList<DataSourceRegistration> dataSources)
+    {
+        return AIFunctionFactory.Create(
+            async (
+                [Description("Kubernetes namespace to query across all data sources (e.g. 'demo-app').")] string ns,
+                [Description("Service name for more targeted queries (e.g. 'order-service'). Optional.")] string? service = null,
+                [Description("Time lookback window (e.g. '1h', '30m', '2h'). Defaults to '1h'.")] string? lookback = null
+            ) =>
+            {
+                var result = await QueryCorrelatedContextAsync(dataSources, ns, service, lookback ?? "1h");
+                return result;
+            },
+            new AIFunctionFactoryOptions
+            {
+                Name = "query_correlated_context",
+                Description = "Query correlated diagnostic context across multiple data sources (metrics, logs, k8s, git) for a given namespace and optional service. Returns a consolidated view of metrics, logs, pod status, and recent changes. Use this for quick end-to-end diagnosis."
+            });
+    }
+
+    private async Task<string> QueryCorrelatedContextAsync(
+        IReadOnlyList<DataSourceRegistration> dataSources,
+        string ns, string? service, string lookback)
+    {
+        var timeRange = ParseLookback(lookback);
+        var results = new Dictionary<string, object?>();
+        var tasks = new List<Task>();
+
+        foreach (var ds in dataSources)
+        {
+            try
+            {
+                var querier = _querierFactory.GetQuerier(ds.Product);
+                tasks.Add(QueryAndCollectAsync(ds, querier, ns, service, timeRange, results));
+            }
+            catch (Exception ex)
+            {
+                results[$"{ds.Category}_{ds.Name}"] = new { error = ex.Message };
+            }
+        }
+
+        await Task.WhenAll(tasks);
+
+        var json = JsonSerializer.Serialize(results, new JsonSerializerOptions { WriteIndented = true });
+        return ResultTruncator.TruncatePlainText(json, maxTokens: 8000);
+    }
+
+    private async Task QueryAndCollectAsync(
+        DataSourceRegistration ds, IDataSourceQuerier querier,
+        string ns, string? service, TimeRangeVO timeRange,
+        Dictionary<string, object?> results)
+    {
+        var key = $"{ds.Category.ToString().ToLowerInvariant()}";
+        try
+        {
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            var queryResult = ds.Category switch
+            {
+                DataSourceCategory.Metrics => await querier.QueryAsync(ds, new DataSourceQueryVO
+                {
+                    Expression = service is not null
+                        ? $"rate(http_requests_total{{namespace=\"{ns}\",service=\"{service}\"}}[5m])"
+                        : $"rate(http_requests_total{{namespace=\"{ns}\"}}[5m])",
+                    TimeRange = timeRange
+                }, cts.Token),
+                DataSourceCategory.Logs => await querier.QueryAsync(ds, new DataSourceQueryVO
+                {
+                    Expression = service is not null
+                        ? $"{{namespace=\"{ns}\",app=\"{service}\"}} |~ \"(?i)error|warn|fail\""
+                        : $"{{namespace=\"{ns}\"}} |~ \"(?i)error|warn|fail\"",
+                    TimeRange = timeRange,
+                    Pagination = new PaginationVO { Limit = 30 }
+                }, cts.Token),
+                DataSourceCategory.Deployment => await querier.QueryAsync(ds, new DataSourceQueryVO
+                {
+                    Expression = "kind=Pod",
+                    Filters = [new LabelFilterVO { Key = "namespace", Value = ns }]
+                }, cts.Token),
+                DataSourceCategory.Git => await querier.QueryAsync(ds, new DataSourceQueryVO
+                {
+                    Expression = "commits",
+                    TimeRange = timeRange,
+                    Pagination = new PaginationVO { Limit = 10 }
+                }, cts.Token),
+                _ => null
+            };
+
+            if (queryResult is not null)
+            {
+                results[key] = ds.Category switch
+                {
+                    DataSourceCategory.Metrics => queryResult.TimeSeries,
+                    DataSourceCategory.Logs => queryResult.LogEntries,
+                    DataSourceCategory.Deployment => queryResult.Resources,
+                    DataSourceCategory.Git => queryResult.Resources,
+                    _ => null
+                };
+            }
+        }
+        catch (Exception ex)
+        {
+            results[key] = new { error = ex.Message };
+        }
+    }
+
     // ─── Helpers ────────────────────────────────────────────────────────────
 
     private static DataSourceQueryVO BuildTimeRangeQuery(string expression, string? start, string? end, string? step)
@@ -479,6 +717,24 @@ public sealed class DataSourceFunctionFactory : IDataSourceFunctionFactory
             Start = startDt,
             End = endDt,
             Step = step
+        };
+    }
+
+    private static TimeRangeVO ParseLookback(string lookback)
+    {
+        var now = DateTime.UtcNow;
+        var duration = lookback switch
+        {
+            var lb when lb.EndsWith('m') && int.TryParse(lb[..^1], out var m) => TimeSpan.FromMinutes(m),
+            var lb when lb.EndsWith('h') && int.TryParse(lb[..^1], out var h) => TimeSpan.FromHours(h),
+            var lb when lb.EndsWith('d') && int.TryParse(lb[..^1], out var d) => TimeSpan.FromDays(d),
+            _ => TimeSpan.FromHours(1)
+        };
+
+        return new TimeRangeVO
+        {
+            Start = now - duration,
+            End = now
         };
     }
 }

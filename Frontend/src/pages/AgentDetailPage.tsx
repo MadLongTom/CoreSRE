@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams, useBlocker } from "react-router";
 import { ArrowLeft, Loader2, Pencil, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -19,8 +19,10 @@ import BoundToolsSection from "@/components/agents/BoundToolsSection";
 import TeamConfigForm from "@/components/agents/TeamConfigForm";
 import { DEFAULT_TEAM_CONFIG } from "@/components/agents/TeamConfigForm";
 import { DeleteAgentDialog } from "@/components/agents/DeleteAgentDialog";
+import { Combobox, type ComboboxOption } from "@/components/ui/combobox";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { getAgentById, updateAgent, ApiError } from "@/lib/api/agents";
+import { getWorkflows } from "@/lib/api/workflows";
 import type {
   AgentRegistration,
   AgentCard,
@@ -30,6 +32,7 @@ import type {
 } from "@/types/agent";
 import { TEAM_MODE_LABELS } from "@/types/agent";
 import type { TeamMode } from "@/types/agent";
+import type { WorkflowSummary } from "@/types/workflow";
 
 export default function AgentDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -57,6 +60,27 @@ export default function AgentDetailPage() {
 
   // Delete dialog
   const [showDelete, setShowDelete] = useState(false);
+
+  // Workflow options for combobox
+  const [workflows, setWorkflows] = useState<WorkflowSummary[]>([]);
+
+  useEffect(() => {
+    getWorkflows()
+      .then((result) => {
+        if (result.success && result.data) setWorkflows(result.data);
+      })
+      .catch(() => {});
+  }, []);
+
+  const workflowOptions = useMemo<ComboboxOption[]>(
+    () =>
+      workflows.map((w) => ({
+        value: w.id,
+        label: w.name,
+        description: w.status,
+      })),
+    [workflows],
+  );
 
   // Block navigation with unsaved changes
   const blocker = useBlocker(dirty && editing);
@@ -436,17 +460,22 @@ export default function AgentDetailPage() {
           </CardHeader>
           <CardContent>
             {editing ? (
-              <Input
+              <Combobox
+                options={workflowOptions}
                 value={editWorkflowRef}
-                onChange={(e) => {
-                  setEditWorkflowRef(e.target.value);
+                onChange={(val) => {
+                  setEditWorkflowRef(val);
                   markDirty();
                 }}
-                placeholder="Workflow GUID"
+                placeholder="选择 Workflow"
+                searchPlaceholder="搜索 Workflow…"
+                emptyText="未找到 Workflow"
               />
             ) : (
               <p className="text-sm font-mono">
-                {agent.workflowRef ?? "—"}
+                {agent.workflowRef
+                  ? workflows.find((w) => w.id === agent.workflowRef)?.name ?? agent.workflowRef
+                  : "—"}
               </p>
             )}
           </CardContent>

@@ -11,4 +11,7 @@ public sealed record DataSourceRefVO
 
     /// <summary>启用的函数名列表。null = 全部函数，否则只暴露列出的函数</summary>
     public List<string>? EnabledFunctions { get; init; }
+
+    /// <summary>是否启用变更工具（restart_pod, scale_deployment 等），默认 false</summary>
+    public bool EnableMutations { get; init; }
 }

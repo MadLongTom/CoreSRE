@@ -90,6 +90,7 @@ app.MapSandboxEndpoints();
 app.MapAlertRuleEndpoints();
 app.MapIncidentEndpoints();
 app.MapEvaluationEndpoints();
+app.MapContextEndpoints();
 
 // ===== SignalR Hub =====
 app.MapHub<WorkflowHub>("/hubs/workflow");

@@ -45,6 +45,8 @@ public class AgentResolverServiceTests
             new Mock<ISkillRegistrationRepository>().Object,
             new Mock<IFileStorageService>().Object,
             _teamOrchestratorMock.Object,
+            new Mock<IDataSourceQuerierFactory>().Object,
+            new Mock<IDataSourceRegistrationRepository>().Object,
             _configurationMock.Object,
             _loggerMock.Object,
             _loggerFactoryMock.Object);
