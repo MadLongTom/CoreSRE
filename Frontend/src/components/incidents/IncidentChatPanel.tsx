@@ -110,7 +110,7 @@ export function IncidentChatPanel({
       <div ref={scrollRef} className="flex-1 overflow-y-auto">
         {messages.length === 0 && !isAgentProcessing ? (
           <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-            等待 Agent 对话…
+            {isResolved ? "暂无对话记录" : "等待 Agent 对话…"}
           </div>
         ) : (
           <div className="flex flex-col gap-3 p-4">

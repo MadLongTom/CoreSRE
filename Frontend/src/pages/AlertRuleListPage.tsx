@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Table,
   TableBody,
@@ -11,7 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Loader2, Plus, Bell } from "lucide-react";
+import { Loader2, Plus, Bell, Trash2 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import type { AlertRuleDto } from "@/types/alert-rule";
 import type { ApiResult } from "@/types/agent";
@@ -23,6 +24,8 @@ export default function AlertRuleListPage() {
   const [rules, setRules] = useState<AlertRuleDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [deleting, setDeleting] = useState(false);
 
   const fetchRules = useCallback(async () => {
     setLoading(true);
@@ -65,16 +68,74 @@ export default function AlertRuleListPage() {
     }
   };
 
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleAll = () => {
+    if (selectedIds.size === rules.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(rules.map((r) => r.id)));
+    }
+  };
+
+  const handleBatchDelete = async () => {
+    if (selectedIds.size === 0) return;
+    if (!confirm(`确认删除选中的 ${selectedIds.size} 条规则？关联的 Incident 将一并删除。`)) return;
+    setDeleting(true);
+    try {
+      const resp = await fetch(`${API}/batch-delete`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: Array.from(selectedIds) }),
+      });
+      if (resp.ok) {
+        setSelectedIds(new Set());
+        await fetchRules();
+      } else {
+        const result = await resp.json().catch(() => null);
+        setError(result?.message ?? "批量删除失败");
+      }
+    } catch {
+      setError("网络错误");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   return (
     <div className="flex h-full flex-col">
       <PageHeader
         title="告警规则"
         leading={<Bell className="h-5 w-5" />}
         actions={
-          <Button size="sm" onClick={() => navigate("/alert-rules/new")}>
-            <Plus className="mr-1 h-3.5 w-3.5" />
-            创建规则
-          </Button>
+          <div className="flex items-center gap-2">
+            {selectedIds.size > 0 && (
+              <Button
+                size="sm"
+                variant="destructive"
+                onClick={handleBatchDelete}
+                disabled={deleting}
+              >
+                {deleting ? (
+                  <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Trash2 className="mr-1 h-3.5 w-3.5" />
+                )}
+                删除 ({selectedIds.size})
+              </Button>
+            )}
+            <Button size="sm" onClick={() => navigate("/alert-rules/new")}>
+              <Plus className="mr-1 h-3.5 w-3.5" />
+              创建规则
+            </Button>
+          </div>
         }
       />
 
@@ -96,6 +157,13 @@ export default function AlertRuleListPage() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-10">
+                  <Checkbox
+                    checked={rules.length > 0 && selectedIds.size === rules.length}
+                    onCheckedChange={toggleAll}
+                    aria-label="全选"
+                  />
+                </TableHead>
                 <TableHead>名称</TableHead>
                 <TableHead>严重级</TableHead>
                 <TableHead>路由</TableHead>
@@ -111,6 +179,13 @@ export default function AlertRuleListPage() {
                   className="cursor-pointer"
                   onClick={() => navigate(`/alert-rules/${r.id}`)}
                 >
+                  <TableCell onClick={(e) => e.stopPropagation()}>
+                    <Checkbox
+                      checked={selectedIds.has(r.id)}
+                      onCheckedChange={() => toggleSelect(r.id)}
+                      aria-label={`选择 ${r.name}`}
+                    />
+                  </TableCell>
                   <TableCell className="font-medium">
                     <Link
                       to={`/alert-rules/${r.id}`}

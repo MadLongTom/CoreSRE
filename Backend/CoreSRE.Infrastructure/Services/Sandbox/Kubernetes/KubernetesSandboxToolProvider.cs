@@ -75,15 +75,9 @@ public sealed class KubernetesSandboxToolProvider : ISandboxToolProvider
             var sandboxInstance = _sandboxRepo.GetByIdAsync(llmConfig.SandboxInstanceId.Value)
                 .GetAwaiter().GetResult();
 
-            if (sandboxInstance is null || sandboxInstance.Status != Domain.Enums.SandboxStatus.Running
-                || string.IsNullOrEmpty(sandboxInstance.PodName))
-            {
-                _logger.LogWarning(
-                    "Persistent sandbox {SandboxId} not available, falling back to ephemeral Pod",
-                    llmConfig.SandboxInstanceId);
-                box = CreateEphemeralBox(agentId, conversationId, image, cpuMillicores, memoryMib, ns, boxType);
-            }
-            else
+            if (sandboxInstance is not null
+                && sandboxInstance.Status == Domain.Enums.SandboxStatus.Running
+                && !string.IsNullOrEmpty(sandboxInstance.PodName))
             {
                 _logger.LogInformation(
                     "Using persistent sandbox Pod={PodName} for Agent={AgentId}",
@@ -95,6 +89,14 @@ public sealed class KubernetesSandboxToolProvider : ISandboxToolProvider
                 box = KubernetesSandboxBox.Attach(
                     _k8sClient, sandboxInstance.K8sNamespace, sandboxInstance.PodName,
                     sandboxInstance.Image, _loggerFactory.CreateLogger<KubernetesSandboxBox>());
+            }
+            else
+            {
+                _logger.LogDebug(
+                    "Persistent sandbox {SandboxId} is not running (status={Status}), using ephemeral Pod",
+                    llmConfig.SandboxInstanceId,
+                    sandboxInstance?.Status.ToString() ?? "NotFound");
+                box = CreateEphemeralBox(agentId, conversationId, image, cpuMillicores, memoryMib, ns, boxType);
             }
         }
         else

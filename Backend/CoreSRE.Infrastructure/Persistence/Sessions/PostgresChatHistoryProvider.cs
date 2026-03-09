@@ -2,6 +2,7 @@ using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
 
 namespace CoreSRE.Infrastructure.Persistence.Sessions;
 
@@ -78,6 +79,70 @@ public sealed class PostgresChatHistoryProvider : ChatHistoryProvider
         return ValueTask.CompletedTask;
     }
 
+    /// <summary>
+    /// Ensures function call/result messages are persisted in the session state.
+    /// Call AFTER RunStreamingAsync and BEFORE SaveSessionAsync.
+    ///
+    /// FunctionInvokingChatClient may handle function calls internally during streaming
+    /// and not include them in the response messages passed to StoreChatHistoryAsync.
+    /// This method injects any missing tool messages collected from the streaming output.
+    /// </summary>
+    public void EnsureToolMessagesStored(AgentSession session, IReadOnlyList<ChatMessage> toolMessages)
+    {
+        if (toolMessages.Count == 0) return;
+
+        var state = _sessionState.GetOrInitializeState(session);
+
+        // Collect existing function call IDs to avoid duplicates
+        var existingCallIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var msg in state.Messages)
+        {
+            foreach (var c in msg.Contents ?? [])
+            {
+                if (c.Kind is "functionCall" or "functionResult" && c.CallId is not null)
+                    existingCallIds.Add(c.CallId);
+            }
+        }
+
+        var injected = 0;
+        foreach (var msg in toolMessages)
+        {
+            bool hasNewContent = msg.Contents.Any(c =>
+                (c is FunctionCallContent fc && !existingCallIds.Contains(fc.CallId ?? "")) ||
+                (c is FunctionResultContent fr && !existingCallIds.Contains(fr.CallId ?? "")));
+
+            if (hasNewContent)
+            {
+                // Find insertion point: just before the last assistant text-only message
+                // to maintain correct chronological order
+                var insertIdx = FindToolInsertionIndex(state.Messages);
+                state.Messages.Insert(insertIdx, ChatMessageToDto(msg));
+                injected++;
+            }
+        }
+
+        if (injected > 0)
+            _sessionState.SaveState(session, state);
+    }
+
+    /// <summary>Find the position to insert tool messages — before the last assistant text-only message.</summary>
+    private static int FindToolInsertionIndex(List<MessageDto> messages)
+    {
+        // Walk backwards to find the last assistant message that has ONLY text content (the final answer).
+        // Tool messages should be inserted before it.
+        for (int i = messages.Count - 1; i >= 0; i--)
+        {
+            var msg = messages[i];
+            if (msg.Role == "assistant" && msg.Contents is { Count: > 0 })
+            {
+                bool hasOnlyText = msg.Contents.All(c => c.Kind == "text");
+                if (hasOnlyText)
+                    return i;
+            }
+        }
+        return messages.Count; // fallback: append at end
+    }
+
     // ── Serialization ────────────────────────────────────────────────
 
     private static readonly JsonSerializerOptions s_serializerOptions = new()
@@ -85,6 +150,7 @@ public sealed class PostgresChatHistoryProvider : ChatHistoryProvider
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
         WriteIndented = false,
+        TypeInfoResolver = new DefaultJsonTypeInfoResolver(),
     };
 
     // ── ChatMessage ↔ DTO conversion ─────────────────────────────────

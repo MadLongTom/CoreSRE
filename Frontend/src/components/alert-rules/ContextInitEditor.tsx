@@ -44,6 +44,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   Alerting: "🔔 告警",
   Deployment: "🚀 部署",
   Git: "📂 代码",
+  CICD: "⚙️ CI/CD",
 };
 
 export function ContextInitEditor({ value, onChange }: ContextInitEditorProps) {

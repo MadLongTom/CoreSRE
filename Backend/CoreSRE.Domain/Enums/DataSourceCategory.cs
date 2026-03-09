@@ -20,6 +20,9 @@ public enum DataSourceCategory
     /// <summary>部署数据源 — Kubernetes, ArgoCD, Flux</summary>
     Deployment,
 
-    /// <summary>代码/SCM 数据源 — GitHub, GitLab, Azure DevOps</summary>
-    Git
+    /// <summary>代码/SCM 数据源 — GitHub, GitLab, Gitea, Azure DevOps</summary>
+    Git,
+
+    /// <summary>CI/CD 管线数据源 — Tekton, Jenkins</summary>
+    CICD
 }

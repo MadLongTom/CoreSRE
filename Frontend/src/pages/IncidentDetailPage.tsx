@@ -97,7 +97,26 @@ export default function IncidentDetailPage() {
     },
     onChatMessageReceived: (evt) => {
       if (evt.incidentId !== id) return;
-      setChatMessages((prev) => [...prev, evt]);
+      setChatMessages((prev) => {
+        // Accumulate consecutive chunks from the same role+agent into one message
+        // instead of creating a separate bubble for each streaming token.
+        const last = prev.length > 0 ? prev[prev.length - 1] : null;
+        if (
+          last &&
+          last.role === evt.role &&
+          last.agentName === evt.agentName &&
+          evt.role === "assistant"
+        ) {
+          const updated = [...prev];
+          updated[updated.length - 1] = {
+            ...last,
+            content: last.content + evt.content,
+            timestamp: evt.timestamp,
+          };
+          return updated;
+        }
+        return [...prev, evt];
+      });
     },
     onIncidentStatusChanged: (evt) => {
       if (evt.incidentId !== id) return;

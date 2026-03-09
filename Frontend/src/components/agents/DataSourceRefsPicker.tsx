@@ -15,6 +15,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   Alerting: "告警",
   Deployment: "部署",
   Git: "代码仓库",
+  CICD: "CI/CD 流水线",
 };
 
 // Category icons (emoji for simplicity)
@@ -25,6 +26,7 @@ const CATEGORY_ICONS: Record<string, string> = {
   Alerting: "🔔",
   Deployment: "🚀",
   Git: "📂",
+  CICD: "⚙️",
 };
 
 interface DataSourceRefsPickerProps {

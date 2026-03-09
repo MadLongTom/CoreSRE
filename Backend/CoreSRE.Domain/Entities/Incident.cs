@@ -33,6 +33,9 @@ public class Incident : BaseEntity
     /// <summary>处置链路</summary>
     public IncidentRoute Route { get; private set; }
 
+    /// <summary>处理本 Incident 的 Agent ID（AgentRegistration.Id）</summary>
+    public Guid? AgentId { get; private set; }
+
     /// <summary>Agent 对话 ID（链接到 Conversation 实体）</summary>
     public Guid? ConversationId { get; private set; }
 
@@ -145,6 +148,12 @@ public class Incident : BaseEntity
     public void AddTimelineEvent(IncidentTimelineVO timelineEvent)
     {
         Timeline.Add(timelineEvent);
+    }
+
+    /// <summary>关联处理 Agent</summary>
+    public void SetAgent(Guid agentId)
+    {
+        AgentId = agentId;
     }
 
     /// <summary>关联对话</summary>

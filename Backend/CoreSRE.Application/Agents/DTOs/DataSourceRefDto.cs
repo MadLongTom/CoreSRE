@@ -10,4 +10,7 @@ public class DataSourceRefDto
 
     /// <summary>启用的函数名列表。null = 全部函数</summary>
     public List<string>? EnabledFunctions { get; set; }
+
+    /// <summary>是否启用变更工具（restart_pod, scale_deployment, rollback_deployment 等），默认 false</summary>
+    public bool EnableMutations { get; set; }
 }

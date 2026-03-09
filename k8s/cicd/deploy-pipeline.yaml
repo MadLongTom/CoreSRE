@@ -1,0 +1,240 @@
+# ──────────── 部署 Job: 模拟 Tekton CD Pipeline ────────────
+# 使用 K8s Job (bitnami/kubectl) 来模拟 Tekton Pipeline 的效果:
+#   1. 读取 Gitea 仓库中的代码 (通过 ConfigMap 挂载)
+#   2. 用 kubectl patch 更新 demo-app/service-code ConfigMap
+#   3. 用 kubectl rollout restart 重启受影响的 Deployment
+#
+# 为什么使用 Job 而不是完整 Tekton:
+#   - Docker Desktop K8s 资源有限，完整 Tekton 需要 ~500MB RAM
+#   - Job 方案足以演示 GitOps CD 的核心概念
+#   - 同样实现了 "代码变更 → 自动部署" 的端到端流程
+# ────────────────────────────────────────────
+
+---
+# 正常版本代码 (用于回滚恢复)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: payment-service-normal
+  namespace: cicd
+data:
+  payment_service.py: |
+    import os, time, random, logging, json
+    from flask import Flask, request, jsonify
+    from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
+    from common import setup_logging, setup_tracing, SERVICE_NAME
+
+    setup_logging()
+    tracer = setup_tracing("payment-service")
+    logger = logging.getLogger("payment-service")
+
+    from opentelemetry.instrumentation.flask import FlaskInstrumentor
+    from opentelemetry import trace
+
+    app = Flask(__name__)
+    FlaskInstrumentor().instrument_app(app)
+
+    REQUEST_COUNT = Counter('http_requests_total', 'Total HTTP requests',
+                            ['method', 'endpoint', 'status', 'app'])
+    REQUEST_DURATION = Histogram('http_request_duration_seconds', 'HTTP request duration',
+                                 ['method', 'endpoint', 'app'],
+                                 buckets=[0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5])
+    PAYMENT_TOTAL = Counter('payments_total', 'Total payments processed', ['status', 'gateway', 'app'])
+
+    @app.route('/health')
+    def health():
+        return jsonify({"status": "ok", "service": "payment-service"})
+
+    @app.route('/metrics')
+    def metrics():
+        return generate_latest(), 200, {'Content-Type': CONTENT_TYPE_LATEST}
+
+    @app.route('/api/payments', methods=['POST'])
+    def process_payment():
+        start = time.time()
+        span = trace.get_current_span()
+        trace_id = format(span.get_span_context().trace_id, '032x') if span.get_span_context().is_valid else ""
+
+        try:
+            data = request.get_json(silent=True) or {}
+            amount = data.get("amount", 0)
+
+            # Simulate payment processing with occasional failures
+            time.sleep(random.uniform(0.02, 0.15))
+
+            if random.random() < 0.03:  # 3% failure rate (正常)
+                raise Exception("Payment gateway timeout")
+
+            gateway = random.choice(["stripe", "paypal", "alipay"])
+            PAYMENT_TOTAL.labels(status="success", gateway=gateway, app="payment-service").inc()
+
+            logger.info(f"Payment processed: amount={amount:.2f}, gateway={gateway}",
+                       extra={"trace_id": trace_id, "span_id": ""})
+
+            duration = time.time() - start
+            REQUEST_COUNT.labels(method='POST', endpoint='/api/payments', status='200', app='payment-service').inc()
+            REQUEST_DURATION.labels(method='POST', endpoint='/api/payments', app='payment-service').observe(duration)
+            return jsonify({"status": "approved", "gateway": gateway, "transaction_id": f"txn-{random.randint(10000,99999)}"})
+
+        except Exception as e:
+            duration = time.time() - start
+            PAYMENT_TOTAL.labels(status="failed", gateway="unknown", app="payment-service").inc()
+            REQUEST_COUNT.labels(method='POST', endpoint='/api/payments', status='500', app='payment-service').inc()
+            REQUEST_DURATION.labels(method='POST', endpoint='/api/payments', app='payment-service').observe(duration)
+            logger.error(f"Payment failed: {e}", extra={"trace_id": trace_id, "span_id": ""})
+            return jsonify({"error": str(e)}), 500
+
+    if __name__ == '__main__':
+        logger.info("Payment service starting on port 8080")
+        app.run(host='0.0.0.0', port=8080)
+
+---
+# ⚠️ 有 Bug 的版本: 支付服务 80% 故障率（模拟代码 Bug 引入）
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: payment-service-buggy
+  namespace: cicd
+data:
+  payment_service.py: |
+    import os, time, random, logging, json
+    from flask import Flask, request, jsonify
+    from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
+    from common import setup_logging, setup_tracing, SERVICE_NAME
+
+    setup_logging()
+    tracer = setup_tracing("payment-service")
+    logger = logging.getLogger("payment-service")
+
+    from opentelemetry.instrumentation.flask import FlaskInstrumentor
+    from opentelemetry import trace
+
+    app = Flask(__name__)
+    FlaskInstrumentor().instrument_app(app)
+
+    REQUEST_COUNT = Counter('http_requests_total', 'Total HTTP requests',
+                            ['method', 'endpoint', 'status', 'app'])
+    REQUEST_DURATION = Histogram('http_request_duration_seconds', 'HTTP request duration',
+                                 ['method', 'endpoint', 'app'],
+                                 buckets=[0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5])
+    PAYMENT_TOTAL = Counter('payments_total', 'Total payments processed', ['status', 'gateway', 'app'])
+
+    @app.route('/health')
+    def health():
+        return jsonify({"status": "ok", "service": "payment-service"})
+
+    @app.route('/metrics')
+    def metrics():
+        return generate_latest(), 200, {'Content-Type': CONTENT_TYPE_LATEST}
+
+    @app.route('/api/payments', methods=['POST'])
+    def process_payment():
+        start = time.time()
+        span = trace.get_current_span()
+        trace_id = format(span.get_span_context().trace_id, '032x') if span.get_span_context().is_valid else ""
+
+        try:
+            data = request.get_json(silent=True) or {}
+            amount = data.get("amount", 0)
+
+            time.sleep(random.uniform(0.02, 0.15))
+
+            # ⚠️ BUG: 开发人员误将 0.03 (3%) 改为 0.80 (80%),
+            #         导致支付服务大面积故障
+            if random.random() < 0.80:  # 80% failure rate ← BUG!
+                raise Exception("Payment gateway timeout")
+
+            gateway = random.choice(["stripe", "paypal", "alipay"])
+            PAYMENT_TOTAL.labels(status="success", gateway=gateway, app="payment-service").inc()
+
+            logger.info(f"Payment processed: amount={amount:.2f}, gateway={gateway}",
+                       extra={"trace_id": trace_id, "span_id": ""})
+
+            duration = time.time() - start
+            REQUEST_COUNT.labels(method='POST', endpoint='/api/payments', status='200', app='payment-service').inc()
+            REQUEST_DURATION.labels(method='POST', endpoint='/api/payments', app='payment-service').observe(duration)
+            return jsonify({"status": "approved", "gateway": gateway, "transaction_id": f"txn-{random.randint(10000,99999)}"})
+
+        except Exception as e:
+            duration = time.time() - start
+            PAYMENT_TOTAL.labels(status="failed", gateway="unknown", app="payment-service").inc()
+            REQUEST_COUNT.labels(method='POST', endpoint='/api/payments', status='500', app='payment-service').inc()
+            REQUEST_DURATION.labels(method='POST', endpoint='/api/payments', app='payment-service').observe(duration)
+            logger.error(f"Payment failed: {e}", extra={"trace_id": trace_id, "span_id": ""})
+            return jsonify({"error": str(e)}), 500
+
+    if __name__ == '__main__':
+        logger.info("Payment service starting on port 8080")
+        app.run(host='0.0.0.0', port=8080)
+
+---
+# 部署 buggy 版本的 Job — 模拟 CI/CD pipeline 将有 bug 的代码部署到线上
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: deploy-buggy-payment
+  namespace: cicd
+spec:
+  backoffLimit: 1
+  ttlSecondsAfterFinished: 300
+  template:
+    metadata:
+      labels:
+        app: tekton-deploy
+    spec:
+      serviceAccountName: tekton-deployer
+      restartPolicy: Never
+      containers:
+        - name: deployer
+          image: bitnami/kubectl:latest
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+              echo "=== CI/CD Pipeline: Deploying payment-service (buggy version) ==="
+              echo ""
+              echo "[Step 1] Reading buggy payment_service.py from mounted ConfigMap ..."
+              cat /buggy-code/payment_service.py | head -5
+              echo "  ... (truncated)"
+              echo "  ✓ Buggy code loaded"
+              echo ""
+
+              echo "[Step 2] Patching service-code ConfigMap in demo-app namespace ..."
+              # 读取目标 ConfigMap，替换 payment_service.py 字段，然后 replace
+              kubectl get configmap service-code -n demo-app -o json > /tmp/cm.json
+              # 使用 sed 不可靠(多行)，用 kubectl create --dry-run 再 apply
+              # 更简单的方式: 直接用 kubectl patch (strategic merge)
+              # 但 ConfigMap data 字段 patch 需要特殊处理。
+              # 最稳妥: 导出 → 修改 → replace
+              BUGGY_CODE=$(cat /buggy-code/payment_service.py)
+              kubectl create configmap service-code \
+                --from-file=requirements.txt=<(kubectl get configmap service-code -n demo-app -o jsonpath='{.data.requirements\.txt}') \
+                --from-file=common.py=<(kubectl get configmap service-code -n demo-app -o jsonpath='{.data.common\.py}') \
+                --from-file=order_service.py=<(kubectl get configmap service-code -n demo-app -o jsonpath='{.data.order_service\.py}') \
+                --from-file=payment_service.py=/buggy-code/payment_service.py \
+                --from-file=inventory_service.py=<(kubectl get configmap service-code -n demo-app -o jsonpath='{.data.inventory_service\.py}') \
+                --from-file=traffic_generator.py=<(kubectl get configmap service-code -n demo-app -o jsonpath='{.data.traffic_generator\.py}') \
+                -n demo-app --dry-run=client -o yaml | kubectl apply -f -
+              echo "  ✓ ConfigMap patched with buggy code"
+              echo ""
+
+              echo "[Step 3] Rolling out restart for payment-service ..."
+              kubectl rollout restart deployment/payment-service -n demo-app
+              echo "  ✓ Rollout restart triggered"
+              echo ""
+
+              echo "[Step 4] Waiting for rollout to complete ..."
+              kubectl rollout status deployment/payment-service -n demo-app --timeout=120s
+              echo "  ✓ Rollout complete — buggy payment-service is now live"
+              echo ""
+
+              echo "=== Pipeline Complete — buggy code deployed ==="
+              echo "  HighErrorRate alert should fire within ~2 minutes"
+          volumeMounts:
+            - name: buggy-code
+              mountPath: /buggy-code
+      volumes:
+        - name: buggy-code
+          configMap:
+            name: payment-service-buggy

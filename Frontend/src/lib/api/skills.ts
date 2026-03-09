@@ -14,6 +14,18 @@ import type {
 } from "@/types/skill";
 
 // ---------------------------------------------------------------------------
+// Path encoding helper
+// ---------------------------------------------------------------------------
+
+/**
+ * Encode a file key for use in a URL path, preserving '/' separators.
+ * encodeURIComponent would encode '/' to '%2F', breaking catch-all route matching.
+ */
+function encodeFileKey(key: string): string {
+  return key.split("/").map(encodeURIComponent).join("/");
+}
+
+// ---------------------------------------------------------------------------
 // Timeout helper
 // ---------------------------------------------------------------------------
 
@@ -150,7 +162,7 @@ export async function deleteSkillFile(
   id: string,
   fileKey: string,
 ): Promise<void> {
-  const encodedKey = encodeURIComponent(fileKey);
+  const encodedKey = encodeFileKey(fileKey);
   const res = await fetchWithTimeout(
     `/api/skills/${id}/files/${encodedKey}`,
     { method: "DELETE" },
@@ -165,7 +177,7 @@ export async function downloadSkillFileText(
   id: string,
   fileKey: string,
 ): Promise<string> {
-  const encodedKey = encodeURIComponent(fileKey);
+  const encodedKey = encodeFileKey(fileKey);
   const res = await fetch(`/api/skills/${id}/files/${encodedKey}`);
   if (!res.ok) {
     throw new ApiError(res.status, undefined, undefined, "Failed to download file");
@@ -175,7 +187,7 @@ export async function downloadSkillFileText(
 
 /** Build the URL for a skill file (used for image/pdf/office embeds) */
 export function getSkillFileUrl(id: string, fileKey: string): string {
-  const encodedKey = encodeURIComponent(fileKey);
+  const encodedKey = encodeFileKey(fileKey);
   return `/api/skills/${id}/files/${encodedKey}`;
 }
 

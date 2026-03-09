@@ -80,6 +80,7 @@ public class RegisterDataSourceCommandHandler
             DataSourceCategory.Alerting => DataSourceRegistration.CreateAlerting(request.Name, request.Description, product, connectionConfig),
             DataSourceCategory.Deployment => DataSourceRegistration.CreateDeployment(request.Name, request.Description, product, connectionConfig),
             DataSourceCategory.Git => DataSourceRegistration.CreateGit(request.Name, request.Description, product, connectionConfig),
+            DataSourceCategory.CICD => DataSourceRegistration.CreateCICD(request.Name, request.Description, product, connectionConfig),
             _ => throw new ArgumentOutOfRangeException(nameof(category))
         };
 

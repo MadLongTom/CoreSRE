@@ -56,6 +56,7 @@ public class DispatchSopExecutionCommandHandler(
         var conversation = Conversation.Create(agentId.Value);
         await conversationRepository.AddAsync(conversation, cancellationToken);
         incident.SetConversation(conversation.Id);
+        incident.SetAgent(agentId.Value);
         incident.TransitionTo(IncidentStatus.Investigating);
         incident.AddTimelineEvent(TimelineEventType.SopStarted,
             $"SOP 自动执行已启动 (Agent: {agentId}, SOP: {request.SopId})");

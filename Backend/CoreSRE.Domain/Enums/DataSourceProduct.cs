@@ -48,5 +48,12 @@ public enum DataSourceProduct
     GitHub,
 
     /// <summary>GitLab — 代码仓库与 CI/CD</summary>
-    GitLab
+    GitLab,
+
+    /// <summary>Gitea — 轻量级 Git 代码仓库</summary>
+    Gitea,
+
+    // ── CI/CD ──
+    /// <summary>Tekton — 云原生 CI/CD 管线</summary>
+    Tekton
 }

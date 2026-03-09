@@ -60,6 +60,9 @@ public class IncidentConfiguration : IEntityTypeConfiguration<Incident>
         builder.Property(e => e.ConversationId)
             .HasColumnName("conversation_id");
 
+        builder.Property(e => e.AgentId)
+            .HasColumnName("agent_id");
+
         builder.Property(e => e.SopId)
             .HasColumnName("sop_id");
 

@@ -55,6 +55,7 @@ public class DispatchRootCauseAnalysisCommandHandler(
         var conversation = Conversation.Create(teamAgentId.Value);
         await conversationRepository.AddAsync(conversation, cancellationToken);
         incident.SetConversation(conversation.Id);
+        incident.SetAgent(teamAgentId.Value);
         incident.TransitionTo(IncidentStatus.Investigating);
         incident.AddTimelineEvent(TimelineEventType.RcaStarted,
             $"根因分析已启动 (Team Agent: {teamAgentId})");

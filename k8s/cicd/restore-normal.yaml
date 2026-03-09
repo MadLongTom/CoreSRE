@@ -1,0 +1,57 @@
+# ──────────── 恢复正常版本的 Job ────────────
+# 回滚 Demo 后用于将 ConfigMap 恢复为正常代码
+# 用法: kubectl apply -f restore-normal.yaml
+# ────────────────────────────────────────────
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: restore-normal-payment
+  namespace: cicd
+spec:
+  backoffLimit: 1
+  ttlSecondsAfterFinished: 300
+  template:
+    metadata:
+      labels:
+        app: tekton-deploy
+    spec:
+      serviceAccountName: tekton-deployer
+      restartPolicy: Never
+      containers:
+        - name: deployer
+          image: bitnami/kubectl:latest
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+              echo "=== Restoring payment-service to normal version ==="
+
+              echo "[Step 1] Reading normal payment_service.py ..."
+              cat /normal-code/payment_service.py | head -5
+              echo "  ✓ Normal code loaded"
+
+              echo "[Step 2] Patching service-code ConfigMap ..."
+              kubectl create configmap service-code \
+                --from-file=requirements.txt=<(kubectl get configmap service-code -n demo-app -o jsonpath='{.data.requirements\.txt}') \
+                --from-file=common.py=<(kubectl get configmap service-code -n demo-app -o jsonpath='{.data.common\.py}') \
+                --from-file=order_service.py=<(kubectl get configmap service-code -n demo-app -o jsonpath='{.data.order_service\.py}') \
+                --from-file=payment_service.py=/normal-code/payment_service.py \
+                --from-file=inventory_service.py=<(kubectl get configmap service-code -n demo-app -o jsonpath='{.data.inventory_service\.py}') \
+                --from-file=traffic_generator.py=<(kubectl get configmap service-code -n demo-app -o jsonpath='{.data.traffic_generator\.py}') \
+                -n demo-app --dry-run=client -o yaml | kubectl apply -f -
+              echo "  ✓ ConfigMap restored to normal"
+
+              echo "[Step 3] Rolling out restart ..."
+              kubectl rollout restart deployment/payment-service -n demo-app
+              kubectl rollout status deployment/payment-service -n demo-app --timeout=120s
+              echo "  ✓ Normal version deployed"
+
+              echo "=== Restore Complete ==="
+          volumeMounts:
+            - name: normal-code
+              mountPath: /normal-code
+      volumes:
+        - name: normal-code
+          configMap:
+            name: payment-service-normal

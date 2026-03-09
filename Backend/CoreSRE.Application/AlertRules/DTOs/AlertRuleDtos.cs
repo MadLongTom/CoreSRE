@@ -62,3 +62,8 @@ public class UpdateAlertRuleRequest
     public Dictionary<string, string>? Tags { get; set; }
     public List<ContextInitItemVO>? ContextProviders { get; set; }
 }
+
+public class BatchDeleteAlertRulesRequest
+{
+    public List<Guid> Ids { get; set; } = [];
+}

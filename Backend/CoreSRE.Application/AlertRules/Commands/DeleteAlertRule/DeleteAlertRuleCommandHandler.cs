@@ -4,7 +4,9 @@ using MediatR;
 
 namespace CoreSRE.Application.AlertRules.Commands.DeleteAlertRule;
 
-public class DeleteAlertRuleCommandHandler(IAlertRuleRepository repository)
+public class DeleteAlertRuleCommandHandler(
+    IAlertRuleRepository repository,
+    IIncidentRepository incidentRepository)
     : IRequestHandler<DeleteAlertRuleCommand, Result<bool>>
 {
     public async Task<Result<bool>> Handle(
@@ -15,11 +17,10 @@ public class DeleteAlertRuleCommandHandler(IAlertRuleRepository repository)
         if (rule is null)
             return Result<bool>.NotFound($"AlertRule with ID '{request.Id}' not found.");
 
-        // 存在关联 Incident 时不允许删除
-        var hasIncidents = await repository.HasIncidentsAsync(request.Id, cancellationToken);
-        if (hasIncidents)
-            return Result<bool>.Conflict(
-                $"Cannot delete AlertRule '{request.Id}' because it has associated incidents.");
+        // 级联删除关联的 Incident
+        var incidents = await incidentRepository.GetByAlertRuleIdAsync(request.Id, cancellationToken);
+        foreach (var incident in incidents)
+            await incidentRepository.DeleteAsync(incident.Id, cancellationToken);
 
         await repository.DeleteAsync(request.Id, cancellationToken);
         return Result<bool>.Ok(true);

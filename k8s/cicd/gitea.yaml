@@ -1,0 +1,97 @@
+# ──────────────────── Gitea (轻量 Git 服务器) ────────────────────
+# 本地 Demo 用轻量 Git 服务器，用于模拟代码仓库和 Webhook 触发 CI/CD。
+# 比 GitLab 轻量得多，适合本地 K8s 演示。
+# ────────────────────────────────────────────────────────────────
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: gitea-data
+  namespace: cicd
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 1Gi
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gitea
+  namespace: cicd
+  labels:
+    app: gitea
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gitea
+  template:
+    metadata:
+      labels:
+        app: gitea
+    spec:
+      containers:
+        - name: gitea
+          image: gitea/gitea:1.22-rootless
+          env:
+            - name: GITEA__database__DB_TYPE
+              value: sqlite3
+            - name: GITEA__server__ROOT_URL
+              value: http://localhost:30301
+            - name: GITEA__server__HTTP_PORT
+              value: "3000"
+            - name: GITEA__service__DISABLE_REGISTRATION
+              value: "false"
+            - name: GITEA__service__REQUIRE_SIGNIN_VIEW
+              value: "false"
+            # 自动创建管理员
+            - name: GITEA__security__INSTALL_LOCK
+              value: "true"
+          ports:
+            - containerPort: 3000
+              name: http
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/gitea
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          readinessProbe:
+            httpGet:
+              path: /api/v1/version
+              port: 3000
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /api/v1/version
+              port: 3000
+            initialDelaySeconds: 30
+            periodSeconds: 30
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: gitea-data
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gitea
+  namespace: cicd
+spec:
+  type: NodePort
+  selector:
+    app: gitea
+  ports:
+    - port: 3000
+      targetPort: 3000
+      nodePort: 30301
+      name: http

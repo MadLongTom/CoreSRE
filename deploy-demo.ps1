@@ -32,11 +32,12 @@ function Write-Err($msg)  { Write-Host "  ✗ $msg" -ForegroundColor Red }
 
 # ──────────── TearDown ────────────
 if ($TearDown) {
-    Write-Step "Tearing down observability + demo-app ..."
+    Write-Step "Tearing down observability + demo-app + cicd ..."
     kubectl delete namespace demo-app --ignore-not-found 2>$null
     kubectl delete namespace observability --ignore-not-found 2>$null
-    kubectl delete clusterrole prometheus promtail --ignore-not-found 2>$null
-    kubectl delete clusterrolebinding prometheus promtail --ignore-not-found 2>$null
+    kubectl delete namespace cicd --ignore-not-found 2>$null
+    kubectl delete clusterrole prometheus promtail tekton-deployer --ignore-not-found 2>$null
+    kubectl delete clusterrolebinding prometheus promtail tekton-deployer --ignore-not-found 2>$null
     Write-Ok "All resources removed."
     exit 0
 }
@@ -83,7 +84,15 @@ if (-not $SkipDeploy) {
     kubectl apply -f (Join-Path $k8sDir "demo-app\services.yaml")
     Write-Ok "order-service, payment-service, inventory-service, traffic-generator deployed."
 
-    # 5. Wait for readiness
+    # 5. CICD namespace (Gitea + Tekton RBAC + Pipeline ConfigMaps)
+    Write-Step "Creating cicd namespace + deploying CI/CD stack ..."
+    kubectl apply -f (Join-Path $k8sDir "cicd\namespace.yaml")
+    kubectl apply -f (Join-Path $k8sDir "cicd\tekton-rbac.yaml")
+    kubectl apply -f (Join-Path $k8sDir "cicd\deploy-pipeline.yaml")
+    kubectl apply -f (Join-Path $k8sDir "cicd\gitea.yaml")
+    Write-Ok "Gitea + Tekton RBAC + deploy pipeline deployed."
+
+    # 6. Wait for readiness
     Write-Step "Waiting for observability pods (timeout 180s) ..."
     $obsPods = @("prometheus", "loki", "jaeger", "alertmanager")
     foreach ($pod in $obsPods) {
@@ -118,6 +127,8 @@ if (-not $SkipDeploy) {
     kubectl get pods -n observability -o wide 2>$null
     Write-Host ""
     kubectl get pods -n demo-app -o wide 2>$null
+    Write-Host ""
+    kubectl get pods -n cicd -o wide 2>$null
 }
 
 # ──────────── Seed DataSources into CoreSRE ────────────
@@ -256,11 +267,41 @@ Register-DataSource `
     }
 
 Write-Host ""
+# 6. Gitea (Git)
+Register-DataSource `
+    -Name "k8s-gitea" `
+    -Description "Local Kubernetes Gitea — lightweight Git server hosting demo-app source code in cicd namespace" `
+    -Category "Git" `
+    -Product "Gitea" `
+    -ConnectionConfig @{
+        baseUrl            = "http://127.0.0.1:30301"
+        authType           = "None"
+        timeoutSeconds     = 30
+        tlsSkipVerify      = $false
+        organization       = "demo"
+    }
+
+# 7. Tekton (CICD)
+Register-DataSource `
+    -Name "k8s-tekton" `
+    -Description "Local Kubernetes Tekton — CI/CD pipeline engine managing build and deploy PipelineRuns/TaskRuns in cicd namespace" `
+    -Category "CICD" `
+    -Product "Tekton" `
+    -ConnectionConfig @{
+        baseUrl        = "https://kubernetes.docker.internal:6443"
+        authType       = "None"
+        timeoutSeconds = 30
+        tlsSkipVerify  = $true
+        namespace      = "cicd"
+    }
+
+Write-Host ""
 Write-Step "All done! Access points:"
 Write-Host "  Prometheus:    http://localhost:30090" -ForegroundColor White
 Write-Host "  Loki:          http://localhost:30100" -ForegroundColor White
 Write-Host "  Jaeger UI:     http://localhost:30686" -ForegroundColor White
 Write-Host "  Alertmanager:  http://localhost:30093" -ForegroundColor White
+Write-Host "  Gitea:         http://localhost:30301" -ForegroundColor White
 Write-Host "  CoreSRE API:   $ApiBase/api/datasources" -ForegroundColor White
 
 # ──────────── Seed AlertRules ────────────

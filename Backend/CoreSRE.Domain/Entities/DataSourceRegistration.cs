@@ -48,7 +48,8 @@ public class DataSourceRegistration : BaseEntity
         [DataSourceCategory.Tracing] = [DataSourceProduct.Jaeger, DataSourceProduct.Tempo],
         [DataSourceCategory.Alerting] = [DataSourceProduct.Alertmanager, DataSourceProduct.PagerDuty],
         [DataSourceCategory.Deployment] = [DataSourceProduct.Kubernetes, DataSourceProduct.ArgoCD],
-        [DataSourceCategory.Git] = [DataSourceProduct.GitHub, DataSourceProduct.GitLab],
+        [DataSourceCategory.Git] = [DataSourceProduct.GitHub, DataSourceProduct.GitLab, DataSourceProduct.Gitea],
+        [DataSourceCategory.CICD] = [DataSourceProduct.Tekton],
     };
 
     /// <summary>验证 Category 与 Product 的组合是否合法</summary>
@@ -90,6 +91,11 @@ public class DataSourceRegistration : BaseEntity
     public static DataSourceRegistration CreateGit(
         string name, string? description, DataSourceProduct product, DataSourceConnectionVO connectionConfig)
         => Create(name, description, DataSourceCategory.Git, product, connectionConfig);
+
+    /// <summary>创建 CICD 类数据源</summary>
+    public static DataSourceRegistration CreateCICD(
+        string name, string? description, DataSourceProduct product, DataSourceConnectionVO connectionConfig)
+        => Create(name, description, DataSourceCategory.CICD, product, connectionConfig);
 
     private static DataSourceRegistration Create(
         string name,
@@ -215,6 +221,11 @@ public class DataSourceRegistration : BaseEntity
             [
                 $"list_commits_{safeName}",
                 $"list_pipelines_{safeName}"
+            ],
+            DataSourceCategory.CICD =>
+            [
+                $"list_pipeline_runs_{safeName}",
+                $"list_task_runs_{safeName}"
             ],
             _ => []
         };

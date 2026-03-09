@@ -132,10 +132,19 @@ public class GetConversationByIdQueryHandler : IRequestHandler<GetConversationBy
         }
 
         // ── ChatClientAgentSession path (or fallback) ────────────────
-        if (sessionData.TryGetProperty("chatHistoryProviderState", out var historyState)
-            && historyState.TryGetProperty("messages", out var topMsgs))
+        // Check both keys: framework default (InMemoryChatHistoryProvider) and our custom provider.
+        // The messages may be at the top level (legacy format) or nested under "stateBag"
+        // (ProviderSessionState stores per-provider state in AgentSession.StateBag).
+        if (TryFindChatHistoryMessages(sessionData, out var topMsgs))
         {
             return ParseMessageArray(topMsgs);
+        }
+
+        // AgentSession serializes provider state under "stateBag" → check there too
+        if (sessionData.TryGetProperty("stateBag", out var stateBag)
+            && TryFindChatHistoryMessages(stateBag, out var bagMsgs))
+        {
+            return ParseMessageArray(bagMsgs);
         }
 
         return [];
@@ -301,8 +310,8 @@ public class GetConversationByIdQueryHandler : IRequestHandler<GetConversationBy
 
     /// <summary>
     /// Navigate a PortableValue entry to its messages array.
-    ///   value.threadState.chatHistoryProviderState.messages[]
-    ///   OR threadState.chatHistoryProviderState.messages[] (unwrapped fallback)
+    ///   value.threadState.{chatHistoryKey}.messages[]
+    ///   OR threadState.{chatHistoryKey}.messages[] (unwrapped fallback)
     /// </summary>
     private static JsonElement? NavigateToMessages(JsonElement portableValue)
     {
@@ -314,12 +323,35 @@ public class GetConversationByIdQueryHandler : IRequestHandler<GetConversationBy
 
         if (!agentHostState.TryGetProperty("threadState", out var threadState))
             return null;
-        if (!threadState.TryGetProperty("chatHistoryProviderState", out var hist))
-            return null;
-        if (!hist.TryGetProperty("messages", out var msgs))
+        if (!TryFindChatHistoryMessages(threadState, out var msgs))
             return null;
 
         return msgs;
+    }
+
+    /// <summary>
+    /// Check both the framework default key ("chatHistoryProviderState", used by InMemoryChatHistoryProvider)
+    /// and our custom provider key ("PostgresChatHistoryProvider") when locating the messages array.
+    /// The key name matches the provider's StateKey which defaults to the class name.
+    /// </summary>
+    private static bool TryFindChatHistoryMessages(JsonElement parent, out JsonElement messages)
+    {
+        // Framework default key (InMemoryChatHistoryProvider)
+        if (parent.TryGetProperty("chatHistoryProviderState", out var hist1)
+            && hist1.TryGetProperty("messages", out messages))
+        {
+            return true;
+        }
+
+        // Our custom provider key (PostgresChatHistoryProvider)
+        if (parent.TryGetProperty("PostgresChatHistoryProvider", out var hist2)
+            && hist2.TryGetProperty("messages", out messages))
+        {
+            return true;
+        }
+
+        messages = default;
+        return false;
     }
 
     /// <summary>

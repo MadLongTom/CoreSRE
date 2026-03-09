@@ -1,0 +1,47 @@
+# ──────────── Tekton Pipelines ────────────
+# 简化版 Tekton 安装 — 仅包含 Demo 所需的 Pipeline/Task/Run CRDs
+# 生产环境请使用官方 release: https://storage.googleapis.com/tekton-releases/pipeline/latest/release.yaml
+#
+# 本文件定义:
+#   1. ServiceAccount + RBAC (用于更新 ConfigMap 和 rollout restart)
+#   2. Tekton Task: update-configmap-and-deploy
+#   3. Tekton Pipeline: deploy-demo-app
+# ────────────────────────────────────────────
+
+---
+# 用于 Tekton Task 在 demo-app namespace 操作的 ServiceAccount
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: tekton-deployer
+  namespace: cicd
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: tekton-deployer
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "patch", "update", "create"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "patch", "update"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: tekton-deployer
+subjects:
+  - kind: ServiceAccount
+    name: tekton-deployer
+    namespace: cicd
+roleRef:
+  kind: ClusterRole
+  name: tekton-deployer
+  apiGroup: rbac.authorization.k8s.io

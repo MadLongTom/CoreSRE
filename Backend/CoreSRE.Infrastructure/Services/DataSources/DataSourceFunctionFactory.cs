@@ -103,6 +103,7 @@ public sealed class DataSourceFunctionFactory : IDataSourceFunctionFactory
             DataSourceCategory.Alerting => GenerateAlertingFunctions(ds, querier, safeName),
             DataSourceCategory.Deployment => GenerateDeploymentFunctions(ds, querier, safeName),
             DataSourceCategory.Git => GenerateGitFunctions(ds, querier, safeName),
+            DataSourceCategory.CICD => GenerateCICDFunctions(ds, querier, safeName),
             _ => []
         };
 
@@ -411,6 +412,61 @@ public sealed class DataSourceFunctionFactory : IDataSourceFunctionFactory
                 {
                     Name = $"get_resource_{safeName}",
                     Description = $"Get a specific Kubernetes resource from {ds.Name} ({ds.Product}) by kind, name, and optional namespace."
+                }),
+
+            AIFunctionFactory.Create(
+                async (
+                    [Description("Deployment name to get rollout history for (e.g. 'payment-service', 'order-service').")] string deployment,
+                    [Description("Kubernetes namespace (e.g. 'demo-app', 'default').")] string ns
+                ) =>
+                {
+                    // Query ReplicaSets owned by this deployment
+                    var query = new DataSourceQueryVO
+                    {
+                        Expression = "kind=ReplicaSet",
+                        Filters =
+                        [
+                            new LabelFilterVO { Key = "namespace", Value = ns }
+                        ]
+                    };
+                    var result = await querier.QueryAsync(ds, query);
+
+                    // Filter to only ReplicaSets owned by this deployment (by label convention)
+                    var deploymentRSes = (result.Resources ?? [])
+                        .Where(r =>
+                        {
+                            // RS names follow pattern: {deployment}-{hash}
+                            if (r.Name.StartsWith(deployment + "-", StringComparison.OrdinalIgnoreCase))
+                                return true;
+                            // Also check labels
+                            return r.Labels?.TryGetValue("app", out var app) == true
+                                   && app.Equals(deployment, StringComparison.OrdinalIgnoreCase);
+                        })
+                        .Select(r => new
+                        {
+                            r.Name,
+                            Revision = r.Properties?.TryGetValue("revision", out var rev) == true ? rev?.ToString() : null,
+                            Image = r.Properties?.TryGetValue("image", out var img) == true ? img?.ToString() : null,
+                            Replicas = r.Properties?.TryGetValue("replicas", out var rep) == true ? rep : null,
+                            ReadyReplicas = r.Properties?.TryGetValue("readyReplicas", out var rr) == true ? rr : null,
+                            Active = r.Status == "Active",
+                            CreatedAt = r.UpdatedAt
+                        })
+                        .OrderByDescending(r => int.TryParse(r.Revision, out var rev) ? rev : 0)
+                        .ToList();
+
+                    return JsonSerializer.Serialize(new
+                    {
+                        deployment,
+                        ns,
+                        totalRevisions = deploymentRSes.Count,
+                        history = deploymentRSes
+                    });
+                },
+                new AIFunctionFactoryOptions
+                {
+                    Name = $"get_deployment_history_{safeName}",
+                    Description = $"Get the rollout history of a Kubernetes Deployment from {ds.Name}. Shows all revisions (ReplicaSets), their images, and which revision is currently active. Use this to identify which revision to rollback to."
                 })
         ];
     }
@@ -474,6 +530,62 @@ public sealed class DataSourceFunctionFactory : IDataSourceFunctionFactory
                 {
                     Name = $"list_pipelines_{safeName}",
                     Description = $"List CI/CD pipelines from {ds.Name} ({ds.Product}). Optional: repo (owner/repo), status filter, limit."
+                })
+        ];
+    }
+
+    // ─── CICD ───────────────────────────────────────────────────────────────
+
+    private List<AIFunction> GenerateCICDFunctions(DataSourceRegistration ds, IDataSourceQuerier querier, string safeName)
+    {
+        return
+        [
+            AIFunctionFactory.Create(
+                async (
+                    [Description("Kubernetes namespace where Tekton pipeline runs execute (e.g. 'cicd', 'default').")] string? ns = null,
+                    [Description("Maximum number of pipeline runs to return. Omit for default.")] int? limit = null
+                ) =>
+                {
+                    var additionalParams = new Dictionary<string, string>();
+                    if (!string.IsNullOrEmpty(ns)) additionalParams["namespace"] = ns;
+
+                    var query = new DataSourceQueryVO
+                    {
+                        Expression = "pipelineruns",
+                        Pagination = limit.HasValue ? new PaginationVO { Limit = limit.Value } : null,
+                        AdditionalParams = additionalParams.Count > 0 ? additionalParams : null
+                    };
+                    var result = await querier.QueryAsync(ds, query);
+                    return JsonSerializer.Serialize(result.Resources ?? []);
+                },
+                new AIFunctionFactoryOptions
+                {
+                    Name = $"list_pipeline_runs_{safeName}",
+                    Description = $"List Tekton PipelineRun resources from {ds.Name} ({ds.Product}). Shows pipeline execution status, start/completion times. Optional: namespace, limit."
+                }),
+
+            AIFunctionFactory.Create(
+                async (
+                    [Description("Kubernetes namespace where Tekton task runs execute (e.g. 'cicd', 'default').")] string? ns = null,
+                    [Description("Maximum number of task runs to return. Omit for default.")] int? limit = null
+                ) =>
+                {
+                    var additionalParams = new Dictionary<string, string>();
+                    if (!string.IsNullOrEmpty(ns)) additionalParams["namespace"] = ns;
+
+                    var query = new DataSourceQueryVO
+                    {
+                        Expression = "taskruns",
+                        Pagination = limit.HasValue ? new PaginationVO { Limit = limit.Value } : null,
+                        AdditionalParams = additionalParams.Count > 0 ? additionalParams : null
+                    };
+                    var result = await querier.QueryAsync(ds, query);
+                    return JsonSerializer.Serialize(result.Resources ?? []);
+                },
+                new AIFunctionFactoryOptions
+                {
+                    Name = $"list_task_runs_{safeName}",
+                    Description = $"List Tekton TaskRun resources from {ds.Name} ({ds.Product}). Shows task execution status and details. Optional: namespace, limit."
                 })
         ];
     }
@@ -667,6 +779,11 @@ public sealed class DataSourceFunctionFactory : IDataSourceFunctionFactory
                     TimeRange = timeRange,
                     Pagination = new PaginationVO { Limit = 10 }
                 }, cts.Token),
+                DataSourceCategory.CICD => await querier.QueryAsync(ds, new DataSourceQueryVO
+                {
+                    Expression = "pipelineruns",
+                    Pagination = new PaginationVO { Limit = 10 }
+                }, cts.Token),
                 _ => null
             };
 
@@ -678,6 +795,7 @@ public sealed class DataSourceFunctionFactory : IDataSourceFunctionFactory
                     DataSourceCategory.Logs => queryResult.LogEntries,
                     DataSourceCategory.Deployment => queryResult.Resources,
                     DataSourceCategory.Git => queryResult.Resources,
+                    DataSourceCategory.CICD => queryResult.Resources,
                     _ => null
                 };
             }

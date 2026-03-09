@@ -351,7 +351,8 @@ export default function DataSourceDetailPage() {
   }
 
   const isK8s = ds.product === "Kubernetes";
-  const isGit = ds.product === "GitHub" || ds.product === "GitLab";
+  const isGit = ds.product === "GitHub" || ds.product === "GitLab" || ds.product === "Gitea";
+  const isCICD = ds.product === "Tekton";
   const isMetrics = ds.category === "Metrics";
   const isLogs = ds.category === "Logs";
 
@@ -577,9 +578,9 @@ export default function DataSourceDetailPage() {
                     </div>
                   )}
 
-                  {(isK8s || isGit) && (
+                  {(isK8s || isGit || isCICD) && (
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                      {isK8s && (
+                      {(isK8s || isCICD) && (
                         <div className="space-y-2">
                           <Label>默认 Namespace</Label>
                           <Input
@@ -600,7 +601,7 @@ export default function DataSourceDetailPage() {
                     </div>
                   )}
 
-                  {isK8s && (
+                  {(isK8s || isCICD) && (
                     <div className="space-y-2">
                       <Label>KubeConfig (Base64，留空保持原有)</Label>
                       <Textarea
@@ -867,9 +868,11 @@ export default function DataSourceDetailPage() {
                           ? "kind=Deployment"
                           : isGit
                             ? "Commits"
-                            : isMetrics
-                              ? "up"
-                              : "{app=~\".+\"}"
+                            : isCICD
+                              ? "pipelinerun"
+                              : isMetrics
+                                ? "up"
+                                : "{app=~\".+\"}"
                       }
                       onKeyDown={(e) => {
                         if (e.key === "Enter") handleQuery();

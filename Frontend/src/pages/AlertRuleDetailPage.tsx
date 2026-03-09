@@ -92,14 +92,14 @@ export default function AlertRuleDetailPage() {
   }, []);
 
   const handleDelete = async () => {
-    if (!id || !confirm("确认删除此规则？")) return;
+    if (!id || !confirm("确认删除此规则？关联的 Incident 将一并删除。")) return;
     try {
       const resp = await fetch(`${API}/${id}`, { method: "DELETE" });
-      const result = await resp.json();
-      if (result.success) {
+      if (resp.ok) {
         navigate("/alert-rules");
       } else {
-        setError(result.error ?? "删除失败");
+        const result = await resp.json().catch(() => null);
+        setError(result?.message ?? "删除失败");
       }
     } catch {
       setError("网络错误");

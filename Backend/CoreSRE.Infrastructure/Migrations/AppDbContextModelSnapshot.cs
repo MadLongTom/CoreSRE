@@ -415,6 +415,10 @@ namespace CoreSRE.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<Guid?>("AgentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("agent_id");
+
                     b.Property<string>("AlertFingerprint")
                         .IsRequired()
                         .HasMaxLength(256)

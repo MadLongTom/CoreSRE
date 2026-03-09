@@ -162,6 +162,7 @@ export interface IncidentDetail {
   alertFingerprint: string | null;
   alertRuleId: string;
   conversationId: string | null;
+  agentId: string | null;
   rootCause: string | null;
   resolution: string | null;
   generatedSopId: string | null;

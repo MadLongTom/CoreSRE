@@ -127,6 +127,77 @@ public class GetConversationByIdQueryHandlerTests
     }
 
     [Fact]
+    public void ExtractMessages_PostgresChatHistoryProvider_Key_ReturnsMessages()
+    {
+        // PostgresChatHistoryProvider stores state under its own class name, not "chatHistoryProviderState"
+        var json = """
+        {
+            "PostgresChatHistoryProvider": {
+                "messages": [
+                    { "role": "user", "contents": [{ "kind": "text", "text": "查一下流量" }] },
+                    {
+                        "role": "assistant",
+                        "contents": [
+                            { "kind": "text", "text": "I'll check" },
+                            { "kind": "functionCall", "callId": "c1", "name": "query_metrics", "arguments": "{\"query\":\"rate(http_requests_total[5m])\"}" }
+                        ],
+                        "authorName": "ops-agent"
+                    },
+                    {
+                        "role": "tool",
+                        "contents": [
+                            { "kind": "functionResult", "callId": "c1", "result": "1.08" }
+                        ]
+                    },
+                    { "role": "assistant", "contents": [{ "kind": "text", "text": "当前 QPS 约 1.08" }], "authorName": "ops-agent" }
+                ]
+            }
+        }
+        """;
+        var sessionData = JsonDocument.Parse(json).RootElement;
+
+        var messages = InvokeExtractMessages(sessionData);
+
+        messages.Should().HaveCount(3); // user + assistant(fc) + assistant(text) — tool role is filtered
+        messages[0].Role.Should().Be("user");
+        messages[0].Content.Should().Be("查一下流量");
+        messages[1].Role.Should().Be("assistant");
+        messages[1].ToolCalls.Should().HaveCount(1);
+        messages[1].ToolCalls![0].ToolName.Should().Be("query_metrics");
+        messages[1].ToolCalls[0].Result.Should().Be("1.08");
+        messages[2].Role.Should().Be("assistant");
+        messages[2].Content.Should().Be("当前 QPS 约 1.08");
+    }
+
+    [Fact]
+    public void ExtractMessages_StateBag_Wrapped_PostgresChatHistoryProvider_ReturnsMessages()
+    {
+        // Actual DB format: ProviderSessionState stores under AgentSession.StateBag,
+        // which serializes as {"stateBag": {"PostgresChatHistoryProvider": {"messages": [...]}}}
+        var json = """
+        {
+            "stateBag": {
+                "PostgresChatHistoryProvider": {
+                    "messages": [
+                        { "role": "user", "contents": [{ "kind": "text", "text": "查一下流量" }] },
+                        { "role": "assistant", "contents": [{ "kind": "text", "text": "当前 QPS 约 1.08" }], "authorName": "ops-agent" }
+                    ]
+                }
+            }
+        }
+        """;
+        var sessionData = JsonDocument.Parse(json).RootElement;
+
+        var messages = InvokeExtractMessages(sessionData);
+
+        messages.Should().HaveCount(2);
+        messages[0].Role.Should().Be("user");
+        messages[0].Content.Should().Be("查一下流量");
+        messages[1].Role.Should().Be("assistant");
+        messages[1].Content.Should().Be("当前 QPS 约 1.08");
+    }
+
+    [Fact]
     public void ExtractMessages_ChatClient_ToolCallsWithResults_MatchedCorrectly()
     {
         var json = """

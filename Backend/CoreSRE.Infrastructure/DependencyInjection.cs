@@ -186,6 +186,8 @@ public static class DependencyInjection
         services.AddScoped<IDataSourceQuerier, ArgoCDQuerier>();
         services.AddScoped<IDataSourceQuerier, GitHubQuerier>();
         services.AddScoped<IDataSourceQuerier, GitLabQuerier>();
+        services.AddScoped<IDataSourceQuerier, GiteaQuerier>();
+        services.AddScoped<IDataSourceQuerier, TektonQuerier>();
         services.AddScoped<IDataSourceQuerierFactory, DataSourceQuerierFactory>();
 
         // DataSource Mutator services + factory (Spec 026: mutation operations)

@@ -23,6 +23,7 @@ public static class AlertRuleEndpoints
         group.MapGet("/{id:guid}", GetAlertRuleById);
         group.MapPut("/{id:guid}", UpdateAlertRule);
         group.MapDelete("/{id:guid}", DeleteAlertRule);
+        group.MapPost("/batch-delete", BatchDeleteAlertRules);
 
         // ── 金丝雀验证 & 健康评分（Spec 025）──
         group.MapPost("/{id:guid}/canary/start", StartCanary);
@@ -50,7 +51,8 @@ public static class AlertRuleEndpoints
             SummarizerAgentId = request.SummarizerAgentId,
             NotificationChannels = request.NotificationChannels,
             CooldownMinutes = request.CooldownMinutes,
-            Tags = request.Tags
+            Tags = request.Tags,
+            ContextProviders = request.ContextProviders
         };
 
         var result = await sender.Send(command);
@@ -116,7 +118,8 @@ public static class AlertRuleEndpoints
             SummarizerAgentId = request.SummarizerAgentId,
             NotificationChannels = request.NotificationChannels,
             CooldownMinutes = request.CooldownMinutes,
-            Tags = request.Tags
+            Tags = request.Tags,
+            ContextProviders = request.ContextProviders
         };
 
         var result = await sender.Send(command);
@@ -151,7 +154,26 @@ public static class AlertRuleEndpoints
             };
         }
 
-        return Results.NoContent();
+        return Results.Ok(result);
+    }
+
+    /// <summary>POST /api/alert-rules/batch-delete — 批量删除告警路由规则</summary>
+    private static async Task<IResult> BatchDeleteAlertRules(
+        BatchDeleteAlertRulesRequest request,
+        ISender sender)
+    {
+        var failed = new List<string>();
+        foreach (var id in request.Ids)
+        {
+            var result = await sender.Send(new DeleteAlertRuleCommand(id));
+            if (!result.Success)
+                failed.Add($"{id}: {result.Message}");
+        }
+
+        if (failed.Count > 0)
+            return Results.Ok(new { success = true, data = new { deleted = request.Ids.Count - failed.Count, failed } });
+
+        return Results.Ok(new { success = true, data = new { deleted = request.Ids.Count, failed = Array.Empty<string>() } });
     }
 
     // ── 金丝雀验证 & 健康评分（Spec 025）──

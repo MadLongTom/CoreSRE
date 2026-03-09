@@ -55,6 +55,7 @@ public class KubernetesQuerier : IDataSourceQuerier
             "daemonset" or "daemonsets" => await ListDaemonSetsAsync(client, ns, labelSelector, ct),
             "job" or "jobs" => await ListJobsAsync(client, ns, labelSelector, ct),
             "cronjob" or "cronjobs" => await ListCronJobsAsync(client, ns, labelSelector, ct),
+            "replicaset" or "replicasets" => await ListReplicaSetsAsync(client, ns, labelSelector, query.Pagination, ct),
             "event" or "events" => await ListEventsAsync(client, ns, labelSelector, ct),
             _ => await ListDeploymentsAsync(client, ns, labelSelector, query.Pagination, ct) // Default to deployments
         };
@@ -408,6 +409,36 @@ public class KubernetesQuerier : IDataSourceQuerier
             },
             UpdatedAt = c.Metadata.CreationTimestamp
         }).ToList();
+    }
+
+    private static async Task<List<ResourceVO>> ListReplicaSetsAsync(
+        k8s.Kubernetes client, string? ns, string? labelSelector, PaginationVO? pagination, CancellationToken ct)
+    {
+        var limit = pagination?.Limit ?? 100;
+        var rsList = ns is not null
+            ? await client.AppsV1.ListNamespacedReplicaSetAsync(ns, labelSelector: labelSelector, limit: limit, cancellationToken: ct)
+            : await client.AppsV1.ListReplicaSetForAllNamespacesAsync(labelSelector: labelSelector, limit: limit, cancellationToken: ct);
+
+        return rsList.Items
+            .OrderByDescending(rs => rs.Metadata.Annotations?.TryGetValue("deployment.kubernetes.io/revision", out var rev) == true
+                ? int.TryParse(rev, out var r) ? r : 0 : 0)
+            .Select(rs => new ResourceVO
+            {
+                Kind = "ReplicaSet",
+                Name = rs.Metadata.Name,
+                Namespace = rs.Metadata.NamespaceProperty,
+                Status = rs.Status?.ReadyReplicas > 0 ? "Active" : "Inactive",
+                Labels = rs.Metadata.Labels?.ToDictionary(kv => kv.Key, kv => kv.Value),
+                Properties = new Dictionary<string, object?>
+                {
+                    ["replicas"] = rs.Status?.Replicas,
+                    ["readyReplicas"] = rs.Status?.ReadyReplicas,
+                    ["availableReplicas"] = rs.Status?.AvailableReplicas,
+                    ["revision"] = rs.Metadata.Annotations?.TryGetValue("deployment.kubernetes.io/revision", out var rev) == true ? rev : null,
+                    ["image"] = rs.Spec?.Template?.Spec?.Containers?.FirstOrDefault()?.Image
+                },
+                UpdatedAt = rs.Metadata.CreationTimestamp
+            }).ToList();
     }
 
     private static async Task<List<ResourceVO>> ListEventsAsync(

@@ -34,6 +34,7 @@ public class IncidentDetailDto
     public string? AlertFingerprint { get; set; }
     public Guid AlertRuleId { get; set; }
     public Guid? ConversationId { get; set; }
+    public Guid? AgentId { get; set; }
     public string? RootCause { get; set; }
     public string? Resolution { get; set; }
     public string? GeneratedSopId { get; set; }

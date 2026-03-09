@@ -36,8 +36,9 @@ import type {
 
 // Products that need special fields
 const K8S_PRODUCTS = new Set(["Kubernetes"]);
-const GIT_PRODUCTS = new Set(["GitHub", "GitLab"]);
+const GIT_PRODUCTS = new Set(["GitHub", "GitLab", "Gitea"]);
 const DEPLOYMENT_PRODUCTS = new Set(["Kubernetes", "ArgoCD"]);
+const CICD_PRODUCTS = new Set(["Tekton"]);
 
 export default function DataSourceCreatePage() {
   const navigate = useNavigate();
@@ -142,9 +143,9 @@ export default function DataSourceCreatePage() {
     }
   };
 
-  const showNamespace = DEPLOYMENT_PRODUCTS.has(product);
+  const showNamespace = DEPLOYMENT_PRODUCTS.has(product) || CICD_PRODUCTS.has(product);
   const showOrganization = GIT_PRODUCTS.has(product);
-  const showKubeConfig = K8S_PRODUCTS.has(product);
+  const showKubeConfig = K8S_PRODUCTS.has(product) || CICD_PRODUCTS.has(product);
   const showStep = category === "Metrics";
   const showIndex = category === "Logs";
 
@@ -300,7 +301,7 @@ export default function DataSourceCreatePage() {
                         value={organization}
                         onChange={(e) => setOrganization(e.target.value)}
                         placeholder={
-                          product === "GitHub"
+                          product === "GitHub" || product === "Gitea"
                             ? "owner/repo 或 owner"
                             : "group/project 或 project-id"
                         }

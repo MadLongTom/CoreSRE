@@ -1,5 +1,6 @@
 using CoreSRE.Application.Chat.DTOs;
 using CoreSRE.Application.Interfaces;
+using CoreSRE.Infrastructure.Persistence.Sessions;
 using CoreSRE.Infrastructure.Telemetry;
 using Microsoft.Agents.AI;
 using Microsoft.Agents.AI.Hosting;
@@ -168,6 +169,12 @@ public static class AgentChatEndpoints
         }, cancellationToken);
 
         // 5. Stream via agent pipeline
+        //    Track function call/result messages during streaming — FunctionInvokingChatClient
+        //    may handle function calls internally and not include them in the response messages
+        //    passed to StoreChatHistoryAsync. We collect them here for later injection.
+        var trackedToolMessages = new List<ChatMessage>();
+        ChatMessage? pendingAssistantFc = null; // assistant message accumulating function calls
+
         await foreach (var update in aiAgent.RunStreamingAsync(newUserMessage, session, cancellationToken: cancellationToken))
         {
             foreach (var content in update.Contents)
@@ -195,14 +202,33 @@ public static class AgentChatEndpoints
                     {
                         await WriteToolCallArgsAsync(context.Response, toolCallId, "{}", cancellationToken);
                     }
+
+                    // Track: accumulate function calls into an assistant message
+                    pendingAssistantFc ??= new ChatMessage(ChatRole.Assistant, []);
+                    pendingAssistantFc.Contents.Add(functionCall);
                 }
                 else if (content is FunctionResultContent functionResult)
                 {
                     var toolCallId = functionResult.CallId ?? Guid.NewGuid().ToString();
                     var resultStr = functionResult.Result?.ToString();
                     await WriteToolCallEndAsync(context.Response, toolCallId, resultStr, cancellationToken);
+
+                    // Track: flush pending assistant FC, then add tool result
+                    if (pendingAssistantFc is not null)
+                    {
+                        trackedToolMessages.Add(pendingAssistantFc);
+                        pendingAssistantFc = null;
+                    }
+                    trackedToolMessages.Add(new ChatMessage(ChatRole.Tool, [functionResult]));
                 }
             }
+        }
+
+        // Flush any remaining pending function call message
+        if (pendingAssistantFc is not null)
+        {
+            trackedToolMessages.Add(pendingAssistantFc);
+            pendingAssistantFc = null;
         }
 
         // TEXT_MESSAGE_END
@@ -223,10 +249,21 @@ public static class AgentChatEndpoints
         // 6. Persist session (best-effort — don't block chat on persistence failure)
         try
         {
-            var serializedPreview = await aiAgent.SerializeSessionAsync(session, cancellationToken: cancellationToken);
-            logger?.LogInformation(
-                "[SessionDebug] About to save session — threadId={ThreadId}, agentId={AgentId}, serializedLength={Len}",
-                threadId, aiAgent.Id, serializedPreview.GetRawText().Length);
+            // Inject tracked tool messages that may have been missed by StoreChatHistoryAsync.
+            // FunctionInvokingChatClient handles function calls internally and may not include
+            // them in the response messages passed to the ChatHistoryProvider.
+            if (trackedToolMessages.Count > 0)
+            {
+                var chatHistoryProvider = aiAgent.GetService<ChatHistoryProvider>();
+                if (chatHistoryProvider is PostgresChatHistoryProvider pgProvider)
+                {
+                    pgProvider.EnsureToolMessagesStored(session, trackedToolMessages);
+                    logger?.LogInformation(
+                        "[SessionDebug] Injected {Count} tracked tool messages into session state",
+                        trackedToolMessages.Count);
+                }
+            }
+
             await sessionStore.SaveSessionAsync(aiAgent, threadId, session, cancellationToken);
             logger?.LogInformation("[SessionDebug] Session saved successfully");
         }

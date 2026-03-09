@@ -8,19 +8,20 @@ export type { ApiResult };
 
 // ── Enums ──
 
-export type DataSourceCategory = "Metrics" | "Logs" | "Tracing" | "Alerting" | "Deployment" | "Git";
+export type DataSourceCategory = "Metrics" | "Logs" | "Tracing" | "Alerting" | "Deployment" | "Git" | "CICD";
 export type DataSourceProduct =
   | "Prometheus" | "VictoriaMetrics" | "Mimir"
   | "Loki" | "Elasticsearch"
   | "Jaeger" | "Tempo"
   | "Alertmanager" | "PagerDuty"
   | "Kubernetes" | "ArgoCD"
-  | "GitHub" | "GitLab";
+  | "GitHub" | "GitLab" | "Gitea"
+  | "Tekton";
 export type DataSourceStatus = "Registered" | "Connected" | "Disconnected" | "Error";
 export type AuthType = "None" | "ApiKey" | "Bearer" | "OAuth2";
 
 export const DATA_SOURCE_CATEGORIES: DataSourceCategory[] = [
-  "Metrics", "Logs", "Tracing", "Alerting", "Deployment", "Git",
+  "Metrics", "Logs", "Tracing", "Alerting", "Deployment", "Git", "CICD",
 ];
 
 export const DATA_SOURCE_PRODUCTS: DataSourceProduct[] = [
@@ -29,7 +30,8 @@ export const DATA_SOURCE_PRODUCTS: DataSourceProduct[] = [
   "Jaeger", "Tempo",
   "Alertmanager", "PagerDuty",
   "Kubernetes", "ArgoCD",
-  "GitHub", "GitLab",
+  "GitHub", "GitLab", "Gitea",
+  "Tekton",
 ];
 
 export const DATA_SOURCE_STATUSES: DataSourceStatus[] = [
@@ -45,7 +47,8 @@ export const CATEGORY_PRODUCTS: Record<DataSourceCategory, DataSourceProduct[]> 
   Tracing: ["Jaeger", "Tempo"],
   Alerting: ["Alertmanager", "PagerDuty"],
   Deployment: ["Kubernetes", "ArgoCD"],
-  Git: ["GitHub", "GitLab"],
+  Git: ["GitHub", "GitLab", "Gitea"],
+  CICD: ["Tekton"],
 };
 
 // ── DTOs ──
@@ -254,6 +257,7 @@ export const categoryLabel: Record<DataSourceCategory, string> = {
   Alerting: "告警 (Alerting)",
   Deployment: "部署 (Deployment)",
   Git: "Git",
+  CICD: "CI/CD",
 };
 
 export const statusLabel: Record<DataSourceStatus, string> = {
