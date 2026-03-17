@@ -54,7 +54,6 @@ coverage/
 .reference/
 
 # ===== Sandbox working directories =====
-sandboxes/
 
 # ===== Reflector / decompiled source (local-only) =====
 Backend/_reflect.csx
