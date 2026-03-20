@@ -2,7 +2,6 @@ using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using System.Text.Json.Serialization.Metadata;
 
 namespace CoreSRE.Infrastructure.Persistence.Sessions;
 
@@ -11,13 +10,12 @@ namespace CoreSRE.Infrastructure.Persistence.Sessions;
 /// 
 /// Problem: The framework's InMemoryChatHistoryProvider serializes ChatMessage content using
 /// STJ polymorphic "$type" discriminators (e.g. {"text":"hello","$type":"text"}).
-/// PostgreSQL JSONB storage reorders object keys alphabetically, and STJ requires "$type"
-/// to be the FIRST property in an object for polymorphic deserialization. This mismatch
-/// causes deserialization to fail silently (0 messages) or throw.
+/// PostgreSQL JSONB storage reorders object keys alphabetically, and STJ previously required
+/// "$type" to be the FIRST property in an object for polymorphic deserialization.
 /// 
-/// Solution: This provider uses a ProviderSessionState with a flat DTO format using explicit
-/// "kind" field instead of STJ "$type" metadata. Key ordering is irrelevant for standard
-/// property deserialization, making it fully compatible with PostgreSQL JSONB.
+/// Solution: With <see cref="JsonSerializerOptions.AllowOutOfOrderMetadataProperties"/> = true
+/// (available since .NET 9), "$type" position is irrelevant. This allows direct serialization
+/// of <see cref="ChatMessage"/> without intermediate DTO mapping, eliminating allocation overhead.
 /// 
 /// Architecture (rc2): Uses ProviderSessionState&lt;State&gt; to store per-session message history
 /// in AgentSession.StateBag, following the new singleton-provider pattern. The provider instance
@@ -47,20 +45,18 @@ public sealed class PostgresChatHistoryProvider : ChatHistoryProvider
         InvokingContext context, CancellationToken cancellationToken = default)
     {
         var state = _sessionState.GetOrInitializeState(context.Session);
-        var messages = state.Messages.Select(DtoToChatMessage).ToList();
 
         // Apply reducer before returning messages (limits history window for token control)
         if (ChatReducer is not null)
         {
-            messages = (await ChatReducer.ReduceAsync(messages, cancellationToken)
+            var reduced = (await ChatReducer.ReduceAsync(state.Messages, cancellationToken)
                 .ConfigureAwait(false)).ToList();
 
-            // Sync reduced messages back to state
-            state.Messages = messages.Select(ChatMessageToDto).ToList();
+            state.Messages = reduced;
             _sessionState.SaveState(context.Session, state);
         }
 
-        return messages;
+        return state.Messages;
     }
 
     /// <inheritdoc />
@@ -69,11 +65,10 @@ public sealed class PostgresChatHistoryProvider : ChatHistoryProvider
     {
         var state = _sessionState.GetOrInitializeState(context.Session);
 
-        var newDtos = context.RequestMessages
-            .Concat(context.ResponseMessages ?? [])
-            .Select(ChatMessageToDto);
+        state.Messages.AddRange(context.RequestMessages);
+        if (context.ResponseMessages is { } responses)
+            state.Messages.AddRange(responses);
 
-        state.Messages.AddRange(newDtos);
         _sessionState.SaveState(context.Session, state);
 
         return ValueTask.CompletedTask;
@@ -97,10 +92,12 @@ public sealed class PostgresChatHistoryProvider : ChatHistoryProvider
         var existingCallIds = new HashSet<string>(StringComparer.Ordinal);
         foreach (var msg in state.Messages)
         {
-            foreach (var c in msg.Contents ?? [])
+            foreach (var c in msg.Contents)
             {
-                if (c.Kind is "functionCall" or "functionResult" && c.CallId is not null)
-                    existingCallIds.Add(c.CallId);
+                if (c is FunctionCallContent fc && fc.CallId is not null)
+                    existingCallIds.Add(fc.CallId);
+                else if (c is FunctionResultContent fr && fr.CallId is not null)
+                    existingCallIds.Add(fr.CallId);
             }
         }
 
@@ -116,7 +113,7 @@ public sealed class PostgresChatHistoryProvider : ChatHistoryProvider
                 // Find insertion point: just before the last assistant text-only message
                 // to maintain correct chronological order
                 var insertIdx = FindToolInsertionIndex(state.Messages);
-                state.Messages.Insert(insertIdx, ChatMessageToDto(msg));
+                state.Messages.Insert(insertIdx, msg);
                 injected++;
             }
         }
@@ -126,16 +123,16 @@ public sealed class PostgresChatHistoryProvider : ChatHistoryProvider
     }
 
     /// <summary>Find the position to insert tool messages — before the last assistant text-only message.</summary>
-    private static int FindToolInsertionIndex(List<MessageDto> messages)
+    private static int FindToolInsertionIndex(List<ChatMessage> messages)
     {
         // Walk backwards to find the last assistant message that has ONLY text content (the final answer).
         // Tool messages should be inserted before it.
         for (int i = messages.Count - 1; i >= 0; i--)
         {
             var msg = messages[i];
-            if (msg.Role == "assistant" && msg.Contents is { Count: > 0 })
+            if (msg.Role == ChatRole.Assistant && msg.Contents is { Count: > 0 })
             {
-                bool hasOnlyText = msg.Contents.All(c => c.Kind == "text");
+                bool hasOnlyText = msg.Contents.All(c => c is TextContent);
                 if (hasOnlyText)
                     return i;
             }
@@ -145,183 +142,30 @@ public sealed class PostgresChatHistoryProvider : ChatHistoryProvider
 
     // ── Serialization ────────────────────────────────────────────────
 
-    private static readonly JsonSerializerOptions s_serializerOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-        WriteIndented = false,
-        TypeInfoResolver = new DefaultJsonTypeInfoResolver(),
-    };
+    /// <summary>
+    /// Uses <see cref="AIJsonUtilities.DefaultOptions"/> as the base to get full MEAI type support
+    /// (ChatMessage, AIContent polymorphic hierarchy, ChatRole converter, etc.).
+    /// <see cref="JsonSerializerOptions.AllowOutOfOrderMetadataProperties"/> = true ensures
+    /// "$type" discriminators work correctly after PostgreSQL JSONB key reordering.
+    /// </summary>
+    private static readonly JsonSerializerOptions s_serializerOptions = CreateSerializerOptions();
 
-    // ── ChatMessage ↔ DTO conversion ─────────────────────────────────
-
-    private static MessageDto ChatMessageToDto(ChatMessage msg)
+    private static JsonSerializerOptions CreateSerializerOptions()
     {
-        return new MessageDto
+        var options = new JsonSerializerOptions(AIJsonUtilities.DefaultOptions)
         {
-            Role = msg.Role.Value,
-            AuthorName = msg.AuthorName,
-            MessageId = msg.MessageId,
-            CreatedAt = msg.CreatedAt,
-            Source = msg.AdditionalProperties?.TryGetValue("source", out var src) == true
-                ? src?.ToString()
-                : null,
-            Contents = msg.Contents.Select(ContentToDto).ToList(),
+            AllowOutOfOrderMetadataProperties = true,
+            WriteIndented = false,
         };
+        return options;
     }
 
-    private static ChatMessage DtoToChatMessage(MessageDto dto)
-    {
-        var role = new ChatRole(dto.Role ?? "user");
-        var contents = dto.Contents?.Select(DtoToContent).ToList()
-                       ?? new List<AIContent>();
-
-        var msg = new ChatMessage(role, contents)
-        {
-            AuthorName = dto.AuthorName,
-            MessageId = dto.MessageId,
-            CreatedAt = dto.CreatedAt,
-        };
-
-        if (!string.IsNullOrEmpty(dto.Source))
-        {
-            msg.AdditionalProperties ??= new AdditionalPropertiesDictionary();
-            msg.AdditionalProperties["source"] = dto.Source;
-        }
-
-        return msg;
-    }
-
-    /// <summary>Convert AIContent to flat DTO with explicit "kind" field (no $type).</summary>
-    private static ContentDto ContentToDto(AIContent content)
-    {
-        return content switch
-        {
-            FunctionCallContent fc => new ContentDto
-            {
-                Kind = "functionCall",
-                CallId = fc.CallId,
-                Name = fc.Name,
-                Arguments = fc.Arguments is not null
-                    ? JsonSerializer.SerializeToElement(fc.Arguments)
-                    : null,
-            },
-            FunctionResultContent fr => new ContentDto
-            {
-                Kind = "functionResult",
-                CallId = fr.CallId,
-                Result = fr.Result is not null
-                    ? JsonSerializer.SerializeToElement(fr.Result)
-                    : null,
-                ExceptionMessage = fr.Exception?.Message,
-            },
-            TextContent tc => new ContentDto
-            {
-                Kind = "text",
-                Text = tc.Text,
-            },
-            DataContent dc => new ContentDto
-            {
-                Kind = "data",
-                Uri = dc.Uri?.ToString(),
-                MediaType = dc.MediaType,
-            },
-            // Fallback: preserve as much text as possible
-            _ => new ContentDto
-            {
-                Kind = "text",
-                Text = content.ToString(),
-            },
-        };
-    }
-
-    /// <summary>Convert flat DTO back to AIContent using explicit "kind" field.</summary>
-    private static AIContent DtoToContent(ContentDto dto)
-    {
-        return dto.Kind switch
-        {
-            "functionCall" => new FunctionCallContent(
-                dto.CallId ?? "",
-                dto.Name ?? "",
-                dto.Arguments is { ValueKind: JsonValueKind.Object } args
-                    ? args.Deserialize<IDictionary<string, object?>>()
-                    : null),
-            "functionResult" => new FunctionResultContent(
-                dto.CallId ?? "",
-                dto.Result is { } res ? (object)res : null),
-            "data" => new DataContent(
-                dto.Uri is not null ? new Uri(dto.Uri) : new Uri("about:blank"),
-                dto.MediaType ?? "application/octet-stream"),
-            // Default and "text"
-            _ => new TextContent(dto.Text ?? ""),
-        };
-    }
-
-    // ── State & DTO types (JSONB-safe, no $type discriminator) ────────
+    // ── State type (stores ChatMessage directly — no DTO mapping needed) ─
 
     /// <summary>Per-session state stored in AgentSession.StateBag.</summary>
     internal sealed class ChatHistoryState
     {
         [JsonPropertyName("messages")]
-        public List<MessageDto> Messages { get; set; } = [];
-    }
-
-    internal sealed class MessageDto
-    {
-        [JsonPropertyName("role")]
-        public string? Role { get; set; }
-
-        [JsonPropertyName("authorName")]
-        public string? AuthorName { get; set; }
-
-        [JsonPropertyName("messageId")]
-        public string? MessageId { get; set; }
-
-        [JsonPropertyName("createdAt")]
-        public DateTimeOffset? CreatedAt { get; set; }
-
-        /// <summary>Message origin: null = normal, "memory" = injected by semantic memory.</summary>
-        [JsonPropertyName("source")]
-        public string? Source { get; set; }
-
-        [JsonPropertyName("contents")]
-        public List<ContentDto>? Contents { get; set; }
-    }
-
-    internal sealed class ContentDto
-    {
-        /// <summary>
-        /// Explicit content type discriminator — replaces STJ "$type" metadata.
-        /// Values: "text", "functionCall", "functionResult", "data".
-        /// </summary>
-        [JsonPropertyName("kind")]
-        public string Kind { get; set; } = "text";
-
-        // ── Text ──
-        [JsonPropertyName("text")]
-        public string? Text { get; set; }
-
-        // ── FunctionCall / FunctionResult ──
-        [JsonPropertyName("callId")]
-        public string? CallId { get; set; }
-
-        [JsonPropertyName("name")]
-        public string? Name { get; set; }
-
-        [JsonPropertyName("arguments")]
-        public JsonElement? Arguments { get; set; }
-
-        [JsonPropertyName("result")]
-        public JsonElement? Result { get; set; }
-
-        [JsonPropertyName("exceptionMessage")]
-        public string? ExceptionMessage { get; set; }
-
-        // ── Data / Binary ──
-        [JsonPropertyName("uri")]
-        public string? Uri { get; set; }
-
-        [JsonPropertyName("mediaType")]
-        public string? MediaType { get; set; }
+        public List<ChatMessage> Messages { get; set; } = [];
     }
 }

@@ -573,12 +573,16 @@ public class GetConversationByIdQueryHandler : IRequestHandler<GetConversationBy
         return string.Join("\n", parts);
     }
 
-    /// <summary>Read the "kind" discriminator from a content DTO element.</summary>
+    /// <summary>Read the content type discriminator from a content element (supports both "kind" and "$type").</summary>
     private static string GetContentKind(JsonElement content)
     {
-        return content.TryGetProperty("kind", out var kindProp)
-            ? kindProp.GetString() ?? "text"
-            : "text";
+        if (content.TryGetProperty("kind", out var kindProp))
+            return kindProp.GetString() ?? "text";
+
+        if (content.TryGetProperty("$type", out var typeProp))
+            return typeProp.GetString() ?? "text";
+
+        return "text";
     }
 
     /// <summary>
