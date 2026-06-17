@@ -126,15 +126,35 @@ public class IncidentDispatcherService(
                     aiAgent, session, messages, incidentId, notifier,
                     proactiveChannel.Reader, linkedCts.Token);
 
-                // 5. 执行成功 → 更新 Incident
-                incident.Resolve(fullResponse);
-                incident.SetTimeToDetect(incident.StartedAt); // MTTD = 0（自动触发）
-                incident.AddTimelineEvent(IncidentTimelineVO.Create(
-                    TimelineEventType.Resolved,
-                    "SOP 自动执行完成",
-                    fullResponse));
+                // 5. 根据是否真正调用工具来判断 SOP 执行结果
+                //    若 Agent 仅产出文字叙述、未调用任何工具 → 视为未实际处置，
+                //    保留 Investigating 状态等待人工复核，避免误标记为 Resolved
+                //    （否则评估指标失真：自动修复率虚高、MTTR 不可信）。
+                var hasRealToolExecution = trackedToolMessages.Any(m => m.Role == ChatRole.Tool);
 
-                await notifier.IncidentResolvedAsync(incidentId, fullResponse, DateTime.UtcNow, cancellationToken);
+                if (hasRealToolExecution)
+                {
+                    incident.Resolve(fullResponse);
+                    incident.SetTimeToDetect(incident.StartedAt); // MTTD = 0（自动触发）
+                    incident.AddTimelineEvent(IncidentTimelineVO.Create(
+                        TimelineEventType.Resolved,
+                        "SOP 自动执行完成",
+                        fullResponse));
+
+                    await notifier.IncidentResolvedAsync(incidentId, fullResponse, DateTime.UtcNow, cancellationToken);
+                }
+                else
+                {
+                    incident.AddTimelineEvent(IncidentTimelineVO.Create(
+                        TimelineEventType.ManualNote,
+                        "SOP 对话已结束但未触发任何工具调用 — 需人工复核",
+                        fullResponse));
+
+                    logger.LogWarning(
+                        "SOP execution for Incident {IncidentId} produced no tool calls; " +
+                        "incident kept as Investigating for manual review.",
+                        incidentId);
+                }
 
                 // 5.5 持久化工具调用消息（FunctionInvokingChatClient 可能未写入 ChatHistoryProvider）
                 PersistTrackedToolMessages(aiAgent, session, trackedToolMessages);

@@ -52,7 +52,7 @@ coverage/
 
 # ===== Reference repos (large, local-only) =====
 .reference/
-
+.playwright-mcp/
 # ===== Sandbox working directories =====
 
 # ===== Reflector / decompiled source (local-only) =====

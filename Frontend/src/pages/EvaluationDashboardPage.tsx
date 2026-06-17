@@ -68,10 +68,15 @@ export default function EvaluationDashboardPage() {
     setLoading(true);
     setError(null);
     try {
+      // Default lookback window: 90 days (backend default is 30, which often
+      // misses demo seed data and shows an empty dashboard).
+      const to = new Date();
+      const from = new Date(to.getTime() - 90 * 24 * 60 * 60 * 1000);
+      const range = { from: from.toISOString(), to: to.toISOString() };
       const [dashRes, sopRes, fbRes] = await Promise.all([
-        getEvaluationDashboard(),
-        getSopEffectiveness(),
-        getFeedbackSummary(),
+        getEvaluationDashboard(range),
+        getSopEffectiveness(range),
+        getFeedbackSummary(range),
       ]);
       if (dashRes.data) setDashboard(dashRes.data);
       if (sopRes.data) setSops(sopRes.data);
